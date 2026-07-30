@@ -1,0 +1,50 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { SiteFooter, SiteHeader } from "../../components/SiteChrome";
+import { getMemberSession } from "../../member-auth";
+import MemberLoginForm from "./MemberLoginForm";
+
+export const dynamic = "force-dynamic";
+
+export default async function MemberLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string }>;
+}) {
+  const params = await searchParams;
+  const returnTo =
+    params.return_to?.startsWith("/") && !params.return_to.startsWith("//")
+      ? params.return_to
+      : "/";
+  if (await getMemberSession()) redirect(returnTo);
+
+  return (
+    <>
+      <SiteHeader />
+      <main className="member-auth-shell member-login-shell">
+        <section className="member-auth-intro">
+          <span>CHURCH MEMBER</span>
+          <h1>교인 로그인</h1>
+          <p>
+            승인된 모현제일교회 교인 계정으로 로그인해 주세요.
+            가입 승인 전에는 로그인할 수 없습니다.
+          </p>
+        </section>
+        <section className="member-auth-card member-login-card">
+          <header>
+            <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
+            <div>
+              <span>WELCOME BACK</span>
+              <h2>아이디와 비밀번호를 입력해 주세요</h2>
+            </div>
+          </header>
+          <MemberLoginForm returnTo={returnTo} />
+          <p className="member-auth-switch">
+            아직 계정이 없으신가요? <Link href="/member/signup">회원가입 신청</Link>
+          </p>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
+  );
+}

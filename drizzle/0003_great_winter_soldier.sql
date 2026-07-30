@@ -1,0 +1,1 @@
+ALTER TABLE `business_applications` ADD `image_url` text DEFAULT '' NOT NULL;

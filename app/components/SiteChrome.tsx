@@ -1,0 +1,341 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+const menuItems = [
+  { label: "교회 소개", href: "/about" },
+  {
+    label: "예배와 말씀",
+    href: "/worship",
+    children: [
+      { label: "주일예배", href: "/worship" },
+      { label: "설교영상", href: "/sermons" },
+    ],
+  },
+  { label: "주보", href: "/bulletin" },
+  { label: "교회소식", href: "/news" },
+  { label: "성도사업장", href: "/business" },
+  { label: "갤러리", href: "/gallery" },
+];
+
+function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {diagonal ? (
+        <path d="M7 17 17 7M8 7h9v9" />
+      ) : (
+        <path d="M4 12h15M14 7l5 5-5 5" />
+      )}
+    </svg>
+  );
+}
+
+export function SiteHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [worshipOpen, setWorshipOpen] = useState(false);
+  const [memberMenuOpen, setMemberMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [member, setMember] = useState<
+    { name: string; position: string } | null | undefined
+  >(undefined);
+
+  useEffect(() => {
+    let active = true;
+    const loadMember = () => {
+      fetch("/api/members/profile", { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { member?: { name: string; position: string } } | null) => {
+          if (active) setMember(data?.member ?? null);
+        })
+        .catch(() => {
+          if (active) setMember(null);
+        });
+    };
+    loadMember();
+    window.addEventListener("member-profile-updated", loadMember);
+    return () => {
+      active = false;
+      window.removeEventListener("member-profile-updated", loadMember);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!memberMenuOpen) return;
+
+    const closeMemberMenu = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && !target.closest("[data-member-menu]")) {
+        setMemberMenuOpen(false);
+      }
+    };
+    const closeMemberMenuWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMemberMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeMemberMenu);
+    document.addEventListener("keydown", closeMemberMenuWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMemberMenu);
+      document.removeEventListener("keydown", closeMemberMenuWithEscape);
+    };
+  }, [memberMenuOpen]);
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    setWorshipOpen(false);
+    setMemberMenuOpen(false);
+  };
+
+  const toggleMenu = () => {
+    if (menuOpen) {
+      closeMenu();
+      return;
+    }
+
+    setWorshipOpen(false);
+    setMenuOpen(true);
+  };
+
+  const memberLabel = member
+    ? `${member.name} ${member.position || "성도"}`
+    : "";
+
+  return (
+    <>
+      <header className={`site-header${scrolled ? " is-scrolled" : ""}`}>
+        <div className="header-inner">
+          <Link className="brand" href="/" aria-label="모현제일교회 홈">
+            <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
+          </Link>
+
+          <nav className="desktop-nav" aria-label="주요 메뉴">
+            {menuItems.map((item) => (
+              <div className={`desktop-nav-item${item.children ? " has-submenu" : ""}`} key={item.label}>
+                <a href={item.href}>{item.label}</a>
+                {item.children && (
+                  <div className="desktop-submenu" aria-label={`${item.label} 하위 메뉴`}>
+                    {item.children.map((child) => (
+                      <a href={child.href} key={child.label}>
+                        {child.label}
+                        <ArrowIcon />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          <div className="header-side">
+            <div className="header-external-links">
+              <a
+                href="https://www.youtube.com/@%EB%AA%A8%ED%98%84%EC%A0%9C%EC%9D%BC%EA%B5%90%ED%9A%8C"
+                target="_blank"
+                rel="noreferrer"
+              >
+                YOUTUBE
+              </a>
+              <span aria-hidden="true">|</span>
+              <span className="header-link-disabled" aria-disabled="true">
+                예배 아카이브
+              </span>
+              <span aria-hidden="true">|</span>
+              {member === undefined ? (
+                <span className="header-member-loading" aria-hidden="true" />
+              ) : member ? (
+                <span
+                  className={`header-member-actions${memberMenuOpen ? " is-open" : ""}`}
+                  data-member-menu
+                  onMouseEnter={() => setMemberMenuOpen(true)}
+                  onMouseLeave={() => setMemberMenuOpen(false)}
+                  onFocus={() => setMemberMenuOpen(true)}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setMemberMenuOpen(false);
+                    }
+                  }}
+                >
+                  <button
+                    className="header-member-login is-member"
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={memberMenuOpen}
+                    onClick={() => setMemberMenuOpen((value) => !value)}
+                  >
+                    {memberLabel}
+                    <i aria-hidden="true" />
+                  </button>
+                  <span className="header-member-dropdown" role="menu" hidden={!memberMenuOpen}>
+                    <a href="/member" role="menuitem">내 정보 관리</a>
+                    <a href="/api/members/session?return_to=/" role="menuitem">로그아웃</a>
+                  </span>
+                </span>
+              ) : (
+                <a className="header-member-login" href="/member/login">
+                  교인 로그인
+                </a>
+              )}
+            </div>
+            <button
+              className={`menu-button${menuOpen ? " is-open" : ""}`}
+              type="button"
+              aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-menu"
+              onClick={toggleMenu}
+            >
+              <span />
+              <span />
+              <b>MENU</b>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div id="mobile-menu" className={`mobile-menu${menuOpen ? " is-open" : ""}`}>
+        <nav aria-label="모바일 주요 메뉴">
+          {menuItems.map((item, index) =>
+            item.children ? (
+              <div className={`mobile-nav-group${worshipOpen ? " is-open" : ""}`} key={item.label}>
+                <button
+                  type="button"
+                  onClick={() => setWorshipOpen((value) => !value)}
+                  aria-expanded={worshipOpen}
+                  aria-controls="mobile-worship-submenu"
+                >
+                  <span>0{index + 1}</span>
+                  <strong>{item.label}</strong>
+                  <i aria-hidden="true">+</i>
+                </button>
+                <div
+                  id="mobile-worship-submenu"
+                  className="mobile-submenu"
+                  hidden={!worshipOpen}
+                >
+                  {item.children.map((child) => (
+                    <a href={child.href} key={child.label} onClick={closeMenu}>
+                      {child.label}
+                      <ArrowIcon />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <a key={item.label} href={item.href} onClick={closeMenu}>
+                <span>0{index + 1}</span>
+                <strong>{item.label}</strong>
+                <ArrowIcon />
+              </a>
+            ),
+          )}
+        </nav>
+        <div className="mobile-menu-bottom">
+          <div className="mobile-menu-meta">
+            <span>MOHYEON JEIL CHURCH</span>
+            <strong>031-333-5420</strong>
+          </div>
+          <div className="mobile-member-links">
+            {member === undefined ? (
+              <span className="mobile-member-loading" aria-hidden="true" />
+            ) : member ? (
+              <div
+                className={`mobile-member-menu${memberMenuOpen ? " is-open" : ""}`}
+                data-member-menu
+              >
+                <button
+                  className="mobile-member-login is-member"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={memberMenuOpen}
+                  onClick={() => setMemberMenuOpen((value) => !value)}
+                >
+                  {memberLabel}
+                  <i aria-hidden="true" />
+                </button>
+                <div className="mobile-member-dropdown" role="menu" hidden={!memberMenuOpen}>
+                  <a href="/member" role="menuitem" onClick={closeMenu}>내 정보 관리</a>
+                  <a
+                    href="/api/members/session?return_to=/"
+                    role="menuitem"
+                    onClick={closeMenu}
+                  >
+                    로그아웃
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <>
+                <a className="mobile-member-signup" href="/member/signup" onClick={closeMenu}>
+                  회원가입
+                </a>
+                <a className="mobile-member-login" href="/member/login" onClick={closeMenu}>
+                  로그인
+                </a>
+              </>
+            )}
+          </div>
+          <div className="mobile-archive-link" aria-disabled="true">
+            <span>예배 아카이브</span>
+            <small>준비 중</small>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function SiteFooter() {
+  return (
+    <footer id="gallery">
+      <div className="page-width footer-main">
+        <div className="footer-brand">
+          <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
+          <p>말씀 중심의 예배와 사랑의 섬김이 있는 교회</p>
+        </div>
+        <section className="footer-offering" aria-labelledby="offering-title">
+          <span>ONLINE OFFERING</span>
+          <h2 id="offering-title">온라인 헌금계좌</h2>
+          <dl>
+            <div>
+              <dt>우체국</dt>
+              <dd>102301-01-001455</dd>
+            </div>
+            <div>
+              <dt>예금주</dt>
+              <dd>
+                <a
+                  className="footer-admin-entry"
+                  href="/admin/login"
+                  aria-label="관리자 로그인"
+                  title="관리자 로그인"
+                >
+                  모
+                </a>
+                현제일교회
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+      <div className="page-width footer-bottom">
+        <span className="footer-copyright">© 2026 모현제일교회. All rights reserved.</span>
+        <span className="footer-denomination">대한예수교장로회 합동 교단</span>
+      </div>
+    </footer>
+  );
+}

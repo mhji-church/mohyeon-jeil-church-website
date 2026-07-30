@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785397152455,
+      "tag": "0000_magical_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785401595599,
+      "tag": "0001_flat_bloodscream",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785437205259,
+      "tag": "0002_loving_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785439286117,
+      "tag": "0003_great_winter_soldier",
+      "breakpoints": true
+    }
+  ]
+}
