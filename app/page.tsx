@@ -191,6 +191,7 @@ function SermonPlayer({
 export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
   const [playingSermon, setPlayingSermon] = useState<string | null>(null);
+  const [modalSermon, setModalSermon] = useState<(typeof sermons)[number] | null>(null);
   const [newsItems, setNewsItems] = useState(initialNewsItems);
 
   useEffect(() => {
@@ -210,6 +211,21 @@ export default function Home() {
         // The initial content remains visible during a temporary network failure.
       });
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = modalSermon ? "hidden" : "";
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setModalSermon(null);
+    };
+
+    if (modalSermon) window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [modalSermon]);
 
   const moveSlide = (direction: number) => {
     setActiveSlide(
@@ -345,8 +361,8 @@ export default function Home() {
               <article key={sermon.title} className="sermon-card">
                 <SermonPlayer
                   sermon={sermon}
-                  isPlaying={playingSermon === sermon.videoId}
-                  onPlay={() => setPlayingSermon(sermon.videoId)}
+                  isPlaying={false}
+                  onPlay={() => setModalSermon(sermon)}
                 />
                 <div className="sermon-card-copy">
                   <span>0{index + 2}</span>
@@ -539,6 +555,44 @@ export default function Home() {
       </section>
 
       <SiteFooter />
+
+      {modalSermon && (
+        <div
+          className="video-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${modalSermon.title} 설교 영상`}
+        >
+          <button
+            className="video-modal-backdrop"
+            type="button"
+            onClick={() => setModalSermon(null)}
+            aria-label="영상 닫기"
+          />
+          <div className="video-modal-panel">
+            <button
+              className="video-modal-close"
+              type="button"
+              onClick={() => setModalSermon(null)}
+              autoFocus
+            >
+              닫기 <span aria-hidden="true">×</span>
+            </button>
+            <div className="video-modal-frame">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${modalSermon.videoId}?autoplay=1&rel=0`}
+                title={`${modalSermon.title} 설교 영상`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+            <div className="video-modal-copy">
+              <span>{modalSermon.date}</span>
+              <strong>{modalSermon.title}</strong>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
