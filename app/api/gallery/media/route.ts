@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { getAdminSession } from "../../../credential-auth";
 import { getMemberSession } from "../../../member-auth";
 import { getContentPost, uploadedObjectKey } from "../../../../lib/content";
@@ -38,14 +37,7 @@ export async function GET(request: Request) {
       headers.set("cache-control", "private, no-store");
       return new Response(response.body, { headers });
     }
-    const bucket = (env as unknown as { BUCKET?: R2Bucket }).BUCKET;
-    const object = await bucket?.get(key.key);
-    if (!object) return new Response("Not found", { status: 404 });
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("etag", object.httpEtag);
-    headers.set("cache-control", "private, no-store");
-    return new Response(object.body, { headers });
+    return new Response("Not found", { status: 404 });
   }
 
   if (!source.startsWith("/assets/")) {

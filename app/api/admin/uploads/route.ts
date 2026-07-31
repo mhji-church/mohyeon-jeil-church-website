@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { requireAdminApi } from "../../../admin-auth";
 import {
   hasExternalR2,
@@ -32,8 +31,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "이미지는 한 장씩 업로드해 주세요." }, { status: 400 });
   }
   const useExternalR2 = hasExternalR2();
-  const bucket = (env as unknown as { BUCKET?: R2Bucket }).BUCKET;
-  if (!useExternalR2 && !bucket) {
+  if (!useExternalR2) {
     return Response.json({ error: "이미지 저장소를 사용할 수 없습니다." }, { status: 500 });
   }
   const uploaded: string[] = [];
@@ -53,17 +51,8 @@ export async function POST(request: Request) {
             ? "businesses"
             : `content/${type}`;
     const key = `${directory}/${crypto.randomUUID()}-${safeName(file.name)}`;
-    if (useExternalR2) {
-      await putExternalObject(key, file, user.email);
-      uploaded.push(`/api/media?store=external&key=${encodeURIComponent(key)}`);
-    } else {
-      const legacyKey = `uploads/${type}/${crypto.randomUUID()}-${safeName(file.name)}`;
-      await bucket!.put(legacyKey, file.stream(), {
-        httpMetadata: { contentType: file.type },
-        customMetadata: { uploadedBy: user.email },
-      });
-      uploaded.push(`/api/media?key=${encodeURIComponent(legacyKey)}`);
-    }
+    await putExternalObject(key, file, user.email);
+    uploaded.push(`/api/media?store=external&key=${encodeURIComponent(key)}`);
   }
   return Response.json({ images: uploaded }, { status: 201 });
 }

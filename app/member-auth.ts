@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMember } from "../lib/members";
@@ -11,7 +10,7 @@ type MemberEnvironment = {
 };
 
 function sessionSecret() {
-  const runtime = env as unknown as MemberEnvironment;
+  const runtime = process.env as MemberEnvironment;
   return (
     runtime.MEMBER_SESSION_SECRET ??
     (process.env.NODE_ENV === "development" ? "local-member-session-secret" : "")

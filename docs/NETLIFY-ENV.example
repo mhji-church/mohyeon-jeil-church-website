@@ -1,0 +1,10 @@
+TURSO_DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=replace-with-turso-token
+R2_ACCESS_KEY_ID=replace-with-r2-access-key
+R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
+R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
+R2_BUCKET_NAME=replace-with-r2-bucket-name
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-with-strong-password
+ADMIN_SESSION_SECRET=replace-with-long-random-value
+MEMBER_SESSION_SECRET=replace-with-another-long-random-value

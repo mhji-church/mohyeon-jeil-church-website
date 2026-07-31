@@ -9,7 +9,6 @@ import {
   type ContentType,
 } from "../../../../lib/content";
 import { requireAdminApi } from "../../../admin-auth";
-import { env } from "cloudflare:workers";
 import { hasExternalR2, putExternalObject } from "../../../../lib/external-r2";
 import { getKoreaDate } from "../../../../lib/korea-date";
 
@@ -53,8 +52,7 @@ async function uploadPendingImages(
   if (!files.length) return { input, uploaded: [] as string[] };
 
   const useExternalR2 = hasExternalR2();
-  const bucket = (env as unknown as { BUCKET?: R2Bucket }).BUCKET;
-  if (!useExternalR2 && !bucket) throw new Error("이미지 저장소를 사용할 수 없습니다.");
+  if (!useExternalR2) throw new Error("이미지 저장소를 사용할 수 없습니다.");
 
   const uploadedById = new Map<string, string>();
   const uploaded: string[] = [];
@@ -72,18 +70,8 @@ async function uploadPendingImages(
             ? "businesses"
             : "bulletins";
       const key = `${directory}/${crypto.randomUUID()}-${safeName(file.name)}`;
-      let url: string;
-      if (useExternalR2) {
-        await putExternalObject(key, file, uploadedBy);
-        url = `/api/media?store=external&key=${encodeURIComponent(key)}`;
-      } else {
-        const legacyKey = `uploads/${input.type}/${crypto.randomUUID()}-${safeName(file.name)}`;
-        await bucket!.put(legacyKey, file.stream(), {
-          httpMetadata: { contentType: file.type },
-          customMetadata: { uploadedBy },
-        });
-        url = `/api/media?key=${encodeURIComponent(legacyKey)}`;
-      }
+      const url = `/api/media?store=external&key=${encodeURIComponent(key)}`;
+      await putExternalObject(key, file, uploadedBy);
       uploaded.push(url);
       uploadedById.set(id, url);
     }

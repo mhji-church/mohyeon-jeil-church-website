@@ -1,5 +1,5 @@
-import { env } from "cloudflare:workers";
 import { deleteExternalObjects } from "./external-r2";
+import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 
 export type ContentType = "bulletin" | "news" | "gallery" | "business";
 export type ContentStatus = "published" | "draft";
@@ -178,14 +178,13 @@ const seedPosts: ContentPostInput[] = [
 ];
 
 function getD1() {
-  const db = (env as unknown as { DB?: D1Database }).DB;
-  if (!db) throw new Error("콘텐츠 데이터베이스를 사용할 수 없습니다.");
-  return db;
+  return getNetlifyDb();
 }
 
 let contentStoreReady = false;
 
 export async function ensureContentStore() {
+  await ensureNetlifySchema();
   if (contentStoreReady) {
     getD1();
     return;
@@ -255,7 +254,7 @@ export async function listContentPosts(options?: {
   await ensureContentStore();
   const db = getD1();
   const filters: string[] = [];
-  const values: unknown[] = [];
+  const values: (string | number)[] = [];
   if (options?.type) {
     filters.push("type = ?");
     values.push(options.type);
@@ -352,15 +351,10 @@ export async function getUploadedMediaAccess(
 }
 
 export async function deleteUploadedImages(images: string[]) {
-  const bucket = (env as unknown as { BUCKET?: R2Bucket }).BUCKET;
   const objects = images.map(uploadedObjectKey).filter((item) => item !== null);
-  const internalKeys = objects
-    .filter((item) => item.store === "internal")
-    .map((item) => item.key);
   const externalKeys = objects
     .filter((item) => item.store === "external")
     .map((item) => item.key);
-  if (bucket && internalKeys.length) await bucket.delete(internalKeys);
   if (externalKeys.length) await deleteExternalObjects(externalKeys);
 }
 

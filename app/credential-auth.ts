@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { cookies } from "next/headers";
 
 const COOKIE_NAME = "mhji_admin_session";
@@ -16,7 +15,7 @@ type AdminSession = {
 };
 
 function config() {
-  const runtime = env as unknown as AdminEnvironment;
+  const runtime = process.env as AdminEnvironment;
   return {
     username: runtime.ADMIN_USERNAME ?? "admin",
     password:

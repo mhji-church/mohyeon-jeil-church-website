@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 type ExternalR2Environment = {
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
@@ -18,7 +16,7 @@ const encoder = new TextEncoder();
 const r2RequestTimeoutMs = 30_000;
 
 function getConfig(): R2Config | null {
-  const runtime = env as unknown as ExternalR2Environment;
+  const runtime = process.env as ExternalR2Environment;
   const accessKeyId = runtime.R2_ACCESS_KEY_ID?.trim();
   const secretAccessKey = runtime.R2_SECRET_ACCESS_KEY?.trim();
   const endpointValue = runtime.R2_ENDPOINT?.trim();
@@ -50,9 +48,12 @@ async function sha256(value: string | ArrayBuffer) {
 }
 
 async function hmac(key: ArrayBuffer | Uint8Array, value: string) {
+  const keyBytes = key instanceof Uint8Array
+    ? key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength) as ArrayBuffer
+    : key;
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    keyBytes,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

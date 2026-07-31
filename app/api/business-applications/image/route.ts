@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { getMemberSession } from "../../../member-auth";
 import { deleteUploadedImages } from "../../../../lib/content";
 import {
@@ -39,24 +38,12 @@ export async function POST(request: Request) {
   }
   const directory = memberDirectory(member.id);
   const key = `${directory}${crypto.randomUUID()}-${safeName(file.name)}`;
-  if (hasExternalR2()) {
-    await putExternalObject(key, file, `member:${member.id}`);
-    return Response.json(
-      { image: `/api/media?store=external&key=${encodeURIComponent(key)}` },
-      { status: 201 },
-    );
-  }
-  const bucket = (env as unknown as { BUCKET?: R2Bucket }).BUCKET;
-  if (!bucket) {
+  if (!hasExternalR2()) {
     return Response.json({ error: "이미지 저장소를 사용할 수 없습니다." }, { status: 500 });
   }
-  const legacyKey = `uploads/business-applications/${member.id}/${crypto.randomUUID()}-${safeName(file.name)}`;
-  await bucket.put(legacyKey, file.stream(), {
-    httpMetadata: { contentType: file.type },
-    customMetadata: { uploadedBy: `member:${member.id}` },
-  });
+  await putExternalObject(key, file, `member:${member.id}`);
   return Response.json(
-    { image: `/api/media?key=${encodeURIComponent(legacyKey)}` },
+    { image: `/api/media?store=external&key=${encodeURIComponent(key)}` },
     { status: 201 },
   );
 }

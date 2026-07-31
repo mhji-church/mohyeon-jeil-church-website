@@ -1,5 +1,5 @@
-import { env } from "cloudflare:workers";
 import { normalizeMobilePhone } from "./phone";
+import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 
 export type MemberStatus = "pending" | "approved" | "suspended";
 
@@ -31,17 +31,15 @@ export type MemberSignupInput = {
 const PASSWORD_HASH_ITERATIONS = 100_000;
 
 function getD1() {
-  const db = (env as unknown as { DB?: D1Database }).DB;
-  if (!db) throw new Error("회원 데이터베이스를 사용할 수 없습니다.");
-  return db;
+  return getNetlifyDb();
 }
 
-export function ensureMemberStore() {
+export async function ensureMemberStore() {
   // The members table is provisioned by the checked-in D1 migration.
   // Do not cache request-scoped D1 promises in module state: a Worker isolate can
   // reuse that promise for a later request and leave every member operation
   // waiting until Cloudflare cancels it.
-  getD1();
+  await ensureNetlifySchema();
 }
 
 function mapMember(row: Record<string, unknown>): Member {
@@ -309,7 +307,7 @@ async function hashPassword(password: string, suppliedSalt?: Uint8Array) {
     {
       name: "PBKDF2",
       hash: "SHA-256",
-      salt,
+      salt: salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer,
       iterations: PASSWORD_HASH_ITERATIONS,
     },
     keyMaterial,

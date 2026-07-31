@@ -1,7 +1,7 @@
-import { env } from "cloudflare:workers";
 import { normalizeMobilePhone } from "./phone";
 import { deleteUploadedImages, ensureContentStore } from "./content";
 import { getKoreaDate } from "./korea-date";
+import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 
 export type BusinessApplicationStatus = "pending" | "reviewed" | "completed";
 
@@ -39,9 +39,7 @@ export type BusinessApplicationInput = Pick<
 >;
 
 function getD1() {
-  const db = (env as unknown as { DB?: D1Database }).DB;
-  if (!db) throw new Error("사업장 신청 데이터베이스를 사용할 수 없습니다.");
-  return db;
+  return getNetlifyDb();
 }
 
 function mapRow(row: Record<string, unknown>): BusinessApplication {
@@ -118,6 +116,7 @@ export async function createBusinessApplication(
   memberId: string,
   input: BusinessApplicationInput,
 ) {
+  await ensureNetlifySchema();
   const validated = validateBusinessApplication(input);
   if (!validated.value) throw new Error(validated.error);
   const id = crypto.randomUUID();
@@ -147,6 +146,7 @@ export async function createBusinessApplication(
 }
 
 export async function listBusinessApplications() {
+  await ensureNetlifySchema();
   const result = await getD1()
     .prepare(
       `SELECT * FROM business_applications
@@ -162,6 +162,7 @@ export async function updateBusinessApplication(
   status: BusinessApplicationStatus,
   adminNote: string,
 ) {
+  await ensureNetlifySchema();
   await getD1()
     .prepare(
       `UPDATE business_applications
@@ -229,6 +230,7 @@ export async function completeBusinessApplication(
 }
 
 export async function deleteBusinessApplication(id: string) {
+  await ensureNetlifySchema();
   const db = getD1();
   const row = await db
     .prepare("SELECT image_url, status FROM business_applications WHERE id = ?")
