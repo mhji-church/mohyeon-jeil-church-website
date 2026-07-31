@@ -4023,6 +4023,12 @@ footer {
   letter-spacing: -0.035em;
 }
 
+@media (max-height: 700px) {
+  .video-modal-panel {
+    width: min(1060px, 100%, 125dvh);
+  }
+}
+
 @media (max-width: 1180px) {
   .header-inner {
     grid-template-columns: 220px minmax(0, 1fr) 270px;
@@ -5126,19 +5132,25 @@ body.modal-open { overflow: hidden; }
 .focus-modal-close { position: fixed; z-index: 305; top: 24px; right: 28px; display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid rgba(255, 255, 255, .42); border-radius: 50%; background: rgba(34, 33, 44, .5); color: white; font-size: 30px; font-weight: 250; line-height: 1; cursor: pointer; transition: background .2s ease, transform .2s ease; }
 .focus-modal-close:hover { background: var(--brown); transform: rotate(6deg); }
 .bulletin-viewer-panel, .gallery-modal-panel { width: min(1500px, 100%); max-height: calc(100vh - 48px); overflow: auto; border: 1px solid rgba(255, 255, 255, .18); background: #292833; box-shadow: 0 34px 100px rgba(0, 0, 0, .4); color: white; }
-.bulletin-viewer-panel { width: min(1500px, 100%); }
+.bulletin-viewer-panel { display: flex; width: min(1500px, 100%); height: calc(100vh - 48px); max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; }
+@supports (height: 100dvh) {
+  .bulletin-viewer-panel { height: calc(100dvh - 48px); max-height: calc(100dvh - 48px); }
+}
 .bulletin-viewer-panel > header, .gallery-modal-panel > header { display: flex; align-items: flex-end; justify-content: space-between; padding: 25px 30px 21px; border-bottom: 1px solid rgba(255, 255, 255, .15); }
+.bulletin-viewer-panel > header { flex: 0 0 auto; }
 .bulletin-viewer-panel header p, .gallery-modal-panel header p { margin: 0 0 8px; color: var(--peach); font-size: 10px; font-weight: 760; letter-spacing: .13em; }
 .bulletin-viewer-panel header h2, .gallery-modal-panel header h2 { margin: 0; font-family: var(--font-serif), serif; font-size: 25px; font-weight: 540; letter-spacing: -.045em; }
 .bulletin-viewer-panel header > span, .gallery-modal-panel header > span { color: rgba(255,255,255,.68); font-size: 12px; font-weight: 700; }
-.bulletin-spread-wrap { display: grid; grid-template-columns: 54px minmax(0, 1fr) 54px; align-items: center; gap: 14px; padding: 24px 22px; }
+.bulletin-spread-wrap { display: grid; min-height: 0; flex: 1 1 auto; grid-template-columns: 54px minmax(0, 1fr) 54px; align-items: stretch; gap: 14px; padding: 24px 22px; }
 .spread-arrow { display: grid; width: 50px; height: 50px; place-items: center; border: 1px solid rgba(255,255,255,.28); border-radius: 50%; background: transparent; color: white; cursor: pointer; transition: background .2s ease, border-color .2s ease; }
 .spread-arrow:hover:not(:disabled) { border-color: var(--peach); background: rgba(231,194,173,.15); }
 .spread-arrow:disabled { opacity: .2; cursor: default; }
-.bulletin-spread { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: stretch; perspective: 1200px; }
+.bulletin-spread { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-items: stretch; perspective: 1200px; }
+.bulletin-spread .bulletin-zoom-image { height: 100%; min-height: 0; }
+.bulletin-spread .zoomable-image-viewport img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .bulletin-spread.turn-next { animation: page-turn-next .44s cubic-bezier(.25,.7,.25,1) both; transform-origin: left center; }
 .bulletin-spread.turn-prev { animation: page-turn-prev .44s cubic-bezier(.25,.7,.25,1) both; transform-origin: right center; }
-.bulletin-viewer-panel > footer { display: flex; align-items: center; justify-content: space-between; padding: 15px 30px 20px; color: rgba(255,255,255,.55); font-size: 10px; }
+.bulletin-viewer-panel > footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 15px 30px 20px; color: rgba(255,255,255,.55); font-size: 10px; }
 .spread-dots { display: flex; gap: 8px; }
 .spread-dots button { width: 18px; height: 3px; padding: 0; border: 0; background: rgba(255,255,255,.28); cursor: pointer; }
 .spread-dots button.is-active { background: var(--peach); }
