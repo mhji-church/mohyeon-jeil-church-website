@@ -5217,7 +5217,7 @@ body.modal-open { overflow: hidden; }
 .zoom-controls .zoom-reset { min-width: 68px; border-right: 0; font-size: 10px; font-weight: 700; }
 .gallery-modal-bottom { display: grid; min-height: 112px; flex: 0 0 auto; grid-template-columns: minmax(260px, .7fr) minmax(420px, 1.3fr); gap: 40px; align-items: center; padding: 18px 30px 20px; border-top: 1px solid rgba(255,255,255,.13); }
 .gallery-modal-bottom > p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; line-height: 1.8; }
-.gallery-zoomable .zoomable-image-viewport img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.gallery-zoomable .zoomable-image-viewport img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; }
 .gallery-thumbnail-picker { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .gallery-thumbnail-picker > button { display: grid; width: 36px; height: 100%; min-height: 58px; place-items: center; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: white; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
 .gallery-thumbnail-picker > button:hover, .gallery-thumbnail-picker > button:focus-visible { border-color: var(--peach); background: rgba(255,255,255,.12); }

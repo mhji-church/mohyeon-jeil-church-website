@@ -230,7 +230,7 @@ export default function ZoomableImage({
           onClick={() => commit({ scale: 1, x: 0, y: 0 })}
           disabled={transform.scale === 1}
         >
-          원래 크기
+          화면 맞춤
         </button>
       </div>
     </div>

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+export type HeaderMember = {
+  name: string;
+  position: string;
+};
+
 const menuItems = [
   { label: "교회 소개", href: "/about" },
   {
@@ -38,26 +43,30 @@ function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
   );
 }
 
-export function SiteHeader() {
+export function SiteHeader({ initialMember }: { initialMember: HeaderMember | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [worshipOpen, setWorshipOpen] = useState(false);
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [member, setMember] = useState<
-    { name: string; position: string } | null
-  >(null);
+  const [member, setMember] = useState<HeaderMember | null>(initialMember);
 
   useEffect(() => {
     let active = true;
     const loadMember = () => {
       fetch("/api/members/profile", { cache: "no-store" })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { member?: { name: string; position: string } } | null) => {
-          if (active) setMember(data?.member ?? null);
+        .then(async (response) => {
+          if (response.ok) {
+            return response.json() as Promise<{ member?: HeaderMember }>;
+          }
+          if (response.status === 401) return { member: null };
+          throw new Error(`회원 정보 확인 실패: ${response.status}`);
         })
-        .catch(() => {
-          if (active) setMember(null);
-        });
+        .then((data: { member?: HeaderMember | null }) => {
+          if (active) setMember(data.member ?? null);
+        })
+        // 네트워크 전환이나 페이지 이동 중 요청 실패는 이미 확인한 로그인
+        // 상태를 비로그인으로 덮어쓰지 않는다. 401 응답일 때만 해제한다.
+        .catch(() => undefined);
     };
     const scheduled = "requestIdleCallback" in window
       ? window.requestIdleCallback(loadMember, { timeout: 800 })

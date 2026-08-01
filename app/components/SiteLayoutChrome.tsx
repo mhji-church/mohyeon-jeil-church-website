@@ -1,12 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { SiteFooter, SiteHeader } from "./SiteChrome";
+import { SiteFooter, SiteHeader, type HeaderMember } from "./SiteChrome";
 
 export default function SiteLayoutChrome({
   children,
+  initialMember,
 }: {
   children: React.ReactNode;
+  initialMember: HeaderMember | null;
 }) {
   const pathname = usePathname();
 
@@ -14,7 +16,7 @@ export default function SiteLayoutChrome({
 
   return (
     <>
-      <SiteHeader />
+      <SiteHeader initialMember={initialMember} />
       {children}
       <SiteFooter />
     </>

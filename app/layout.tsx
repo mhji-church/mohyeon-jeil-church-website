@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import SiteLayoutChrome from "./components/SiteLayoutChrome";
+import { getMemberSession } from "./member-auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -48,17 +49,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const member = await getMemberSession();
+  const initialMember = member
+    ? { name: member.name, position: member.position }
+    : null;
+
   return (
     <html lang="ko">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SiteLayoutChrome>{children}</SiteLayoutChrome>
+        <SiteLayoutChrome initialMember={initialMember}>{children}</SiteLayoutChrome>
       </body>
     </html>
   );
