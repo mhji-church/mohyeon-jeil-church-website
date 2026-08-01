@@ -5143,8 +5143,8 @@ footer {
 
 /* Gallery board */
 .gallery-board { background: var(--paper); }
-.gallery-album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; }
-.gallery-album-card { display: block; width: 100%; overflow: hidden; padding: 0; border: 1px solid var(--line); background: #fff; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
+.gallery-album-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 26px; }
+.gallery-album-card { display: block; width: 100%; max-width: calc((100% - 52px) / 3); flex: 1 1 320px; overflow: hidden; padding: 0; border: 1px solid var(--line); background: #fff; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
 .gallery-album-card:hover { border-color: rgba(169, 113, 97, .42); box-shadow: 0 24px 54px rgba(44, 41, 48, .1); transform: translateY(-5px); }
 .gallery-album-cover { position: relative; overflow: hidden; aspect-ratio: 16 / 10; background: #e5dfda; }
 .gallery-album-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .55s ease, filter .35s ease; }
@@ -5233,7 +5233,8 @@ body.modal-open { overflow: hidden; }
 
 @media (max-width: 1024px) {
   .about-intro-grid, .worship-guide-grid { gap: 64px; }
-  .business-grid, .gallery-album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .business-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gallery-album-card { max-width: calc((100% - 26px) / 2); }
   .business-application-layout { grid-template-columns: 1fr; gap: 24px; }
   .business-application-layout > aside { position: static; }
 }
@@ -5242,7 +5243,9 @@ body.modal-open { overflow: hidden; }
   .content-hero { min-height: 330px; }
   .content-section { padding: 72px 0 84px; }
   .content-list-heading { margin-bottom: 30px; }
-  .business-grid, .gallery-album-grid { grid-template-columns: 1fr; gap: 16px; }
+  .business-grid { grid-template-columns: 1fr; gap: 16px; }
+  .gallery-album-grid { gap: 16px; }
+  .gallery-album-card { max-width: 100%; flex-basis: 100%; }
   .business-directory-heading { display: none; }
   .business-directory-mobile-apply { display: flex; min-height: 50px; align-items: center; justify-content: space-between; margin-top: 24px; padding: 0 20px; background: var(--ink); color: white; font-size: 12px; font-weight: 760; }
   .business-directory-mobile-apply b { color: var(--peach); font-size: 17px; font-weight: 400; }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { businessCategories } from "../../../lib/business-categories";
+import { formatPhoneNumber } from "../../../lib/phone";
 
 const supportedExtensions = new Set([
   "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp",
@@ -310,7 +311,20 @@ export default function BusinessApplicationForm({
           <div className="business-form-row">
             <label>
               <span>사업장 연락처</span>
-              <input name="businessPhone" maxLength={30} placeholder="예: 031-000-0000" />
+              <input
+                name="businessPhone"
+                type="tel"
+                autoComplete="tel"
+                inputMode="numeric"
+                maxLength={13}
+                placeholder="예: 031-000-0000"
+                onInput={(event) => {
+                  event.currentTarget.value = formatPhoneNumber(
+                    event.currentTarget.value,
+                  );
+                }}
+              />
+              <small>숫자만 입력해도 하이픈이 자동으로 추가됩니다.</small>
             </label>
             <label>
               <span>홈페이지·SNS</span>
