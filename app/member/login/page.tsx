@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SiteFooter, SiteHeader } from "../../components/SiteChrome";
 import { getMemberSession } from "../../member-auth";
 import MemberLoginForm from "./MemberLoginForm";
 
@@ -20,7 +19,6 @@ export default async function MemberLoginPage({
 
   return (
     <>
-      <SiteHeader />
       <main className="member-auth-shell member-login-shell">
         <section className="member-auth-intro">
           <span>CHURCH MEMBER</span>
@@ -44,7 +42,6 @@ export default async function MemberLoginPage({
           </p>
         </section>
       </main>
-      <SiteFooter />
     </>
   );
 }

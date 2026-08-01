@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { SiteFooter, SiteHeader } from "../../components/SiteChrome";
 import { getMemberSession } from "../../member-auth";
 import PasswordChangeForm from "./PasswordChangeForm";
 
@@ -22,7 +21,6 @@ export default async function MemberPasswordPage({
   if (!member.forcePasswordChange) redirect(returnTo);
   return (
     <>
-      <SiteHeader />
       <main className="member-auth-shell member-login-shell">
         <section className="member-auth-intro">
           <span>SECURITY CHECK</span>
@@ -43,7 +41,6 @@ export default async function MemberPasswordPage({
           <PasswordChangeForm returnTo={returnTo} />
         </section>
       </main>
-      <SiteFooter />
     </>
   );
 }

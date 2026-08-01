@@ -1,5 +1,3 @@
-import { SiteFooter, SiteHeader } from "./SiteChrome";
-
 type ContentPageProps = {
   eyebrow: string;
   title: string;
@@ -18,7 +16,6 @@ export default function ContentPage({
 }: ContentPageProps) {
   return (
     <main>
-      <SiteHeader />
       <section className="subpage-hero content-hero">
         <div className="subpage-hero-bg" aria-hidden="true">
           <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
@@ -30,7 +27,6 @@ export default function ContentPage({
         </div>
       </section>
       {children}
-      <SiteFooter />
     </main>
   );
 }

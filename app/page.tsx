@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SiteFooter, SiteHeader } from "./components/SiteChrome";
 
 const heroSlides = [
   {
@@ -237,7 +236,6 @@ export default function Home() {
 
   return (
     <main>
-      <SiteHeader />
 
       <section
         className="hero"
@@ -564,7 +562,6 @@ export default function Home() {
         </div>
       </section>
 
-      <SiteFooter />
 
       {modalSermon && (
         <div

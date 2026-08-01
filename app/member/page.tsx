@@ -1,4 +1,3 @@
-import { SiteFooter, SiteHeader } from "../components/SiteChrome";
 import { requireMemberPage } from "../member-auth";
 import MemberProfileForm from "./MemberProfileForm";
 
@@ -9,7 +8,6 @@ export default async function MemberPage() {
 
   return (
     <>
-      <SiteHeader />
       <main className="member-profile-page">
         <header className="member-profile-heading">
           <span>MY ACCOUNT</span>
@@ -22,7 +20,6 @@ export default async function MemberPage() {
 
         <MemberProfileForm member={member} />
       </main>
-      <SiteFooter />
     </>
   );
 }

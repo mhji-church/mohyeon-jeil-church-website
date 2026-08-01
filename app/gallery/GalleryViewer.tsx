@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ZoomableImage from "../components/ZoomableImage";
 
 export type GalleryModalAlbum = {
@@ -20,6 +20,7 @@ export default function GalleryViewer({
   onClose: () => void;
 }) {
   const [activeImage, setActiveImage] = useState(0);
+  const thumbnailsRef = useRef<HTMLDivElement>(null);
 
   const moveImage = useCallback((amount: number) => {
     if (!album.images.length) return;
@@ -41,6 +42,26 @@ export default function GalleryViewer({
       window.removeEventListener("keydown", handleKey);
     };
   }, [moveImage, onClose]);
+
+  useEffect(() => {
+    const activeThumbnail = thumbnailsRef.current?.querySelector<HTMLElement>(
+      `[data-thumbnail-index="${activeImage}"]`,
+    );
+    activeThumbnail?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeImage]);
+
+  const scrollThumbnails = (direction: number) => {
+    const thumbnails = thumbnailsRef.current;
+    if (!thumbnails) return;
+    thumbnails.scrollBy({
+      left: direction * Math.max(280, thumbnails.clientWidth * 0.75),
+      behavior: "smooth",
+    });
+  };
 
   return (
     <div
@@ -80,6 +101,7 @@ export default function GalleryViewer({
                 key={album.images[activeImage]}
                 src={album.images[activeImage]}
                 alt={`${album.title} 사진 ${activeImage + 1}`}
+                className="gallery-zoomable"
                 onSwipe={(direction) => moveImage(direction === "next" ? 1 : -1)}
               />
               <button type="button" onClick={() => moveImage(1)} aria-label="다음 사진">
@@ -89,18 +111,39 @@ export default function GalleryViewer({
 
             <footer className="gallery-modal-bottom">
               <p>{album.content}</p>
-              <div className="gallery-thumbnails" aria-label="사진 선택">
-                {album.images.map((image, index) => (
+              <div className="gallery-thumbnail-picker">
+                {album.images.length > 4 && (
                   <button
                     type="button"
-                    className={index === activeImage ? "is-active" : ""}
-                    onClick={() => setActiveImage(index)}
-                    key={image}
-                    aria-label={`${index + 1}번 사진 보기`}
+                    onClick={() => scrollThumbnails(-1)}
+                    aria-label="이전 썸네일 보기"
                   >
-                    <img src={image} alt="" loading="lazy" decoding="async" />
+                    ←
                   </button>
-                ))}
+                )}
+                <div className="gallery-thumbnails" aria-label="사진 선택" ref={thumbnailsRef}>
+                  {album.images.map((image, index) => (
+                    <button
+                      type="button"
+                      className={index === activeImage ? "is-active" : ""}
+                      onClick={() => setActiveImage(index)}
+                      key={image}
+                      data-thumbnail-index={index}
+                      aria-label={`${index + 1}번 사진 보기`}
+                    >
+                      <img src={image} alt="" loading="lazy" decoding="async" />
+                    </button>
+                  ))}
+                </div>
+                {album.images.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollThumbnails(1)}
+                    aria-label="다음 썸네일 보기"
+                  >
+                    →
+                  </button>
+                )}
               </div>
             </footer>
           </>

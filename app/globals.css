@@ -5217,8 +5217,13 @@ body.modal-open { overflow: hidden; }
 .zoom-controls .zoom-reset { min-width: 68px; border-right: 0; font-size: 10px; font-weight: 700; }
 .gallery-modal-bottom { display: grid; min-height: 112px; flex: 0 0 auto; grid-template-columns: minmax(260px, .7fr) minmax(420px, 1.3fr); gap: 40px; align-items: center; padding: 18px 30px 20px; border-top: 1px solid rgba(255,255,255,.13); }
 .gallery-modal-bottom > p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; line-height: 1.8; }
-.gallery-thumbnails { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.gallery-thumbnails button { overflow: hidden; padding: 0; border: 2px solid transparent; background: transparent; opacity: .55; cursor: pointer; }
+.gallery-zoomable .zoomable-image-viewport img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.gallery-thumbnail-picker { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.gallery-thumbnail-picker > button { display: grid; width: 36px; height: 100%; min-height: 58px; place-items: center; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: white; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
+.gallery-thumbnail-picker > button:hover, .gallery-thumbnail-picker > button:focus-visible { border-color: var(--peach); background: rgba(255,255,255,.12); }
+.gallery-thumbnails { display: flex; min-width: 0; gap: 8px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-behavior: smooth; scrollbar-width: none; }
+.gallery-thumbnails::-webkit-scrollbar { display: none; }
+.gallery-thumbnails button { width: calc((100% - 24px) / 4); min-width: calc((100% - 24px) / 4); flex: 0 0 calc((100% - 24px) / 4); overflow: hidden; padding: 0; border: 2px solid transparent; background: transparent; opacity: .55; cursor: pointer; }
 .gallery-thumbnails button.is-active { border-color: var(--peach); opacity: 1; }
 .gallery-thumbnails img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 @keyframes focus-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -5352,8 +5357,9 @@ body.modal-open { overflow: hidden; }
   .zoom-controls button, .zoom-controls output { min-width: 36px; height: 36px; padding-inline: 8px; }
   .gallery-modal-bottom { display: block; min-height: 78px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: #292833; }
   .gallery-modal-bottom > p { display: none; }
-  .gallery-thumbnails { display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none; }
-  .gallery-thumbnails::-webkit-scrollbar { display: none; }
+  .gallery-thumbnail-picker { gap: 6px; }
+  .gallery-thumbnail-picker > button { width: 32px; min-height: 52px; }
+  .gallery-thumbnails { gap: 7px; }
   .gallery-thumbnails button { width: 92px; flex: 0 0 92px; }
 }
 

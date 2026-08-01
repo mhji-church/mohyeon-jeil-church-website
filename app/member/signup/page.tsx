@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { SiteFooter, SiteHeader } from "../../components/SiteChrome";
 import SignupForm from "./SignupForm";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +6,6 @@ export const dynamic = "force-dynamic";
 export default function MemberSignupPage() {
   return (
     <>
-      <SiteHeader />
       <main className="member-auth-shell">
         <section className="member-auth-intro">
           <span>MEMBER REGISTRATION</span>
@@ -36,7 +34,6 @@ export default function MemberSignupPage() {
           </p>
         </section>
       </main>
-      <SiteFooter />
     </>
   );
 }

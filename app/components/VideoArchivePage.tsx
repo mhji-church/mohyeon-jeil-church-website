@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { SiteFooter, SiteHeader } from "./SiteChrome";
 
 export type ArchiveVideo = {
   videoId: string;
@@ -69,7 +68,6 @@ export default function VideoArchivePage({
 
   return (
     <main>
-      <SiteHeader />
 
       <section className="subpage-hero">
         <div className="subpage-hero-bg" aria-hidden="true">
@@ -180,7 +178,6 @@ export default function VideoArchivePage({
         </div>
       </section>
 
-      <SiteFooter />
 
       {playing && (
         <div className="video-modal" role="dialog" aria-modal="true" aria-label={`${playing.title} 영상`}>

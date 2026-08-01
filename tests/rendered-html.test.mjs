@@ -42,4 +42,24 @@ test("renders development preview metadata", async () => {
   assert.match(html, developmentPreviewMeta);
   assert.match(html, />교인 로그인</);
   assert.match(html, /hero-spring-mobile\.webp/);
+  assert.equal((html.match(/class="site-header/g) ?? []).length, 1);
+  assert.equal((html.match(/<footer id="gallery"/g) ?? []).length, 1);
+
+  const adminResponse = typeof server.fetch === "function"
+    ? await server.fetch(
+      new Request("http://localhost/admin/login", { headers: { accept: "text/html" } }),
+      {
+        ASSETS: {
+          fetch: async () => new Response("Not found", { status: 404 }),
+        },
+      },
+      {
+        waitUntil() {},
+        passThroughOnException() {},
+      },
+    )
+    : await server(new Request("http://localhost/admin/login"));
+  const adminHtml = await adminResponse.text();
+  assert.doesNotMatch(adminHtml, /class="site-header/);
+  assert.doesNotMatch(adminHtml, /<footer id="gallery"/);
 });
