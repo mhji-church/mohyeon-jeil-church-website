@@ -97,7 +97,7 @@ export default function GalleryViewer({
                   key={image}
                   aria-label={`${index + 1}번 사진 보기`}
                 >
-                  <img src={image} alt="" />
+                  <img src={image} alt="" loading="lazy" decoding="async" />
                 </button>
               ))}
             </div>

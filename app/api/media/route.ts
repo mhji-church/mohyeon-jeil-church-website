@@ -28,8 +28,14 @@ export async function GET(request: Request) {
   headers.set(
     "cache-control",
     access === "public"
-      ? "public, max-age=300"
+      ? "public, max-age=86400, immutable"
       : "private, no-store",
   );
+  if (access === "public") {
+    headers.set(
+      "netlify-cdn-cache-control",
+      "public, durable, s-maxage=31536000, immutable",
+    );
+  }
   return new Response(body, { headers });
 }

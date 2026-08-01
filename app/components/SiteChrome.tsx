@@ -37,8 +37,8 @@ export function SiteHeader() {
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [member, setMember] = useState<
-    { name: string; position: string } | null | undefined
-  >(undefined);
+    { name: string; position: string } | null
+  >(null);
 
   useEffect(() => {
     let active = true;
@@ -52,10 +52,17 @@ export function SiteHeader() {
           if (active) setMember(null);
         });
     };
-    loadMember();
+    const scheduled = "requestIdleCallback" in window
+      ? window.requestIdleCallback(loadMember, { timeout: 800 })
+      : window.setTimeout(loadMember, 120);
     window.addEventListener("member-profile-updated", loadMember);
     return () => {
       active = false;
+      if ("cancelIdleCallback" in window && typeof scheduled === "number") {
+        window.cancelIdleCallback(scheduled);
+      } else {
+        window.clearTimeout(scheduled);
+      }
       window.removeEventListener("member-profile-updated", loadMember);
     };
   }, []);
@@ -126,14 +133,14 @@ export function SiteHeader() {
           <nav className="desktop-nav" aria-label="주요 메뉴">
             {menuItems.map((item) => (
               <div className={`desktop-nav-item${item.children ? " has-submenu" : ""}`} key={item.label}>
-                <a href={item.href}>{item.label}</a>
+                <Link href={item.href} prefetch={false}>{item.label}</Link>
                 {item.children && (
                   <div className="desktop-submenu" aria-label={`${item.label} 하위 메뉴`}>
                     {item.children.map((child) => (
-                      <a href={child.href} key={child.label}>
+                      <Link href={child.href} prefetch={false} key={child.label}>
                         {child.label}
                         <ArrowIcon />
-                      </a>
+                      </Link>
                     ))}
                   </div>
                 )}
@@ -155,9 +162,7 @@ export function SiteHeader() {
                 예배 아카이브
               </span>
               <span aria-hidden="true">|</span>
-              {member === undefined ? (
-                <span className="header-member-loading" aria-hidden="true" />
-              ) : member ? (
+              {member ? (
                 <span
                   className={`header-member-actions${memberMenuOpen ? " is-open" : ""}`}
                   data-member-menu
@@ -186,9 +191,9 @@ export function SiteHeader() {
                   </span>
                 </span>
               ) : (
-                <a className="header-member-login" href="/member/login">
+                <Link className="header-member-login" href="/member/login" prefetch={false}>
                   교인 로그인
-                </a>
+                </Link>
               )}
             </div>
             <button
@@ -228,19 +233,19 @@ export function SiteHeader() {
                   hidden={!worshipOpen}
                 >
                   {item.children.map((child) => (
-                    <a href={child.href} key={child.label} onClick={closeMenu}>
+                    <Link href={child.href} prefetch={false} key={child.label} onClick={closeMenu}>
                       {child.label}
                       <ArrowIcon />
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>
             ) : (
-              <a key={item.label} href={item.href} onClick={closeMenu}>
+              <Link key={item.label} href={item.href} prefetch={false} onClick={closeMenu}>
                 <span>0{index + 1}</span>
                 <strong>{item.label}</strong>
                 <ArrowIcon />
-              </a>
+              </Link>
             ),
           )}
         </nav>
@@ -250,9 +255,7 @@ export function SiteHeader() {
             <strong>031-333-5420</strong>
           </div>
           <div className="mobile-member-links">
-            {member === undefined ? (
-              <span className="mobile-member-loading" aria-hidden="true" />
-            ) : member ? (
+            {member ? (
               <div
                 className={`mobile-member-menu${memberMenuOpen ? " is-open" : ""}`}
                 data-member-menu
@@ -280,12 +283,12 @@ export function SiteHeader() {
               </div>
             ) : (
               <>
-                <a className="mobile-member-signup" href="/member/signup" onClick={closeMenu}>
+                <Link className="mobile-member-signup" href="/member/signup" prefetch={false} onClick={closeMenu}>
                   회원가입
-                </a>
-                <a className="mobile-member-login" href="/member/login" onClick={closeMenu}>
+                </Link>
+                <Link className="mobile-member-login" href="/member/login" prefetch={false} onClick={closeMenu}>
                   로그인
-                </a>
+                </Link>
               </>
             )}
           </div>

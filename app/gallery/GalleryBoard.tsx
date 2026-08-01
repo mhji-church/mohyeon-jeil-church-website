@@ -28,7 +28,9 @@ export default function GalleryBoard({
               aria-label={`${album.title} 앨범 열기`}
             >
               <div className="gallery-album-cover">
-                {album.coverImage ? <img src={album.coverImage} alt="" /> : null}
+                {album.coverImage ? (
+                  <img src={album.coverImage} alt="" loading="lazy" decoding="async" />
+                ) : null}
                 <span>{album.imageCount} PHOTOS</span>
               </div>
               <div className="gallery-album-copy">

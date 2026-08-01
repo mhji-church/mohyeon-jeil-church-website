@@ -60,7 +60,12 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                 onClick={() => openViewer(latest)}
                 aria-label={`${latest.title} 크게 보기`}
               >
-                <img src={latest.images[0]} alt={`${latest.title} 첫 번째 면`} />
+                <img
+                  src={latest.images[0]}
+                  alt={`${latest.title} 첫 번째 면`}
+                  loading="lazy"
+                  decoding="async"
+                />
                 <span className="bulletin-new-label">NEW</span>
                 <span className="bulletin-cover-action">클릭하여 크게 보기</span>
               </button>

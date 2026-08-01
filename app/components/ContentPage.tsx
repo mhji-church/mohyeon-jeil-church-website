@@ -21,7 +21,7 @@ export default function ContentPage({
       <SiteHeader />
       <section className="subpage-hero content-hero">
         <div className="subpage-hero-bg" aria-hidden="true">
-          <img src={heroImage} alt="" />
+          <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
         </div>
         <div className="page-width subpage-hero-inner">
           <p>{eyebrow}</p>

@@ -69,7 +69,12 @@ export default async function BusinessPage() {
                 return (
                   <article className="business-card" key={business.id}>
                     <div className="business-image">
-                      <img src={business.images[0]} alt={`${business.title} 대표 이미지`} />
+                      <img
+                        src={business.images[0]}
+                        alt={`${business.title} 대표 이미지`}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </div>
                     <div className="business-copy">
                       <div>

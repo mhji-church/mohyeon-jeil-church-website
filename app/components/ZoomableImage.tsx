@@ -198,6 +198,7 @@ export default function ZoomableImage({
         <img
           src={src}
           alt={alt}
+          decoding="async"
           draggable={false}
           style={{
             transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,

@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         const value = response.headers.get(name);
         if (value) headers.set(name, value);
       }
-      headers.set("cache-control", "private, no-store");
+      headers.set("cache-control", "private, max-age=300");
       return new Response(response.body, { headers });
     }
     return new Response("Not found", { status: 404 });

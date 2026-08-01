@@ -143,6 +143,8 @@ function SermonImage({ src, alt }: { src: string; alt: string }) {
     <img
       src={failed ? "/assets/hero-worship.webp" : src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );
@@ -249,12 +251,15 @@ export default function Home() {
               className={`hero-slide${index === activeSlide ? " is-active" : ""}`}
               key={slide.image}
               aria-hidden={index !== activeSlide}
-              style={{ backgroundImage: `url(${slide.image})` }}
             >
               <picture>
+                <source media="(max-width: 720px)" srcSet={slide.mobileImage} />
                 <img
                   src={slide.image}
                   alt={index === activeSlide ? slide.alt : ""}
+                  loading={index <= 1 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  decoding="async"
                   style={{ objectPosition: slide.position }}
                 />
               </picture>
@@ -510,7 +515,12 @@ export default function Home() {
 
       <section className="visit-section" id="visit">
         <div className="visit-map">
-          <img src="/assets/church-map.png" alt="모현제일교회 위치 지도" />
+          <img
+            src="/assets/church-map.png"
+            alt="모현제일교회 위치 지도"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
         <div className="visit-copy">
           <p className="section-kicker light">VISIT US</p>

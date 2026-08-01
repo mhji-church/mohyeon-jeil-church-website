@@ -1928,7 +1928,7 @@ svg {
   position: relative;
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 670;
   letter-spacing: -0.035em;
 }
@@ -2008,9 +2008,9 @@ svg {
   align-items: center;
   gap: 11px;
   color: #6d6870;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 730;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.055em;
   white-space: nowrap;
 }
 
@@ -2031,7 +2031,7 @@ svg {
   border: 0;
   background: transparent;
   color: #9b685b;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 730;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -4040,7 +4040,7 @@ footer {
   }
 
   .desktop-nav-item > a {
-    font-size: 12px;
+    font-size: 13.5px;
   }
 
   .archive-card {

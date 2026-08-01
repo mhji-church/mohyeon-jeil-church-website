@@ -73,7 +73,7 @@ export default function VideoArchivePage({
 
       <section className="subpage-hero">
         <div className="subpage-hero-bg" aria-hidden="true">
-          <img src="/assets/hero-worship.webp" alt="" />
+          <img src="/assets/hero-worship.webp" alt="" fetchPriority="high" decoding="async" />
         </div>
         <div className="page-width subpage-hero-inner">
           <p>{eyebrow}</p>
@@ -109,6 +109,8 @@ export default function VideoArchivePage({
                   <img
                     src={`https://i.ytimg.com/vi/${video.videoId}/maxresdefault.jpg`}
                     alt={`${video.title} 유튜브 썸네일`}
+                    loading="lazy"
+                    decoding="async"
                     onError={(event) => {
                       event.currentTarget.src = `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
                     }}

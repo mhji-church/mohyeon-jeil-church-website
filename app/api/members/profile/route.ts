@@ -8,18 +8,24 @@ import { getMemberSession } from "../../../member-auth";
 export async function GET() {
   const member = await getMemberSession();
   if (!member) {
-    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    return Response.json(
+      { error: "로그인이 필요합니다." },
+      { status: 401, headers: { "cache-control": "private, no-store" } },
+    );
   }
-  return Response.json({
-    member: {
-      username: member.username,
-      name: member.name,
-      phone: member.phone,
-      birthDate: member.birthDate,
-      position: member.position,
-      createdAt: member.createdAt,
+  return Response.json(
+    {
+      member: {
+        username: member.username,
+        name: member.name,
+        phone: member.phone,
+        birthDate: member.birthDate,
+        position: member.position,
+        createdAt: member.createdAt,
+      },
     },
-  });
+    { headers: { "cache-control": "private, no-store" } },
+  );
 }
 
 export async function PATCH(request: Request) {
