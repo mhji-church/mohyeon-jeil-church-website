@@ -1,13 +1,39 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
+import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
 
 export default function GalleryBoard({
   albums,
   isMember,
+  modalAlbums,
+  initialAlbumId,
 }: {
   albums: GalleryListItem[];
   isMember: boolean;
+  modalAlbums: GalleryModalAlbum[];
+  initialAlbumId: string;
 }) {
+  const [viewer, setViewer] = useState<GalleryModalAlbum | null>(
+    modalAlbums.find((item) => item.id === initialAlbumId) ?? null,
+  );
+
+  const openViewer = (album: GalleryModalAlbum) => {
+    setViewer(album);
+    const url = new URL(window.location.href);
+    url.searchParams.set("album", album.id);
+    window.history.replaceState(null, "", url);
+  };
+
+  const closeViewer = () => {
+    setViewer(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("album");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+
   return (
     <section className="content-section gallery-board">
       <div className="page-width">
@@ -20,13 +46,10 @@ export default function GalleryBoard({
         </header>
 
         <div className="gallery-album-grid">
-          {albums.map((album, index) => (
-            <Link
-              className="gallery-album-card"
-              href={`/gallery/${encodeURIComponent(album.id)}#gallery-viewer`}
-              key={album.id}
-              aria-label={`${album.title} 앨범 열기`}
-            >
+          {albums.map((album, index) => {
+            const modalAlbum = modalAlbums.find((item) => item.id === album.id);
+            const cardContent = (
+              <>
               <div className="gallery-album-cover">
                 {album.coverImage ? (
                   <img src={album.coverImage} alt="" loading="lazy" decoding="async" />
@@ -45,8 +68,30 @@ export default function GalleryBoard({
                   <i aria-hidden="true">→</i>
                 </strong>
               </div>
-            </Link>
-          ))}
+              </>
+            );
+
+            return isMember && modalAlbum ? (
+              <button
+                className="gallery-album-card"
+                type="button"
+                onClick={() => openViewer(modalAlbum)}
+                key={album.id}
+                aria-label={`${album.title} 앨범 열기`}
+              >
+                {cardContent}
+              </button>
+            ) : (
+              <Link
+                className="gallery-album-card"
+                href={`/member/login?returnTo=${encodeURIComponent(`/gallery?album=${album.id}`)}`}
+                key={album.id}
+                aria-label={`${album.title} 앨범을 보기 위해 로그인`}
+              >
+                {cardContent}
+              </Link>
+            );
+          })}
         </div>
 
         <nav className="gallery-pagination" aria-label="갤러리 페이지">
@@ -55,6 +100,10 @@ export default function GalleryBoard({
           <button type="button" disabled aria-label="다음 페이지">→</button>
         </nav>
       </div>
+
+      {viewer ? (
+        <GalleryViewer key={viewer.id} album={viewer} onClose={closeViewer} />
+      ) : null}
     </section>
   );
 }

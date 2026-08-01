@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import ContentPage from "../components/ContentPage";
 import GalleryBoard from "./GalleryBoard";
-import { listPublicGalleryPosts } from "../../lib/content";
+import type { GalleryModalAlbum } from "./GalleryViewer";
+import { listContentPosts, listPublicGalleryPosts } from "../../lib/content";
 import { getMemberSession } from "../member-auth";
 
 export const metadata: Metadata = {
@@ -11,11 +12,30 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function GalleryPage() {
+export default async function GalleryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ album?: string }>;
+}) {
+  const { album: initialAlbumId = "" } = await searchParams;
   const [albums, member] = await Promise.all([
     listPublicGalleryPosts(),
     getMemberSession(),
   ]);
+  const memberAlbums = member
+    ? await listContentPosts({ type: "gallery" })
+    : [];
+  const modalAlbums: GalleryModalAlbum[] = memberAlbums.map((album) => ({
+    id: album.id,
+    title: album.title,
+    date: album.date,
+    category: album.category,
+    content: album.content,
+    images: album.images.map(
+      (_, index) =>
+        `/api/gallery/media?post_id=${encodeURIComponent(album.id)}&image=${index}`,
+    ),
+  }));
 
   return (
     <ContentPage
@@ -25,7 +45,12 @@ export default async function GalleryPage() {
       current="갤러리"
       heroImage="/assets/hero-flowers.webp"
     >
-      <GalleryBoard albums={albums} isMember={Boolean(member)} />
+      <GalleryBoard
+        albums={albums}
+        isMember={Boolean(member)}
+        modalAlbums={modalAlbums}
+        initialAlbumId={initialAlbumId}
+      />
     </ContentPage>
   );
 }
