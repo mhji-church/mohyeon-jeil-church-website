@@ -19,6 +19,13 @@ const menuItems = [
   { label: "갤러리", href: "/gallery" },
 ];
 
+// 링크가 준비되면 href에 주소만 입력하면 PC·모바일 모두 기존 위치의
+// 일반 링크로 자동 전환되고 "준비 중" 표시는 사라집니다.
+const worshipArchive = {
+  label: "예배 아카이브",
+  href: null as string | null,
+};
+
 function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -158,9 +165,20 @@ export function SiteHeader() {
                 YOUTUBE
               </a>
               <span aria-hidden="true">|</span>
-              <span className="header-link-disabled" aria-disabled="true">
-                예배 아카이브
-              </span>
+              {worshipArchive.href ? (
+                <a className="header-archive-link" href={worshipArchive.href}>
+                  {worshipArchive.label}
+                </a>
+              ) : (
+                <span
+                  className="header-archive-link is-preparing"
+                  aria-disabled="true"
+                  aria-label={`${worshipArchive.label} 준비 중`}
+                >
+                  <span>{worshipArchive.label}</span>
+                  <small>준비 중</small>
+                </span>
+              )}
               <span aria-hidden="true">|</span>
               {member ? (
                 <span
@@ -292,10 +310,16 @@ export function SiteHeader() {
               </>
             )}
           </div>
-          <div className="mobile-archive-link" aria-disabled="true">
-            <span>예배 아카이브</span>
-            <small>준비 중</small>
-          </div>
+          {worshipArchive.href ? (
+            <a className="mobile-archive-link" href={worshipArchive.href} onClick={closeMenu}>
+              <span>{worshipArchive.label}</span>
+            </a>
+          ) : (
+            <div className="mobile-archive-link is-preparing" aria-disabled="true">
+              <span>{worshipArchive.label}</span>
+              <small>준비 중</small>
+            </div>
+          )}
         </div>
       </div>
     </>

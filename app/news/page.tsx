@@ -39,24 +39,32 @@ export default async function NewsPage() {
               return (
               <details className="church-news-card" key={post.id} open={index === 0}>
                 <summary>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <div>
+                  <span className="church-news-number">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="church-news-title">
                     <time>{post.date}</time>
                     <h3>{post.title}</h3>
                   </div>
-                  <i aria-hidden="true">+</i>
+                  <i className="church-news-toggle" aria-hidden="true">+</i>
                 </summary>
-                <ol>
+                <ol className="church-news-body">
                   {items.map(([title, text], itemIndex) => (
                     <li key={`${title}-${itemIndex}`}>
-                      <strong>{title}</strong>
-                      <p>{text}</p>
+                      <div>
+                        <strong>{title}</strong>
+                        <p>{text}</p>
+                      </div>
                     </li>
                   ))}
                 </ol>
               </details>
               );
             })}
+            {news.length === 0 && (
+              <div className="church-news-empty">
+                <strong>등록된 교회소식이 없습니다.</strong>
+                <p>새로운 소식이 등록되면 이곳에서 확인할 수 있습니다.</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
