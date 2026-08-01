@@ -13,8 +13,31 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mhji.kr"),
   title: "모현제일교회",
   description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회입니다.",
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: "https://mhji.kr",
+    siteName: "모현제일교회",
+    title: "모현제일교회",
+    description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회입니다.",
+    images: [
+      {
+        url: "/assets/mhji-social-preview.png",
+        width: 1200,
+        height: 630,
+        alt: "모현제일교회",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "모현제일교회",
+    description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회입니다.",
+    images: ["/assets/mhji-social-preview.png"],
+  },
   other: {
     "codex-preview": "development",
   },

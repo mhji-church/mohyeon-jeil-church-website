@@ -45,7 +45,7 @@ export default function GalleryViewer({
 
   return (
     <section className="content-section gallery-member-album">
-      <div className="page-width">
+      <div className="page-width gallery-view-width">
         <article className="gallery-member-panel" id="gallery-viewer">
           <header>
             <div>
