@@ -1324,6 +1324,7 @@ select {
 .member-form label {
   display: grid;
   gap: 8px;
+  align-content: start;
 }
 
 .member-form label > span {
@@ -1363,6 +1364,7 @@ select {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 17px;
+  align-items: start;
 }
 
 .member-consent {
@@ -5106,12 +5108,14 @@ footer {
 .business-application-form { display: grid; gap: 22px; padding: 40px; border: 1px solid var(--line); background: white; }
 .business-application-form header { padding-bottom: 23px; border-bottom: 1px solid var(--line); }
 .business-application-form header h2 { margin: 9px 0 0; font-family: var(--font-serif), serif; font-size: 30px; font-weight: 550; letter-spacing: -.05em; }
-.business-application-form label { display: grid; gap: 9px; }
+.business-application-form label { display: grid; gap: 9px; align-content: start; }
 .business-application-form label > span { font-size: 11px; font-weight: 730; }
 .business-application-form input:not([type="checkbox"]), .business-application-form select, .business-application-form textarea { width: 100%; padding: 14px 15px; border: 1px solid rgba(48,47,60,.18); border-radius: 3px; outline: none; background: white; color: var(--ink); font-size: 13px; }
+.business-application-form input:not([type="checkbox"]), .business-application-form select { height: 49px; }
 .business-application-form input:focus, .business-application-form select:focus, .business-application-form textarea:focus { border-color: var(--brown); box-shadow: 0 0 0 3px rgba(169,113,97,.09); }
 .business-application-form textarea { line-height: 1.75; resize: vertical; }
-.business-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.business-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.business-application-form label > small { color: #8b858a; font-size: 10px; line-height: 1.6; }
 .business-form-notice { padding: 13px 15px; border: 1px solid rgba(169,113,97,.28); background: #f7eee8; color: #8c5f51; font-size: 12px; line-height: 1.6; }
 .business-form-consent { display: flex !important; grid-template-columns: none; align-items: flex-start; gap: 10px !important; padding: 16px 18px; background: #f7f4f1; }
 .business-form-consent input { flex: 0 0 auto; margin-top: 3px; accent-color: var(--brown); }

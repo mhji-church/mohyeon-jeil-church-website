@@ -12,6 +12,12 @@ const maxSourceBytes = 80 * 1024 * 1024;
 const uploadTargetBytes = 760 * 1024;
 const uploadRetryBytes = 360 * 1024;
 
+function normalizeWebsiteAddress(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
+
 function extension(file: File) {
   return file.name.split(".").pop()?.toLowerCase() ?? "";
 }
@@ -150,6 +156,10 @@ export default function BusinessApplicationForm({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
+    const websiteInput = event.currentTarget.elements.namedItem("website");
+    if (websiteInput instanceof HTMLInputElement) {
+      websiteInput.value = normalizeWebsiteAddress(websiteInput.value);
+    }
     const form = new FormData(event.currentTarget);
     const finalCategory = category === "기타" ? customCategory.trim() : category;
     if (!finalCategory) {
@@ -333,7 +343,16 @@ export default function BusinessApplicationForm({
                 maxLength={300}
                 placeholder="예: www.mhji.kr 또는 instagram.com/계정"
                 inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                onBlur={(event) => {
+                  event.currentTarget.value = normalizeWebsiteAddress(
+                    event.currentTarget.value,
+                  );
+                }}
               />
+              <small>주소만 입력하면 앞에 https://가 자동으로 추가됩니다.</small>
             </label>
           </div>
           <label>
