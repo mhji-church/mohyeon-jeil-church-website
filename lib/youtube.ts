@@ -18,6 +18,11 @@ export const YOUTUBE_PLAYLISTS: Record<YouTubePlaylistType, string> = {
   sermons: "PLgLUeYDaBNJ47oym-bYAqowVa24vw_t_P",
 };
 
+// Invalidate the sermons cache once for the 2026-08-02 playlist cleanup.
+// The next successful sync writes a newer updated_at value, so regular
+// refreshes continue to be controlled only by the scheduled Netlify function.
+const SERMONS_CACHE_REFRESH_AFTER = "2026-08-02 13:25:00";
+
 type PlaylistItem = {
   snippet?: {
     title?: string;
@@ -190,11 +195,16 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
 export async function getCachedYouTubePlaylistVideos(type: YouTubePlaylistType) {
   await ensureNetlifySchema();
   const row = await getNetlifyDb()
-    .prepare("SELECT videos_json FROM youtube_playlist_cache WHERE playlist_type = ?")
+    .prepare(
+      "SELECT videos_json, updated_at FROM youtube_playlist_cache WHERE playlist_type = ?",
+    )
     .bind(type)
-    .first<{ videos_json: string }>();
+    .first<{ videos_json: string; updated_at: string }>();
 
   if (!row) return null;
+  if (type === "sermons" && row.updated_at < SERMONS_CACHE_REFRESH_AFTER) {
+    return null;
+  }
   try {
     const videos = JSON.parse(row.videos_json) as YouTubePlaylistVideo[];
     if (!Array.isArray(videos) || videos.length === 0) return null;
