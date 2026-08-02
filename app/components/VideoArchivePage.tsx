@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { YouTubePlaylistType } from "../../lib/youtube";
 
 export type ArchiveVideo = {
   videoId: string;
@@ -8,6 +9,7 @@ export type ArchiveVideo = {
   date: string;
   category: string;
   detail?: string;
+  thumbnailUrl?: string;
 };
 
 type VideoArchivePageProps = {
@@ -18,6 +20,7 @@ type VideoArchivePageProps = {
   playlistUrl: string;
   counterpartLabel: string;
   counterpartHref: string;
+  playlistType: YouTubePlaylistType;
 };
 
 const PAGE_SIZE = 8;
@@ -46,14 +49,43 @@ export default function VideoArchivePage({
   playlistUrl,
   counterpartLabel,
   counterpartHref,
+  playlistType,
 }: VideoArchivePageProps) {
   const [page, setPage] = useState(1);
   const [playing, setPlaying] = useState<ArchiveVideo | null>(null);
-  const totalPages = Math.max(1, Math.ceil(videos.length / PAGE_SIZE));
+  const [playlistVideos, setPlaylistVideos] = useState(videos);
+  const totalPages = Math.max(1, Math.ceil(playlistVideos.length / PAGE_SIZE));
   const pageVideos = useMemo(
-    () => videos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [page, videos],
+    () => playlistVideos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [page, playlistVideos],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/youtube?type=${playlistType}`, {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("YouTube playlist request failed");
+        return response.json();
+      })
+      .then((data: { videos?: ArchiveVideo[] }) => {
+        if (!data.videos?.length) return;
+        setPlaylistVideos(
+          data.videos.map((video) => ({
+            ...video,
+            detail: videos.find((fallback) => fallback.videoId === video.videoId)?.detail,
+          })),
+        );
+        setPage(1);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          // Keep the bundled list visible if YouTube is temporarily unavailable.
+        }
+      });
+    return () => controller.abort();
+  }, [playlistType, videos]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -88,7 +120,7 @@ export default function VideoArchivePage({
               <h2>{title} 영상</h2>
             </div>
             <div className="archive-heading-side">
-              <span>총 {videos.length}개의 영상</span>
+              <span>총 {playlistVideos.length}개의 영상</span>
               <a href={counterpartHref}>
                 {counterpartLabel} 보기 <ArrowIcon />
               </a>
@@ -105,7 +137,7 @@ export default function VideoArchivePage({
                   aria-label={`${video.title} 사이트에서 재생`}
                 >
                   <img
-                    src={`https://i.ytimg.com/vi/${video.videoId}/maxresdefault.jpg`}
+                    src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.videoId}/maxresdefault.jpg`}
                     alt={`${video.title} 유튜브 썸네일`}
                     loading="lazy"
                     decoding="async"

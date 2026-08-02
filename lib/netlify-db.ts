@@ -75,6 +75,7 @@ export async function ensureNetlifySchema() {
         `CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY NOT NULL, username TEXT NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, birth_date TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', force_password_change INTEGER NOT NULL DEFAULT 0, approved_at TEXT, approved_by TEXT, last_login_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
         `CREATE UNIQUE INDEX IF NOT EXISTS members_username_unique ON members(username)`,
         `CREATE TABLE IF NOT EXISTS business_applications (id TEXT PRIMARY KEY NOT NULL, member_id TEXT NOT NULL, applicant_name TEXT NOT NULL, applicant_phone TEXT NOT NULL, business_name TEXT NOT NULL, category TEXT NOT NULL, owner_name TEXT NOT NULL, business_phone TEXT NOT NULL DEFAULT '', address TEXT NOT NULL, description TEXT NOT NULL, website TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+        `CREATE TABLE IF NOT EXISTS youtube_playlist_cache (playlist_type TEXT PRIMARY KEY NOT NULL, videos_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
       ];
       for (const sql of statements) await db.prepare(sql).run();
     })().catch((error) => {
