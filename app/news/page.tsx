@@ -9,7 +9,20 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function NewsPage() {
+type NewsPageProps = {
+  searchParams: Promise<{ date?: string | string[] }>;
+};
+
+function newsAnchor(date: string) {
+  return `news-${date.replaceAll(".", "-")}`;
+}
+
+export default async function NewsPage({ searchParams }: NewsPageProps) {
+  const requestedDate = (await searchParams).date;
+  const selectedDate =
+    typeof requestedDate === "string" && /^\d{4}\.\d{2}\.\d{2}$/.test(requestedDate)
+      ? requestedDate
+      : null;
   const news = await listContentPosts({ type: "news" });
   return (
     <ContentPage
@@ -37,7 +50,12 @@ export default async function NewsPage() {
                 items = [["안내", post.content]];
               }
               return (
-              <details className="church-news-card" key={post.id} open={index === 0}>
+              <details
+                className="church-news-card"
+                id={newsAnchor(post.date)}
+                key={post.id}
+                open={selectedDate ? post.date === selectedDate : index === 0}
+              >
                 <summary>
                   <span className="church-news-number">{String(index + 1).padStart(2, "0")}</span>
                   <div className="church-news-title">

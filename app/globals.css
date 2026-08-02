@@ -3139,10 +3139,21 @@ svg {
 }
 
 .sermon-card-copy h3 {
-  margin: 12px 0 19px;
+  margin: 12px 0 8px;
   overflow: hidden;
   font-size: 20px;
   letter-spacing: -0.05em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sermon-card-copy .sermon-card-detail {
+  margin: 0 0 11px;
+  overflow: hidden;
+  color: #77727b;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5036,7 +5047,7 @@ footer {
 
 /* News */
 .church-news-list { display: grid; gap: 18px; }
-.church-news-card { overflow: hidden; border: 1px solid rgba(48, 47, 60, .14); background: #fff; box-shadow: 0 16px 46px rgba(42, 39, 47, .035); transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
+.church-news-card { overflow: hidden; scroll-margin-top: 116px; border: 1px solid rgba(48, 47, 60, .14); background: #fff; box-shadow: 0 16px 46px rgba(42, 39, 47, .035); transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
 .church-news-card:hover { border-color: rgba(169, 113, 97, .34); box-shadow: 0 20px 54px rgba(42, 39, 47, .065); }
 .church-news-card[open] { border-color: rgba(169, 113, 97, .28); box-shadow: 0 22px 62px rgba(42, 39, 47, .07); }
 .church-news-card summary { display: grid; min-height: 136px; grid-template-columns: 72px minmax(0, 1fr) 44px; align-items: center; gap: 22px; padding: 25px 34px; cursor: pointer; list-style: none; }
@@ -5147,19 +5158,19 @@ footer {
 
 /* Gallery board */
 .gallery-board { background: var(--paper); }
-.gallery-album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; align-items: start; }
+.gallery-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, calc((var(--page) - 52px) / 3))); gap: 26px; align-items: start; justify-content: start; }
 .gallery-album-card { display: block; width: 100%; min-width: 0; overflow: hidden; padding: 0; border: 1px solid var(--line); background: #fff; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease; }
 .gallery-album-card:hover { border-color: rgba(169, 113, 97, .42); box-shadow: 0 24px 54px rgba(44, 41, 48, .1); transform: translateY(-5px); }
 .gallery-album-cover { position: relative; overflow: hidden; aspect-ratio: 16 / 10; background: #e5dfda; }
 .gallery-album-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .55s ease, filter .35s ease; }
 .gallery-album-card:hover .gallery-album-cover img { filter: brightness(.86); transform: scale(1.035); }
 .gallery-album-cover > span { position: absolute; right: 16px; bottom: 16px; padding: 8px 11px; background: rgba(34, 33, 44, .84); color: white; font-size: 9px; font-weight: 780; letter-spacing: .1em; }
-.gallery-album-copy { padding: 25px 26px 28px; }
+.gallery-album-copy { display: flex; height: 284px; flex-direction: column; padding: 25px 26px 28px; }
 .gallery-album-copy > div { display: flex; align-items: center; justify-content: space-between; }
 .gallery-album-copy time, .gallery-album-copy > div > span { color: var(--brown); font-size: 10px; font-weight: 760; letter-spacing: .11em; }
-.gallery-album-copy h3 { margin: 15px 0 11px; font-family: var(--font-serif), serif; font-size: 23px; font-weight: 570; letter-spacing: -.05em; }
-.gallery-album-copy p { min-height: 46px; margin: 0 0 24px; color: #756e74; font-size: 13px; line-height: 1.75; }
-.gallery-album-copy strong { display: flex; align-items: center; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--line); font-size: 12px; }
+.gallery-album-copy h3 { display: -webkit-box; min-height: 62px; margin: 15px 0 11px; overflow: hidden; font-family: var(--font-serif), serif; font-size: 23px; font-weight: 570; letter-spacing: -.05em; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.gallery-album-copy p { display: -webkit-box; height: 46px; min-height: 46px; margin: 0 0 24px; overflow: hidden; color: #756e74; font-size: 13px; line-height: 1.75; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.gallery-album-copy strong { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 17px; border-top: 1px solid var(--line); font-size: 12px; }
 .gallery-album-copy strong i { color: var(--brown); font-size: 18px; font-style: normal; font-weight: 400; }
 .gallery-pagination { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 52px; }
 .gallery-pagination button, .gallery-pagination strong { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--line); background: transparent; font-size: 12px; }
@@ -5237,7 +5248,7 @@ body.modal-open { overflow: hidden; }
 
 @media (max-width: 1024px) {
   .about-intro-grid, .worship-guide-grid { gap: 64px; }
-  .business-grid, .gallery-album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .business-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .business-application-layout { grid-template-columns: 1fr; gap: 24px; }
   .business-application-layout > aside { position: static; }
 }
@@ -5284,12 +5295,13 @@ body.modal-open { overflow: hidden; }
   .gallery-album-card { display: block; }
   .gallery-album-cover { width: 100%; height: auto; min-height: 0; aspect-ratio: 16 / 9; }
   .gallery-album-cover > span { right: 10px; bottom: 10px; padding: 6px 8px; font-size: 8px; }
-  .gallery-album-copy { min-width: 0; padding: 18px 20px 20px; }
+  .gallery-album-copy { min-width: 0; height: 224px; padding: 18px 20px 20px; }
   .gallery-album-copy > div > span { display: none; }
-  .gallery-album-copy h3 { margin: 9px 0 6px; font-size: 20px; line-height: 1.3; }
+  .gallery-album-copy h3 { min-height: 52px; margin: 9px 0 6px; font-size: 20px; line-height: 1.3; }
   .gallery-album-copy p {
     display: -webkit-box;
-    min-height: 0;
+    height: 38px;
+    min-height: 38px;
     margin-bottom: 13px;
     overflow: hidden;
     font-size: 12px;

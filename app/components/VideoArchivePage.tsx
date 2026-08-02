@@ -15,6 +15,7 @@ export type ArchiveVideo = {
 type VideoArchivePageProps = {
   eyebrow: string;
   title: string;
+  collectionTitle: string;
   description: string;
   videos: ArchiveVideo[];
   playlistUrl: string;
@@ -44,6 +45,7 @@ function PlayIcon() {
 export default function VideoArchivePage({
   eyebrow,
   title,
+  collectionTitle,
   description,
   videos,
   playlistUrl,
@@ -74,7 +76,8 @@ export default function VideoArchivePage({
         setPlaylistVideos(
           data.videos.map((video) => ({
             ...video,
-            detail: videos.find((fallback) => fallback.videoId === video.videoId)?.detail,
+            detail:
+              video.detail || videos.find((fallback) => fallback.videoId === video.videoId)?.detail,
           })),
         );
         setPage(1);
@@ -117,7 +120,7 @@ export default function VideoArchivePage({
           <div className="archive-heading">
             <div>
               <p>{eyebrow}</p>
-              <h2>{title} 영상</h2>
+              <h2>{collectionTitle}</h2>
             </div>
             <div className="archive-heading-side">
               <span>총 {playlistVideos.length}개의 영상</span>

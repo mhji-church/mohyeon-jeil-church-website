@@ -26,6 +26,7 @@ export default function WorshipPage() {
     <VideoArchivePage
       eyebrow="SUNDAY WORSHIP"
       title="주일예배"
+      collectionTitle="주일 2부 예배 모음"
       description="말씀과 찬양으로 하나님을 높이는 주일예배의 자리입니다."
       videos={worshipVideos}
       playlistUrl="https://www.youtube.com/watch?v=MaSO7kx9B18&list=PLgLUeYDaBNJ5h5nMA3PPZrBitScj7sDyz"

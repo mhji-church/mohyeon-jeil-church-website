@@ -28,6 +28,7 @@ export default function SermonsPage() {
     <VideoArchivePage
       eyebrow="SERMON MESSAGE"
       title="설교영상"
+      collectionTitle="설교 모음"
       description="일상 가운데 다시 붙드는 생명의 말씀을 전합니다."
       videos={sermonVideos}
       playlistUrl="https://www.youtube.com/watch?v=waDExWNnhTs&list=PLgLUeYDaBNJ47oym-bYAqowVa24vw_t_P"

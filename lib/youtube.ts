@@ -7,8 +7,10 @@ export type YouTubePlaylistVideo = {
   title: string;
   date: string;
   category: string;
+  detail?: string;
   thumbnailUrl: string;
   href: string;
+  sourceTitle?: string;
 };
 
 export const YOUTUBE_PLAYLISTS: Record<YouTubePlaylistType, string> = {
@@ -35,12 +37,49 @@ type PlaylistResponse = {
   error?: { message?: string };
 };
 
-function formatVideoTitle(type: YouTubePlaylistType, title: string) {
+function formatVideoMetadata(
+  type: YouTubePlaylistType,
+  title: string,
+  existingDetail?: string,
+) {
   const normalizedTitle = title.trim();
-  if (type !== "sermons") return normalizedTitle;
+  if (type !== "sermons") {
+    return { title: normalizedTitle, detail: existingDetail };
+  }
 
-  const sermonTitle = normalizedTitle.split("|", 1)[0]?.trim();
-  return sermonTitle || normalizedTitle;
+  const parts = normalizedTitle.split("|").map((part) => part.trim());
+  const sermonTitle = parts[0] || normalizedTitle;
+  const detail =
+    parts[1] && parts[2]
+      ? `${parts[1]} · ${parts[2]}`
+      : existingDetail;
+
+  return { title: sermonTitle, detail };
+}
+
+export function sermonDateFromTitle(title: string) {
+  const match = title.match(
+    /\(\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*\)\s*$/,
+  );
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}.${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
+}
+
+function isSundaySecondService(title: string) {
+  return /주일\s*2부\s*예배/.test(title);
 }
 
 function formatKoreaDate(value: string | undefined) {
@@ -103,19 +142,26 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
         !rawTitle ||
         rawTitle === "Private video" ||
         rawTitle === "Deleted video" ||
+        (type === "worship" && !isSundaySecondService(rawTitle)) ||
         seen.has(videoId)
       ) {
         continue;
       }
       seen.add(videoId);
       const publishedAt = item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt || "";
+      const metadata = formatVideoMetadata(type, rawTitle);
       videos.push({
         videoId,
-        title: formatVideoTitle(type, rawTitle),
-        date: formatKoreaDate(publishedAt),
+        title: metadata.title,
+        date:
+          type === "sermons"
+            ? sermonDateFromTitle(rawTitle) || formatKoreaDate(publishedAt)
+            : formatKoreaDate(publishedAt),
         category: type === "worship" ? "주일 2부 예배" : "주일예배 설교",
+        detail: metadata.detail,
         thumbnailUrl: thumbnailUrl(item, videoId),
         href: `https://www.youtube.com/watch?v=${videoId}`,
+        sourceTitle: rawTitle,
         publishedAt,
       });
     }
@@ -124,14 +170,20 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
   } while (pageToken);
 
   return videos
-    .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
+    .sort((left, right) =>
+      type === "sermons"
+        ? right.date.localeCompare(left.date) || right.publishedAt.localeCompare(left.publishedAt)
+        : right.publishedAt.localeCompare(left.publishedAt),
+    )
     .map((video) => ({
       videoId: video.videoId,
       title: video.title,
       date: video.date,
       category: video.category,
+      detail: video.detail,
       thumbnailUrl: video.thumbnailUrl,
       href: video.href,
+      sourceTitle: video.sourceTitle,
     }));
 }
 
@@ -145,12 +197,25 @@ export async function getCachedYouTubePlaylistVideos(type: YouTubePlaylistType) 
   if (!row) return null;
   try {
     const videos = JSON.parse(row.videos_json) as YouTubePlaylistVideo[];
-    return Array.isArray(videos) && videos.length > 0
-      ? videos.map((video) => ({
+    if (!Array.isArray(videos) || videos.length === 0) return null;
+    if (type === "sermons" && videos.some((video) => !video.sourceTitle)) {
+      return null;
+    }
+    return videos
+      .filter((video) => type !== "worship" || isSundaySecondService(video.title))
+      .map((video) => {
+        const sourceTitle = video.sourceTitle || video.title;
+        const metadata = formatVideoMetadata(type, sourceTitle, video.detail);
+        return {
           ...video,
-          title: formatVideoTitle(type, video.title),
-        }))
-      : null;
+          title: metadata.title,
+          detail: metadata.detail,
+          date:
+            type === "sermons"
+              ? sermonDateFromTitle(sourceTitle) || video.date
+              : video.date,
+        };
+      });
   } catch {
     return null;
   }

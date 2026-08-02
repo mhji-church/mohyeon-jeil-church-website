@@ -68,6 +68,7 @@ type HomeSermon = {
   videoId: string;
   title: string;
   type: string;
+  detail: string;
   date: string;
   href: string;
   image: string;
@@ -78,7 +79,8 @@ const initialSermons: HomeSermon[] = [
     videoId: "waDExWNnhTs",
     title: "아프다고 말해도 괜찮아요",
     type: "주일예배",
-    date: "2026.06.07",
+    detail: "고린도후서 1장 8~9절 · 이광현 담임목사",
+    date: "2026.07.26",
     href: "https://youtu.be/waDExWNnhTs",
     image: "/assets/sermon-main.jpg",
   },
@@ -86,7 +88,8 @@ const initialSermons: HomeSermon[] = [
     videoId: "R92WDQa-eb8",
     title: "무덤에서 집으로",
     type: "주일예배",
-    date: "2026.05.31",
+    detail: "마가복음 5장 15~20절 · 이광현 담임목사",
+    date: "2026.07.19",
     href: "https://youtu.be/R92WDQa-eb8",
     image: "/assets/sermon-second.jpg",
   },
@@ -94,13 +97,21 @@ const initialSermons: HomeSermon[] = [
     videoId: "S27TvW1d_Kg",
     title: "그가 누구이기에",
     type: "주일예배",
-    date: "2026.05.24",
+    detail: "누가복음 8장 22~25절 · 이광현 담임목사",
+    date: "2026.07.12",
     href: "https://youtu.be/S27TvW1d_Kg",
     image: "/assets/sermon-third.jpg",
   },
 ];
 
-const initialNewsItems = [
+type HomeNewsItem = {
+  id?: string;
+  date: string;
+  title: string;
+  excerpt: string;
+};
+
+const initialNewsItems: HomeNewsItem[] = [
   {
     date: "2026.06.07",
     title: "2026년 6월 7일 교회소식",
@@ -117,6 +128,10 @@ const initialNewsItems = [
     excerpt: "예배와 교육, 지역을 섬기는 공동체 일정을 안내합니다.",
   },
 ];
+
+function newsHref(date: string) {
+  return `/news?date=${encodeURIComponent(date)}#news-${date.replaceAll(".", "-")}`;
+}
 
 const worshipTimes = [
   { name: "주일 1부 예배", time: "오전 9시", place: "본당" },
@@ -215,7 +230,7 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/content?type=news&limit=3", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data: { posts?: Array<{ date: string; title: string; excerpt: string }> }) => {
+      .then((data: { posts?: HomeNewsItem[] }) => {
         if (data.posts?.length) setNewsItems(data.posts);
       })
       .catch(() => {
@@ -237,6 +252,7 @@ export default function Home() {
             title: string;
             date: string;
             category: string;
+            detail?: string;
             thumbnailUrl: string;
             href: string;
           }>;
@@ -247,6 +263,10 @@ export default function Home() {
               videoId: video.videoId,
               title: video.title,
               type: video.category,
+              detail:
+                video.detail ||
+                initialSermons.find((sermon) => sermon.videoId === video.videoId)?.detail ||
+                "",
               date: video.date,
               href: video.href,
               image: video.thumbnailUrl,
@@ -393,10 +413,7 @@ export default function Home() {
                 <time>{sermons[0].date}</time>
               </div>
               <h3>{sermons[0].title}</h3>
-              <p>
-                말씀을 통해 위로받고 다시 일어설 힘을 얻는
-                <br className="desktop-only" /> 예배의 자리로 초대합니다.
-              </p>
+              <p>{sermons[0].detail}</p>
               <a
                 className="sermon-play-link"
                 href={sermons[0].href}
@@ -421,6 +438,7 @@ export default function Home() {
                   <div>
                     <p>{sermon.type}</p>
                     <h3>{sermon.title}</h3>
+                    <p className="sermon-card-detail">{sermon.detail}</p>
                     <time>{sermon.date}</time>
                   </div>
                   <a
@@ -512,7 +530,11 @@ export default function Home() {
 
           <div className="news-grid">
             {newsItems.map((item, index) => (
-              <a className={`news-item${index === 0 ? " is-new" : ""}`} href="/news" key={item.date}>
+              <a
+                className={`news-item${index === 0 ? " is-new" : ""}`}
+                href={newsHref(item.date)}
+                key={item.id || item.date}
+              >
                 <div className="news-item-top">
                   <span>{index === 0 ? "NEW" : `0${index + 1}`}</span>
                   <time>{item.date}</time>
