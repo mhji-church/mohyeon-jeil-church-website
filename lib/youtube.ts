@@ -35,6 +35,14 @@ type PlaylistResponse = {
   error?: { message?: string };
 };
 
+function formatVideoTitle(type: YouTubePlaylistType, title: string) {
+  const normalizedTitle = title.trim();
+  if (type !== "sermons") return normalizedTitle;
+
+  const sermonTitle = normalizedTitle.split("|", 1)[0]?.trim();
+  return sermonTitle || normalizedTitle;
+}
+
 function formatKoreaDate(value: string | undefined) {
   if (!value) return "";
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -89,12 +97,12 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
 
     for (const item of data.items ?? []) {
       const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
-      const title = item.snippet?.title?.trim();
+      const rawTitle = item.snippet?.title?.trim();
       if (
         !videoId ||
-        !title ||
-        title === "Private video" ||
-        title === "Deleted video" ||
+        !rawTitle ||
+        rawTitle === "Private video" ||
+        rawTitle === "Deleted video" ||
         seen.has(videoId)
       ) {
         continue;
@@ -103,7 +111,7 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
       const publishedAt = item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt || "";
       videos.push({
         videoId,
-        title,
+        title: formatVideoTitle(type, rawTitle),
         date: formatKoreaDate(publishedAt),
         category: type === "worship" ? "주일 2부 예배" : "주일예배 설교",
         thumbnailUrl: thumbnailUrl(item, videoId),
@@ -137,7 +145,12 @@ export async function getCachedYouTubePlaylistVideos(type: YouTubePlaylistType) 
   if (!row) return null;
   try {
     const videos = JSON.parse(row.videos_json) as YouTubePlaylistVideo[];
-    return Array.isArray(videos) && videos.length > 0 ? videos : null;
+    return Array.isArray(videos) && videos.length > 0
+      ? videos.map((video) => ({
+          ...video,
+          title: formatVideoTitle(type, video.title),
+        }))
+      : null;
   } catch {
     return null;
   }
