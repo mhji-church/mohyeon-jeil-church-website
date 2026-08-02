@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { YouTubePlaylistType } from "../../lib/youtube";
 
 export type ArchiveVideo = {
@@ -53,6 +53,8 @@ export default function VideoArchivePage({
   counterpartHref,
   playlistType,
 }: VideoArchivePageProps) {
+  const archiveSectionRef = useRef<HTMLElement>(null);
+  const shouldRestoreArchivePosition = useRef(false);
   const [page, setPage] = useState(1);
   const [playing, setPlaying] = useState<ArchiveVideo | null>(null);
   const [playlistVideos, setPlaylistVideos] = useState(videos);
@@ -91,7 +93,13 @@ export default function VideoArchivePage({
   }, [playlistType, videos]);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!shouldRestoreArchivePosition.current) return;
+
+    shouldRestoreArchivePosition.current = false;
+    archiveSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }, [page]);
 
   useEffect(() => {
@@ -100,6 +108,14 @@ export default function VideoArchivePage({
       document.body.style.overflow = "";
     };
   }, [playing]);
+
+  function changePage(nextPage: number) {
+    const normalizedPage = Math.min(totalPages, Math.max(1, nextPage));
+    if (normalizedPage === page) return;
+
+    shouldRestoreArchivePosition.current = true;
+    setPage(normalizedPage);
+  }
 
   return (
     <main>
@@ -115,7 +131,7 @@ export default function VideoArchivePage({
         </div>
       </section>
 
-      <section className="archive-section">
+      <section className="archive-section" ref={archiveSectionRef}>
         <div className="page-width">
           <div className="archive-heading">
             <div>
@@ -131,7 +147,7 @@ export default function VideoArchivePage({
           </div>
 
           <div className="archive-grid">
-            {pageVideos.map((video, index) => (
+            {pageVideos.map((video) => (
               <article className="archive-card" key={video.videoId}>
                 <button
                   className="archive-thumbnail"
@@ -148,9 +164,6 @@ export default function VideoArchivePage({
                       event.currentTarget.src = `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
                     }}
                   />
-                  <span className="archive-number">
-                    {String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}
-                  </span>
                   <PlayIcon />
                 </button>
                 <div className="archive-card-copy">
@@ -176,7 +189,7 @@ export default function VideoArchivePage({
           <div className="archive-pagination" aria-label="영상 목록 페이지">
             <button
               type="button"
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              onClick={() => changePage(page - 1)}
               disabled={page === 1}
               aria-label="이전 페이지"
             >
@@ -187,7 +200,7 @@ export default function VideoArchivePage({
                 className={number === page ? "is-active" : ""}
                 type="button"
                 key={number}
-                onClick={() => setPage(number)}
+                onClick={() => changePage(number)}
                 aria-current={number === page ? "page" : undefined}
               >
                 {String(number).padStart(2, "0")}
@@ -195,7 +208,7 @@ export default function VideoArchivePage({
             ))}
             <button
               type="button"
-              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              onClick={() => changePage(page + 1)}
               disabled={page === totalPages}
               aria-label="다음 페이지"
             >

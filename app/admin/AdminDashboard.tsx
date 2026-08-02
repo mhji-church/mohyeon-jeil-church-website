@@ -12,6 +12,7 @@ import {
   businessCategories,
   isBusinessCategory,
 } from "../../lib/business-categories";
+import { formatPhoneNumber } from "../../lib/phone";
 
 type Props = {
   userName: string;
@@ -97,7 +98,7 @@ const emptyPost = (type: ContentType): ContentPostInput => ({
     type === "news"
       ? JSON.stringify([["", ""]])
       : type === "business"
-        ? JSON.stringify({ owner: "", address: "", phone: "", website: "" })
+        ? JSON.stringify({ owner: "", address: "", phone: "", website: "https://" })
         : "",
   images: [],
   status: "published",
@@ -163,6 +164,13 @@ function parseBusinessDetails(content: string): BusinessDetails {
   } catch {
     return { owner: "", address: "", phone: "", website: "" };
   }
+}
+
+function normalizeWebsiteAddress(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "https://";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, "")}`;
 }
 
 async function canvasBlob(
@@ -781,8 +789,15 @@ export default function AdminDashboard({
                     required
                   />
                 </label>
-                <label>
-                  <span>게시 날짜</span>
+                <label className="admin-date-field">
+                  <span className="admin-field-heading">
+                    <b>게시 날짜</b>
+                    {!editingId && (
+                      <small id="admin-post-date-help">
+                        한국 시간 기준 오늘 날짜가 자동 적용됩니다.
+                      </small>
+                    )}
+                  </span>
                   <input
                     value={form.date}
                     onChange={(event) => updateField("date", event.target.value)}
@@ -791,11 +806,6 @@ export default function AdminDashboard({
                     placeholder="2026.07.31"
                     required
                   />
-                  {!editingId && (
-                    <small id="admin-post-date-help">
-                      한국 시간 기준 오늘 날짜가 자동 적용됩니다.
-                    </small>
-                  )}
                 </label>
               </div>
 
@@ -927,7 +937,10 @@ export default function AdminDashboard({
                       <span>연락처</span>
                       <input
                         value={parseBusinessDetails(form.content).phone}
-                        onChange={(event) => updateBusinessField("phone", event.target.value)}
+                        onChange={(event) =>
+                          updateBusinessField("phone", formatPhoneNumber(event.target.value))
+                        }
+                        inputMode="tel"
                         placeholder="예: 031-000-0000"
                       />
                     </label>
@@ -937,6 +950,10 @@ export default function AdminDashboard({
                     <input
                       value={parseBusinessDetails(form.content).website}
                       onChange={(event) => updateBusinessField("website", event.target.value)}
+                      onBlur={(event) =>
+                        updateBusinessField("website", normalizeWebsiteAddress(event.target.value))
+                      }
+                      inputMode="url"
                       placeholder="https://"
                     />
                   </label>

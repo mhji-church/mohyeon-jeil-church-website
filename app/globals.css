@@ -552,9 +552,31 @@ select {
 }
 
 .admin-editor label > span,
+.admin-field-heading > b,
 .admin-image-manager > div > span {
   font-size: 11px;
   font-weight: 720;
+}
+
+.admin-field-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-field-heading > b {
+  flex: 0 0 auto;
+}
+
+.admin-field-heading > small {
+  overflow: hidden;
+  color: #948d89;
+  font-size: 9px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-editor input[type="text"],
@@ -3721,6 +3743,7 @@ footer {
 .archive-section {
   padding: 118px 0 132px;
   background: var(--paper);
+  scroll-margin-top: 76px;
 }
 
 .archive-heading {
@@ -3819,17 +3842,6 @@ footer {
 .archive-thumbnail:hover::after,
 .archive-thumbnail:focus-visible::after {
   background: rgba(25, 24, 34, 0.29);
-}
-
-.archive-number {
-  position: absolute;
-  z-index: 2;
-  top: 13px;
-  left: 14px;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 8px;
-  font-weight: 780;
-  letter-spacing: 0.1em;
 }
 
 .archive-play {
@@ -4395,6 +4407,7 @@ footer {
 
   .archive-section {
     padding: 78px 0 88px;
+    scroll-margin-top: 68px;
   }
 
   .archive-heading {
