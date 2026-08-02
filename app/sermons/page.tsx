@@ -33,6 +33,7 @@ export default function SermonsPage() {
       playlistUrl="https://www.youtube.com/watch?v=waDExWNnhTs&list=PLgLUeYDaBNJ47oym-bYAqowVa24vw_t_P"
       counterpartLabel="주일예배"
       counterpartHref="/worship"
+      playlistType="sermons"
     />
   );
 }

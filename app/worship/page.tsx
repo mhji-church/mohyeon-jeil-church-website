@@ -31,6 +31,7 @@ export default function WorshipPage() {
       playlistUrl="https://www.youtube.com/watch?v=MaSO7kx9B18&list=PLgLUeYDaBNJ5h5nMA3PPZrBitScj7sDyz"
       counterpartLabel="설교영상"
       counterpartHref="/sermons"
+      playlistType="worship"
     />
   );
 }

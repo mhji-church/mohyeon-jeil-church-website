@@ -64,7 +64,16 @@ const quickLinks = [
   { number: "06", label: "갤러리", href: "/gallery" },
 ];
 
-const sermons = [
+type HomeSermon = {
+  videoId: string;
+  title: string;
+  type: string;
+  date: string;
+  href: string;
+  image: string;
+};
+
+const initialSermons: HomeSermon[] = [
   {
     videoId: "waDExWNnhTs",
     title: "아프다고 말해도 괜찮아요",
@@ -155,7 +164,7 @@ function SermonPlayer({
   onPlay,
   isPlaying,
 }: {
-  sermon: (typeof sermons)[number];
+  sermon: HomeSermon;
   featured?: boolean;
   onPlay: () => void;
   isPlaying: boolean;
@@ -191,8 +200,9 @@ function SermonPlayer({
 
 export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [sermons, setSermons] = useState(initialSermons);
   const [playingSermon, setPlayingSermon] = useState<string | null>(null);
-  const [modalSermon, setModalSermon] = useState<(typeof sermons)[number] | null>(null);
+  const [modalSermon, setModalSermon] = useState<HomeSermon | null>(null);
   const [newsItems, setNewsItems] = useState(initialNewsItems);
 
   useEffect(() => {
@@ -211,6 +221,45 @@ export default function Home() {
       .catch(() => {
         // The initial content remains visible during a temporary network failure.
       });
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/youtube?type=sermons", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("YouTube playlist request failed");
+        return response.json();
+      })
+      .then(
+        (data: {
+          videos?: Array<{
+            videoId: string;
+            title: string;
+            date: string;
+            category: string;
+            thumbnailUrl: string;
+            href: string;
+          }>;
+        }) => {
+          if (!data.videos?.length) return;
+          setSermons(
+            data.videos.slice(0, 3).map((video) => ({
+              videoId: video.videoId,
+              title: video.title,
+              type: video.category,
+              date: video.date,
+              href: video.href,
+              image: video.thumbnailUrl,
+            })),
+          );
+        },
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          // Keep the bundled sermons visible if YouTube is temporarily unavailable.
+        }
+      });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
