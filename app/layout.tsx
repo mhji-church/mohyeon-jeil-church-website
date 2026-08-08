@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://mhji.kr"),
   title: "모현제일교회",
   description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회입니다.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "모현제일교회",
+    statusBarStyle: "default",
+  },
   openGraph: {
     type: "website",
     locale: "ko_KR",
@@ -46,6 +52,7 @@ export const metadata: Metadata = {
   icons: {
     icon: "/assets/favicon.png",
     shortcut: "/assets/favicon.png",
+    apple: "/assets/icon-192.png",
   },
 };
 

@@ -54,7 +54,8 @@ export default function VideoArchivePage({
   playlistType,
 }: VideoArchivePageProps) {
   const archiveSectionRef = useRef<HTMLElement>(null);
-  const shouldRestoreArchivePosition = useRef(false);
+  const archivePaginationRef = useRef<HTMLDivElement>(null);
+  const previousPageRef = useRef(1);
   const [page, setPage] = useState(1);
   const [playing, setPlaying] = useState<ArchiveVideo | null>(null);
   const [playlistVideos, setPlaylistVideos] = useState(videos);
@@ -93,13 +94,25 @@ export default function VideoArchivePage({
   }, [playlistType, videos]);
 
   useEffect(() => {
-    if (!shouldRestoreArchivePosition.current) return;
+    if (previousPageRef.current === page) return;
+    previousPageRef.current = page;
+    const timer = window.setTimeout(() => {
+      const archiveSection = archiveSectionRef.current;
+      const pagination = archivePaginationRef.current;
+      if (!archiveSection || !pagination) return;
 
-    shouldRestoreArchivePosition.current = false;
-    archiveSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+      const mobile = window.matchMedia("(max-width: 720px)").matches;
+      const headerOffset = mobile ? 68 : 76;
+      const sectionTop = archiveSection.getBoundingClientRect().top + window.scrollY;
+      const paginationBottom = pagination.getBoundingClientRect().bottom + window.scrollY;
+      const targetTop = mobile
+        ? sectionTop - headerOffset + 42
+        : paginationBottom - window.innerHeight + 28;
+
+      window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+    }, 80);
+
+    return () => window.clearTimeout(timer);
   }, [page]);
 
   useEffect(() => {
@@ -113,7 +126,6 @@ export default function VideoArchivePage({
     const normalizedPage = Math.min(totalPages, Math.max(1, nextPage));
     if (normalizedPage === page) return;
 
-    shouldRestoreArchivePosition.current = true;
     setPage(normalizedPage);
   }
 
@@ -186,7 +198,11 @@ export default function VideoArchivePage({
             ))}
           </div>
 
-          <div className="archive-pagination" aria-label="영상 목록 페이지">
+          <div
+            className="archive-pagination"
+            ref={archivePaginationRef}
+            aria-label="영상 목록 페이지"
+          >
             <button
               type="button"
               onClick={() => changePage(page - 1)}

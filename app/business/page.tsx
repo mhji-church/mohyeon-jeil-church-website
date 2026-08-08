@@ -61,10 +61,11 @@ export default async function BusinessPage() {
             <div className="business-grid">
               {businesses.map((business) => {
                 const details = parseBusinessDetails(business.content);
-                const website = details.website
-                  ? /^https?:\/\//i.test(details.website)
-                    ? details.website
-                    : `https://${details.website}`
+                const websiteInput = details.website.trim();
+                const website = websiteInput && !/^https?:\/\/?$/i.test(websiteInput)
+                  ? /^https?:\/\//i.test(websiteInput)
+                    ? websiteInput
+                    : `https://${websiteInput}`
                   : "";
                 return (
                   <article className="business-card" key={business.id}>

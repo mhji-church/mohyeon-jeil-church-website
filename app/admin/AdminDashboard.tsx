@@ -531,7 +531,7 @@ export default function AdminDashboard({
     setUploading(pendingImages.length > 0);
     const post = {
       ...form,
-      date: editingId ? form.date : getKoreaDate(),
+      date: form.date,
       content: form.type === "news" ? fromNewsText(newsText) : form.content,
     };
     const uploadedImages: string[] = [];
@@ -794,14 +794,13 @@ export default function AdminDashboard({
                     <b>게시 날짜</b>
                     {!editingId && (
                       <small id="admin-post-date-help">
-                        한국 시간 기준 오늘 날짜가 자동 적용됩니다.
+                        오늘 날짜가 기본 적용되며 필요하면 변경할 수 있습니다.
                       </small>
                     )}
                   </span>
                   <input
                     value={form.date}
                     onChange={(event) => updateField("date", event.target.value)}
-                    readOnly={!editingId}
                     aria-describedby={!editingId ? "admin-post-date-help" : undefined}
                     placeholder="2026.07.31"
                     required

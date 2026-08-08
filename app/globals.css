@@ -3677,6 +3677,185 @@ footer {
   font-size: 9px;
 }
 
+.home-floating-actions {
+  position: fixed;
+  z-index: 40;
+  right: 24px;
+  bottom: 24px;
+}
+
+.home-scroll-top,
+.home-install-trigger {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(29, 28, 38, 0.94);
+  color: #fff;
+  box-shadow: 0 12px 32px rgba(22, 21, 29, 0.2);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.home-scroll-top {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  gap: 1px;
+  border-radius: 50%;
+}
+
+.home-scroll-top svg {
+  width: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.home-scroll-top span {
+  margin-top: -4px;
+  font-size: 7px;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+}
+
+.home-install-trigger,
+.home-install-panel {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .home-floating-actions {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .home-scroll-top {
+    display: none;
+  }
+
+  .home-install-trigger {
+    display: grid;
+    width: 46px;
+    height: 46px;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .home-install-trigger svg {
+    width: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .home-install-panel {
+    position: absolute;
+    right: 0;
+    bottom: 58px;
+    display: block;
+    width: min(308px, calc(100vw - 32px));
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 14px 36px rgba(22, 21, 29, 0.18);
+  }
+
+  .home-install-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #77727b;
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  .home-install-panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding-right: 24px;
+  }
+
+  .home-install-panel-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--ink);
+    color: #fff;
+  }
+
+  .home-install-panel-icon svg {
+    width: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .home-install-panel-heading strong,
+  .home-install-panel-heading small {
+    display: block;
+  }
+
+  .home-install-panel-heading strong {
+    font-size: 14px;
+    letter-spacing: -0.04em;
+  }
+
+  .home-install-panel-heading small {
+    margin-top: 2px;
+    color: #8c8582;
+    font-size: 9px;
+  }
+
+  .home-install-panel > p {
+    margin: 15px 0 14px;
+    color: #6f6967;
+    font-size: 10px;
+    line-height: 1.65;
+  }
+
+  .home-install-panel .home-install-button {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 12px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 740;
+    cursor: pointer;
+  }
+
+  .home-install-panel .home-install-help {
+    margin: 12px 0 0;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: var(--paper-muted);
+    color: #655e5b;
+    font-size: 9px;
+    line-height: 1.6;
+  }
+}
+
 .subpage-hero {
   position: relative;
   height: 430px;

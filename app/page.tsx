@@ -111,6 +111,11 @@ type HomeNewsItem = {
   excerpt: string;
 };
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
 const initialNewsItems: HomeNewsItem[] = [
   {
     date: "2026.06.07",
@@ -210,6 +215,134 @@ function SermonPlayer({
       {featured && <span className="new-label">NEW</span>}
       <PlayIcon />
     </button>
+  );
+}
+
+function HomeFloatingActions() {
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPanelOpen, setInstallPanelOpen] = useState(false);
+  const [installHelp, setInstallHelp] = useState("");
+  const [installed, setInstalled] = useState(() =>
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone)),
+  );
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 520);
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+      setInstallPanelOpen(false);
+      setInstallHelp("");
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  const addToHome = async () => {
+    setInstallHelp("");
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") setInstalled(true);
+      setInstallPrompt(null);
+      if (choice.outcome === "dismissed") {
+        setInstallHelp("설치가 취소되었습니다. 다시 설치하려면 페이지를 새로고침해 주세요.");
+      }
+      return;
+    }
+
+    const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    setInstallHelp(
+      isiOS
+        ? "iPhone·iPad에서는 자동 설치가 지원되지 않습니다. Safari의 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택해 주세요."
+        : "현재 브라우저에서는 자동 설치를 사용할 수 없습니다. 브라우저 메뉴에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택해 주세요.",
+    );
+  };
+
+  const closeInstallPanel = () => {
+    setInstallPanelOpen(false);
+    setInstallHelp("");
+  };
+
+  return (
+    <div className="home-floating-actions">
+      {showScrollTop && (
+        <button
+          className="home-scroll-top"
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="페이지 최상단으로 이동"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 14.5 12 7l7 7.5M12 7v12" />
+          </svg>
+          <span>TOP</span>
+        </button>
+      )}
+      {!installed && (
+        <button
+          className="home-install-trigger"
+          type="button"
+          onClick={() => setInstallPanelOpen((open) => !open)}
+          aria-label="홈 화면 추가 안내 열기"
+          aria-expanded={installPanelOpen}
+          aria-controls="home-install-panel"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m4 11 8-7 8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1Z" />
+            <path d="M18 3v5M15.5 5.5h5" />
+          </svg>
+        </button>
+      )}
+      {!installed && installPanelOpen && (
+        <div className="home-install-panel" id="home-install-panel" role="dialog" aria-label="홈 화면 추가">
+          <button
+            className="home-install-close"
+            type="button"
+            onClick={closeInstallPanel}
+            aria-label="홈 화면 추가 안내 닫기"
+          >
+            ×
+          </button>
+          <div className="home-install-panel-heading">
+            <span className="home-install-panel-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="m4 11 8-7 8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1Z" />
+              </svg>
+            </span>
+            <div>
+              <strong>홈 화면 추가</strong>
+              <small>모현제일교회</small>
+            </div>
+          </div>
+          <p>홈 화면에서 모현제일교회 홈페이지를 앱처럼 바로 이용할 수 있습니다.</p>
+          <button className="home-install-button" type="button" onClick={addToHome}>
+            홈 화면 추가
+          </button>
+          {installHelp && <p className="home-install-help" role="status">{installHelp}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -671,6 +804,7 @@ export default function Home() {
           </div>
         </div>
       )}
+      <HomeFloatingActions />
     </main>
   );
 }

@@ -10,7 +10,7 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "vite build",
     "start": "node dist/server/index.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "NITRO_PRESET=netlify npm run build && node --test tests/*.test.mjs",
     "validate:artifact": "test -f dist/server/index.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
