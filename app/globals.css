@@ -17,10 +17,17 @@
 }
 
 html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
   scroll-behavior: smooth;
 }
 
 body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin: 0;
   overflow-x: hidden;
   background: var(--paper);
@@ -1317,16 +1324,11 @@ select {
 }
 
 .member-auth-card > header {
-  display: flex;
-  align-items: center;
-  gap: 28px;
+  display: block;
   margin-bottom: 38px;
   padding-bottom: 28px;
   border-bottom: 1px solid rgba(48, 47, 60, 0.12);
-}
-
-.member-auth-card header img {
-  width: 178px;
+  text-align: center;
 }
 
 .member-auth-card header h2 {
@@ -1493,6 +1495,18 @@ select {
 
 .member-login-card {
   width: min(590px, calc(100% - 80px));
+}
+
+.member-login-card > header {
+  gap: 24px;
+}
+
+.member-login-card > header h2 {
+  margin-top: 7px;
+  font-size: 17px;
+  line-height: 1.1;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
 }
 
 .member-login-form {
@@ -1743,6 +1757,33 @@ select {
   line-height: 1.55;
 }
 
+@media (min-width: 981px) {
+  .member-auth-card > header {
+    margin-bottom: 42px;
+    padding: 2px 0 30px;
+  }
+
+  .member-auth-card > header > div {
+    width: 100%;
+  }
+
+  .member-auth-card > header h2 {
+    margin-top: 7px;
+    font-size: 24px;
+    line-height: 1;
+    transform: translateY(1px);
+  }
+
+  .member-login-card > header {
+    padding-inline: 0;
+  }
+
+  .member-login-card > header h2 {
+    font-size: 17px;
+    line-height: 1.1;
+  }
+}
+
 @media (max-width: 980px) {
   .admin-member-stats {
     grid-template-columns: repeat(4, 1fr);
@@ -1817,12 +1858,7 @@ select {
   }
 
   .member-auth-card > header {
-    display: grid;
-    gap: 20px;
-  }
-
-  .member-auth-card header img {
-    width: 164px;
+    display: block;
   }
 
   .member-field-row {
@@ -1884,6 +1920,14 @@ img {
   max-width: 100%;
 }
 
+main {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 svg {
   width: 20px;
   fill: none;
@@ -1905,13 +1949,12 @@ svg {
   height: 88px;
   border-bottom: 1px solid rgba(48, 47, 60, 0.11);
   background: rgba(255, 253, 249, 0.97);
-  transition: height 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 10px 28px rgba(35, 33, 44, 0.055);
   backdrop-filter: blur(18px);
 }
 
 .site-header.is-scrolled {
-  height: 76px;
-  box-shadow: 0 14px 38px rgba(35, 33, 44, 0.08);
+  height: 88px;
 }
 
 .header-inner {
@@ -2581,6 +2624,7 @@ svg {
   overflow: hidden;
   background: var(--ink-deep);
   color: white;
+  isolation: isolate;
 }
 
 .hero-slides,
@@ -2606,7 +2650,9 @@ svg {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: saturate(0.94) contrast(1.025) brightness(0.97);
   transform: scale(1.018);
+  backface-visibility: hidden;
 }
 
 .hero-slide.is-active img {
@@ -2622,21 +2668,21 @@ svg {
   }
 }
 
+@keyframes heroDriftMobile {
+  from {
+    transform: scale(1.025);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
 .hero-overlay {
   position: absolute;
   inset: 0;
-}
-
-.hero-overlay-left {
   background:
-    linear-gradient(90deg, rgba(25, 24, 34, 0.78), rgba(25, 24, 34, 0.38) 48%, rgba(25, 24, 34, 0.08) 76%),
-    linear-gradient(0deg, rgba(20, 19, 27, 0.58), transparent 48%);
-}
-
-.hero-overlay-right {
-  background:
-    linear-gradient(270deg, rgba(25, 24, 34, 0.76), rgba(25, 24, 34, 0.35) 50%, rgba(25, 24, 34, 0.08) 76%),
-    linear-gradient(0deg, rgba(20, 19, 27, 0.54), transparent 46%);
+    linear-gradient(90deg, rgba(20, 19, 28, 0.82) 0%, rgba(20, 19, 28, 0.55) 32%, rgba(20, 19, 28, 0.16) 67%, rgba(20, 19, 28, 0.05) 100%),
+    linear-gradient(0deg, rgba(20, 19, 27, 0.56), transparent 50%);
 }
 
 .hero-frame {
@@ -2650,24 +2696,16 @@ svg {
 .hero-content-wrap {
   position: relative;
   z-index: 3;
-  width: min(1440px, calc(100% - 120px));
+  width: min(1560px, calc(100% - clamp(80px, 8vw, 180px)));
   height: 100%;
   margin-inline: auto;
 }
 
 .hero-copy {
   position: absolute;
-  bottom: 132px;
-  width: min(820px, 70%);
-}
-
-.hero-copy-right {
-  right: 0;
-  width: min(740px, 64%);
-}
-
-.hero-copy-left {
   left: 0;
+  bottom: 132px;
+  width: min(820px, 72%);
 }
 
 .hero-eyebrow {
@@ -2699,30 +2737,6 @@ svg {
 
 .hero h1 span {
   display: block;
-  animation: titleReveal 0.82s both;
-}
-
-.hero h1 span:nth-child(2) {
-  animation-delay: 0.1s;
-}
-
-@keyframes titleReveal {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.hero-caption {
-  margin: 25px 0 0;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 15px;
-  line-height: 1.8;
-  letter-spacing: -0.02em;
 }
 
 .hero-controller {
@@ -2811,28 +2825,33 @@ svg {
   color: var(--ink);
 }
 
-.hero-verse {
-  position: absolute;
-  right: 0;
-  bottom: 49px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.48);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.hero-verse span {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 12px;
-  letter-spacing: -0.02em;
-}
-
 .quick-menu {
   background: var(--ink-deep);
   color: white;
+}
+
+@media (min-width: 2200px) {
+  .hero-content-wrap {
+    width: calc(100% - 320px);
+  }
+
+  .hero-copy {
+    bottom: 230px;
+    width: min(1040px, 70%);
+  }
+
+  .hero-eyebrow {
+    margin-bottom: 28px;
+    font-size: 12px;
+  }
+
+  .hero h1 {
+    font-size: 96px;
+  }
+
+  .hero-controller {
+    bottom: 82px;
+  }
 }
 
 .quick-menu-inner {
@@ -3061,6 +3080,11 @@ svg {
   letter-spacing: -0.06em;
 }
 
+.featured-sermon-copy h3.is-long {
+  font-size: clamp(26px, 2.7vw, 40px);
+  line-height: 1.3;
+}
+
 .featured-sermon-copy > p {
   margin: 0;
   color: #77727b;
@@ -3093,6 +3117,9 @@ svg {
 .sermon-strip {
   display: grid;
   grid-template-columns: 1fr 1fr 0.55fr;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 28px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -3101,7 +3128,10 @@ svg {
 .sermon-card {
   display: grid;
   grid-template-columns: 43% 1fr;
+  width: 100%;
+  min-width: 0;
   min-height: 205px;
+  overflow: hidden;
   padding: 22px 24px 22px 0;
   border-right: 1px solid var(--line);
 }
@@ -3145,6 +3175,12 @@ svg {
   padding: 8px 0 8px 22px;
 }
 
+.sermon-card-copy > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .sermon-card-copy > span {
   grid-row: 1 / 3;
   color: var(--brown);
@@ -3167,6 +3203,10 @@ svg {
   letter-spacing: -0.05em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sermon-card-copy h3.is-long {
+  font-size: clamp(15px, 1.2vw, 18px);
 }
 
 .sermon-card-copy .sermon-card-detail {
@@ -3753,17 +3793,22 @@ footer {
   }
 
   .home-install-panel {
-    position: absolute;
-    right: 0;
-    bottom: 58px;
+    position: fixed;
+    z-index: 141;
+    right: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 50%;
     display: block;
-    width: min(308px, calc(100vw - 32px));
-    padding: 20px;
+    width: min(340px, calc(100vw - 32px));
+    max-width: calc(100% - 32px);
+    padding: 22px 20px 20px;
     border: 1px solid var(--line);
-    border-radius: 18px;
+    border-radius: 20px;
     background: #fff;
     color: var(--ink);
-    box-shadow: 0 14px 36px rgba(22, 21, 29, 0.18);
+    box-shadow: 0 20px 54px rgba(22, 21, 29, 0.24);
+    text-align: center;
+    transform: translateX(-50%);
   }
 
   .home-install-close {
@@ -3782,15 +3827,17 @@ footer {
 
   .home-install-panel-heading {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 11px;
-    padding-right: 24px;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 26px;
   }
 
   .home-install-panel-icon {
     display: grid;
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
     flex: 0 0 auto;
     place-items: center;
     border-radius: 11px;
@@ -3813,21 +3860,23 @@ footer {
   }
 
   .home-install-panel-heading strong {
-    font-size: 14px;
+    font-size: 16px;
     letter-spacing: -0.04em;
   }
 
   .home-install-panel-heading small {
-    margin-top: 2px;
+    margin-top: 3px;
     color: #8c8582;
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .home-install-panel > p {
-    margin: 15px 0 14px;
+    margin: 14px 0 16px;
     color: #6f6967;
-    font-size: 10px;
-    line-height: 1.65;
+    font-size: clamp(9px, 2.65vw, 11px);
+    line-height: 1.4;
+    letter-spacing: -0.035em;
+    white-space: nowrap;
   }
 
   .home-install-panel .home-install-button {
@@ -3853,12 +3902,14 @@ footer {
     color: #655e5b;
     font-size: 9px;
     line-height: 1.6;
+    text-align: center;
+    white-space: normal;
   }
 }
 
 .subpage-hero {
   position: relative;
-  height: 430px;
+  height: 240px;
   margin-top: 88px;
   overflow: hidden;
   background: var(--ink-deep);
@@ -3880,11 +3931,67 @@ footer {
 }
 
 .subpage-hero-bg img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.subpage-hero-cover {
   object-fit: cover;
-  object-position: center 49%;
-  transform: scale(1.025);
+  object-position: center 50%;
+  filter: saturate(.9) brightness(.76);
+  transform: none;
+}
+
+.subpage-hero-focus {
+  display: none;
+  left: auto !important;
+  right: 12%;
+  width: auto !important;
+  object-fit: contain;
+  object-position: center;
+  filter: saturate(.92) brightness(.82);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+}
+
+@media (min-width: 1280px) and (min-aspect-ratio: 4/3) {
+  .subpage-hero-cover {
+    filter: blur(2px) saturate(.88) brightness(.72);
+    transform: scale(1.018);
+  }
+
+  .subpage-hero-focus {
+    display: block;
+  }
+}
+
+.subpage-hero[data-page="교회 소개"] .subpage-hero-cover {
+  object-position: center 46%;
+}
+
+.subpage-hero[data-page="성도사업장"] .subpage-hero-cover,
+.subpage-hero[data-page="갤러리"] .subpage-hero-cover {
+  object-position: center 53%;
+}
+
+.subpage-hero[data-page="주일예배"] .subpage-hero-cover,
+.subpage-hero[data-page="설교영상"] .subpage-hero-cover {
+  object-position: center 54%;
+}
+
+.subpage-hero[data-page="교회소식"] .subpage-hero-cover {
+  object-position: center 48%;
+}
+
+.subpage-hero[data-page="주보"] .subpage-hero-cover {
+  object-position: center 44%;
+}
+
+.subpage-hero[data-page="교회소식"] .subpage-hero-focus,
+.subpage-hero[data-page="주보"] .subpage-hero-focus {
+  right: 7%;
 }
 
 .subpage-hero-inner {
@@ -3894,11 +4001,11 @@ footer {
   height: 100%;
   flex-direction: column;
   justify-content: flex-end;
-  padding-bottom: 74px;
+  padding-bottom: 38px;
 }
 
 .subpage-hero-inner > p {
-  margin: 0 0 17px;
+  margin: 0 0 10px;
   color: var(--peach);
   font-size: 9px;
   font-weight: 780;
@@ -3907,14 +4014,14 @@ footer {
 
 .subpage-hero-inner h1 {
   margin: 0;
-  font-size: clamp(47px, 5vw, 72px);
+  font-size: clamp(40px, 4vw, 56px);
   font-weight: 620;
   line-height: 1;
   letter-spacing: -0.065em;
 }
 
 .subpage-hero-inner > span {
-  margin-top: 22px;
+  margin-top: 12px;
   color: rgba(255, 255, 255, 0.67);
   font-size: 14px;
 }
@@ -4289,6 +4396,12 @@ footer {
     width: calc(100% - 92px);
   }
 
+  .hero {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+  }
+
   .quick-menu-inner {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -4341,9 +4454,7 @@ footer {
     display: grid;
   }
 
-  .hero-copy,
-  .hero-copy-right {
-    right: auto;
+  .hero-copy {
     left: 0;
     width: min(780px, 88%);
   }
@@ -4565,16 +4676,33 @@ footer {
   }
 
   .subpage-hero {
-    height: 310px;
+    height: 205px;
     margin-top: 68px;
   }
 
+  .subpage-hero-focus {
+    display: none;
+  }
+
+  .subpage-hero-cover {
+    filter: saturate(.9) brightness(.76);
+    transform: none;
+  }
+
+  .subpage-hero[data-page="교회소식"] .subpage-hero-cover {
+    object-position: 66% center;
+  }
+
+  .subpage-hero[data-page="주보"] .subpage-hero-cover {
+    object-position: 66% center;
+  }
+
   .subpage-hero-inner {
-    padding-bottom: 48px;
+    padding-bottom: 28px;
   }
 
   .subpage-hero-inner h1 {
-    font-size: 44px;
+    font-size: 36px;
   }
 
   .subpage-hero-inner > span {
@@ -4682,19 +4810,19 @@ footer {
 
   .hero-slide img {
     object-fit: cover;
-    transform: scale(1.018);
+    object-position: var(--hero-mobile-position, center);
+    transform: scale(1);
   }
 
   .hero-slide.is-active img {
-    animation: heroDrift 7.4s ease-out both;
+    animation: heroDriftMobile 7.4s ease-out both;
   }
 
-  .hero-overlay-left,
-  .hero-overlay-right {
+  .hero-overlay {
     z-index: 2;
     background:
-      linear-gradient(0deg, rgba(20, 19, 27, 0.82), rgba(20, 19, 27, 0.22) 70%, rgba(20, 19, 27, 0.08)),
-      linear-gradient(90deg, rgba(20, 19, 27, 0.25), transparent);
+      linear-gradient(0deg, rgba(20, 19, 27, 0.76), rgba(20, 19, 27, 0.15) 76%, rgba(20, 19, 27, 0.05)),
+      linear-gradient(90deg, rgba(20, 19, 27, 0.6), rgba(20, 19, 27, 0.08) 78%, transparent);
   }
 
   .hero-frame {
@@ -4702,19 +4830,19 @@ footer {
   }
 
   .hero-content-wrap {
-    width: calc(100% - 40px);
+    width: calc(100% - 36px);
   }
 
-  .hero-copy,
-  .hero-copy-right {
-    bottom: 78px;
-    width: 100%;
+  .hero-copy {
+    bottom: 72px;
+    width: 88%;
   }
 
   .hero-eyebrow {
-    gap: 10px;
-    margin-bottom: 10px;
-    font-size: 8px;
+    display: flex;
+    gap: 9px;
+    margin-bottom: 8px;
+    font-size: clamp(6px, 1.8vw, 8px);
     letter-spacing: 0.16em;
   }
 
@@ -4723,17 +4851,14 @@ footer {
   }
 
   .hero h1 {
-    font-size: clamp(24px, 7.2vw, 38px);
-    line-height: 1.22;
-    letter-spacing: -0.065em;
+    max-width: 100%;
+    font-size: clamp(16px, 4.8vw, 20px);
+    line-height: 1.3;
+    letter-spacing: -0.045em;
   }
 
   .hero h1 span {
     white-space: nowrap;
-  }
-
-  .hero-caption {
-    display: none;
   }
 
   .hero-controller {
@@ -4749,10 +4874,6 @@ footer {
   .hero-arrows button {
     width: 34px;
     height: 34px;
-  }
-
-  .hero-verse {
-    display: none;
   }
 
   .quick-menu-inner {
@@ -4778,12 +4899,12 @@ footer {
   }
 
   .section {
-    padding: 88px 0;
+    padding: 56px 0;
   }
 
   .section-intro {
     display: block;
-    margin-bottom: 34px;
+    margin-bottom: 24px;
   }
 
   .section-intro h2,
@@ -4792,16 +4913,21 @@ footer {
   }
 
   .section-intro > p {
-    margin-top: 19px;
+    margin-top: 15px;
     font-size: 12px;
     line-height: 1.7;
   }
 
   .featured-sermon {
+    width: 100%;
+    max-width: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .featured-sermon-media {
+    width: 100%;
+    max-width: 100%;
     aspect-ratio: 16 / 9;
   }
 
@@ -4823,41 +4949,60 @@ footer {
   }
 
   .featured-sermon-copy {
-    min-height: 320px;
-    padding: 37px 25px;
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(26px, 7vw, 34px) clamp(18px, 5.5vw, 26px) clamp(28px, 8vw, 38px);
+  }
+
+  .sermon-meta {
+    flex-wrap: wrap;
+    gap: 7px 13px;
+    line-height: 1.5;
   }
 
   .featured-sermon-copy h3 {
-    margin: 18px 0 13px;
-    font-size: 30px;
+    margin: 16px 0 12px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    font-size: clamp(23px, 7.2vw, 30px);
+    line-height: 1.3;
+  }
+
+  .featured-sermon-copy h3.is-long {
+    font-size: clamp(20px, 6.3vw, 27px);
+    line-height: 1.34;
   }
 
   .featured-sermon-copy > p {
-    font-size: 12px;
+    overflow-wrap: anywhere;
+    font-size: clamp(11px, 3.3vw, 13px);
+    line-height: 1.75;
   }
 
   .featured-sermon-copy > a {
-    width: 210px;
-    margin-top: 34px;
+    width: 100%;
+    min-height: 48px;
+    margin-top: 26px;
+    padding: 0 2px;
   }
 
   .sermon-play-link {
-    width: 210px;
-    margin-top: 34px;
+    width: 100%;
+    min-height: 48px;
+    margin-top: 26px;
   }
 
   .sermon-strip {
-    grid-template-columns: 1fr;
-    margin-top: 18px;
+    display: block;
+    overflow: hidden;
+    margin-top: 14px;
+    border-top: 0;
   }
 
   .sermon-card,
   .sermon-card:nth-child(2) {
-    grid-template-columns: 42% 1fr;
-    min-height: 166px;
-    padding: 15px 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    display: none;
   }
 
   .sermon-card-media {
@@ -4877,11 +5022,32 @@ footer {
   }
 
   .sermon-card-copy {
-    padding: 7px 0 7px 17px;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 0 8px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 7px 0 7px 14px;
   }
 
   .sermon-card-copy h3 {
-    font-size: 17px;
+    display: -webkit-box;
+    max-width: 100%;
+    margin: 10px 0 7px;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-size: clamp(14px, 4.3vw, 17px);
+    line-height: 1.35;
+    letter-spacing: -0.06em;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .sermon-card-copy h3.is-long {
+    font-size: clamp(13px, 3.8vw, 15px);
+    line-height: 1.38;
   }
 
   .sermon-all {
@@ -4892,6 +5058,7 @@ footer {
     min-height: 0;
     height: 64px;
     padding: 0 3px;
+    border-top: 1px solid var(--line);
     background: transparent;
     color: var(--ink);
   }
@@ -4919,7 +5086,7 @@ footer {
   }
 
   .identity-section {
-    padding: 99px 0 92px;
+    padding: 56px 0;
   }
 
   .identity-line {
@@ -4975,7 +5142,7 @@ footer {
   }
 
   .worship-section {
-    padding: 87px 0;
+    padding: 56px 0;
   }
 
   .worship-heading {
@@ -5032,7 +5199,7 @@ footer {
   }
 
   .visit-copy {
-    padding: 74px 20px 78px;
+    padding: 56px 20px 60px;
   }
 
   .visit-copy h2 {
@@ -5151,7 +5318,6 @@ footer {
 
   .hero-slide,
   .hero-slide.is-active img,
-  .hero h1 span,
   .hero-progress span {
     animation: none;
     transition: none;
@@ -5159,7 +5325,13 @@ footer {
 }
 
 /* Shared content pages */
-.content-hero { min-height: 430px; }
+.content-hero {
+  height: 240px;
+  min-height: 240px;
+}
+.content-hero--brand { background: #93645a; }
+.content-hero--brand .subpage-hero-inner > p { color: #f6d9ca; }
+.content-hero--brand .subpage-hero-inner > span { color: rgba(255, 255, 255, .78); }
 .content-hero .subpage-hero-bg::after {
   background:
     linear-gradient(90deg, rgba(34, 33, 44, 0.76) 0%, rgba(34, 33, 44, 0.35) 55%, rgba(34, 33, 44, 0.58) 100%),
@@ -5174,9 +5346,10 @@ footer {
 
 /* About */
 .about-intro { background: var(--paper); }
-.about-intro-grid { display: grid; grid-template-columns: minmax(300px, .82fr) minmax(480px, 1.18fr); gap: clamp(70px, 10vw, 150px); align-items: start; }
+.about-intro-grid { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(0, 1.1fr); gap: clamp(52px, 7vw, 110px); align-items: start; }
 .content-kicker > span { display: block; margin-bottom: 26px; color: var(--brown); font-size: 10px; font-weight: 780; letter-spacing: .2em; }
-.content-kicker > strong { font-family: var(--font-serif), "Noto Serif KR", serif; font-size: clamp(36px, 3.4vw, 56px); font-weight: 520; letter-spacing: -.07em; line-height: 1.36; }
+.content-kicker > strong { display: block; font-family: var(--font-serif), "Noto Serif KR", serif; font-size: clamp(32px, 3vw, 50px); font-weight: 520; letter-spacing: -.07em; line-height: 1.36; }
+.content-kicker > strong > span { display: block; white-space: nowrap; }
 .about-intro-copy > p { margin: 8px 0 50px; color: #5f5960; font-size: 19px; font-weight: 480; letter-spacing: -.035em; line-height: 2; }
 .about-intro-copy dl { margin: 0; border-top: 1px solid var(--line); }
 .about-intro-copy dl > div { display: grid; grid-template-columns: 112px 1fr; padding: 21px 0; border-bottom: 1px solid var(--line); }
@@ -5445,10 +5618,24 @@ body.modal-open { overflow: hidden; }
   .business-application-layout > aside { position: static; }
 }
 
+@media (max-width: 900px) {
+  .about-intro-grid { grid-template-columns: 1fr; gap: 40px; }
+  .content-kicker > strong { font-size: clamp(28px, 5.2vw, 42px); }
+}
+
 @media (max-width: 760px) {
-  .content-hero { min-height: 330px; }
+  .content-hero {
+    height: 205px;
+    min-height: 205px;
+  }
   .content-section { padding: 72px 0 84px; }
   .content-list-heading { margin-bottom: 30px; }
+  .value-section .content-heading h2 {
+    font-size: clamp(23px, 6.6vw, 28px);
+    font-weight: 680;
+    letter-spacing: -.075em;
+    white-space: nowrap;
+  }
   .business-grid, .gallery-album-grid { grid-template-columns: 1fr; gap: 16px; }
   .business-directory-heading { display: none; }
   .business-directory-mobile-apply { display: flex; min-height: 50px; align-items: center; justify-content: space-between; margin-top: 24px; padding: 0 20px; background: var(--ink); color: white; font-size: 12px; font-weight: 760; }
@@ -5505,6 +5692,8 @@ body.modal-open { overflow: hidden; }
   .gallery-album-copy strong i { font-size: 16px; }
   .gallery-pagination { margin-top: 36px; }
   .about-intro-grid, .worship-guide-grid { grid-template-columns: 1fr; gap: 36px; }
+  .content-kicker > span { margin-bottom: 18px; }
+  .content-kicker > strong { font-size: clamp(24px, 7.4vw, 36px); line-height: 1.42; }
   .about-intro-copy > p { margin-top: 0; font-size: 16px; line-height: 1.9; }
   .value-grid { grid-template-columns: 1fr; margin-top: 40px; }
   .value-card { min-height: auto; padding: 30px 6px 34px; border-right: 0; border-bottom: 1px solid rgba(48, 47, 60, .16); }

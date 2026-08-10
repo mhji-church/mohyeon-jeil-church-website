@@ -19,7 +19,7 @@ export default async function BusinessApplicationPage() {
       title="사업장 등록 신청"
       description="성도님이 운영하는 사업장 정보를 보내주시면 확인 후 성도사업장에 등록합니다."
       current="성도사업장"
-      heroImage="/assets/hero-flowers.webp"
+      heroImage="/assets/hero-flowers-4k.webp"
     >
       <BusinessApplicationForm
         applicantName={member.name}

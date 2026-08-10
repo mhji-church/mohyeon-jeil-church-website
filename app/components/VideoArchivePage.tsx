@@ -132,9 +132,10 @@ export default function VideoArchivePage({
   return (
     <main>
 
-      <section className="subpage-hero">
+      <section className="subpage-hero" data-page={title}>
         <div className="subpage-hero-bg" aria-hidden="true">
-          <img src="/assets/hero-worship.webp" alt="" fetchPriority="high" decoding="async" />
+          <img className="subpage-hero-cover" src="/assets/hero-worship.webp" alt="" fetchPriority="high" decoding="async" />
+          <img className="subpage-hero-focus" src="/assets/hero-worship.webp" alt="" decoding="async" />
         </div>
         <div className="page-width subpage-hero-inner">
           <p>{eyebrow}</p>

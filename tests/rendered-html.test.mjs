@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const developmentPreviewMeta =
@@ -41,7 +41,8 @@ test("renders development preview metadata", async () => {
   const html = await response.text();
   assert.match(html, developmentPreviewMeta);
   assert.match(html, />교인 로그인</);
-  assert.match(html, /hero-spring-mobile\.webp/);
+  const homeSource = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(homeSource, /hero-winter-4k\.webp/);
   assert.equal((html.match(/class="site-header/g) ?? []).length, 1);
   assert.equal((html.match(/<footer id="gallery"/g) ?? []).length, 1);
 

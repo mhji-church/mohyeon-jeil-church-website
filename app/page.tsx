@@ -1,57 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
+
+const heroTitle = ["말씀으로 바로 서고", "사랑으로 함께하는 교회"];
+const heroEyebrow = "MOHYEON JEIL CHURCH";
 
 const heroSlides = [
   {
-    image: "/assets/hero-spring.webp",
-    mobileImage: "/assets/hero-spring-mobile.webp",
+    image: "/assets/hero-drone-4k.webp",
+    mobilePosition: "46% 50%",
     alt: "봄의 모현제일교회 드론 전경",
-    eyebrow: "A CHURCH FOR THE COMMUNITY",
-    title: ["말씀으로 세우고", "사랑으로 섬깁니다"],
-    caption: "말씀 중심의 예배와 사랑의 섬김으로 지역과 함께합니다.",
-    position: "center",
-    tone: "right",
+    position: "center 50%",
   },
   {
-    image: "/assets/hero-sign.webp",
-    mobileImage: "/assets/hero-sign-mobile.webp",
+    image: "/assets/hero-sign-4k.webp",
+    mobilePosition: "left 48%",
     alt: "모현제일교회 외벽 표지",
-    eyebrow: "MOHYEON JEIL CHURCH",
-    title: ["말씀 위에 굳게 서고", "사랑으로 이웃을 섬깁니다"],
-    caption: "예배와 교제, 나눔으로 함께 자라는 건강한 공동체입니다.",
-    position: "center 48%",
-    tone: "left",
+    position: "left 48%",
   },
   {
-    image: "/assets/hero-worship.webp",
-    mobileImage: "/assets/hero-worship-mobile.webp",
+    image: "/assets/hero-worship-4k.webp",
+    mobilePosition: "center 52%",
     alt: "모현제일교회 예배 모습",
-    eyebrow: "WORSHIP IN HIS PRESENCE",
-    title: ["예배 안에서 만나고", "말씀 안에서 새로워집니다"],
-    caption: "모든 세대가 함께 하나님을 높이는 예배의 자리로 초대합니다.",
     position: "center 54%",
-    tone: "left",
   },
   {
-    image: "/assets/hero-flowers.webp",
-    mobileImage: "/assets/hero-flowers-mobile.webp",
+    image: "/assets/hero-flowers-4k.webp",
+    mobilePosition: "center 42%",
     alt: "꽃밭 너머로 보이는 모현제일교회",
-    eyebrow: "GROWING TOGETHER IN FAITH",
-    title: ["함께 예배하고 자라며", "함께 섬기는 공동체"],
-    caption: "복음 안에서 서로를 세우고 지역과 이웃을 향해 사랑을 나눕니다.",
     position: "center 57%",
-    tone: "left",
   },
   {
-    image: "/assets/hero-winter.webp",
-    mobileImage: "/assets/hero-winter-mobile.webp",
-    alt: "눈 내린 겨울의 모현제일교회 드론 전경",
-    eyebrow: "UNCHANGING GOSPEL",
-    title: ["계절이 바뀌어도", "변함없는 복음과 함께"],
-    caption: "주님의 사랑 안에서 오늘도 믿음의 길을 함께 걷습니다.",
-    position: "center 48%",
-    tone: "left",
+    image: "/assets/hero-winter-4k.webp",
+    mobilePosition: "center 52%",
+    alt: "겨울 들녘과 모현제일교회 드론 전경",
+    position: "center 52%",
   },
 ];
 
@@ -115,6 +98,26 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+
+function isAndroidDevice() {
+  return /android/i.test(navigator.userAgent);
+}
+
+function isChromeAndroid() {
+  const userAgent = navigator.userAgent;
+  return /android/i.test(userAgent) &&
+    /chrome\//i.test(userAgent) &&
+    !/(; wv\)|\bwv\b|naver|kakaotalk|samsungbrowser|firefox|edga|opr\/)/i.test(userAgent);
+}
+
+function isIOSDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function titleClassName(title: string, baseClass: string, longAt: number) {
+  return `${baseClass}${Array.from(title).length >= longAt ? " is-long" : ""}`;
+}
 
 const initialNewsItems: HomeNewsItem[] = [
   {
@@ -223,6 +226,7 @@ function HomeFloatingActions() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installPanelOpen, setInstallPanelOpen] = useState(false);
   const [installHelp, setInstallHelp] = useState("");
+  const [openInChrome, setOpenInChrome] = useState(false);
   const [installed, setInstalled] = useState(() =>
     typeof window !== "undefined" &&
     (window.matchMedia("(display-mode: standalone)").matches ||
@@ -243,6 +247,15 @@ function HomeFloatingActions() {
     };
 
     onScroll();
+    const initializeInstallUi = window.setTimeout(() => {
+      setOpenInChrome(isAndroidDevice() && !isChromeAndroid());
+      const installRequest = new URL(window.location.href);
+      if (installRequest.searchParams.get("install") === "1") {
+        setInstallPanelOpen(true);
+        installRequest.searchParams.delete("install");
+        window.history.replaceState({}, "", `${installRequest.pathname}${installRequest.search}${installRequest.hash}`);
+      }
+    }, 0);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
@@ -251,6 +264,7 @@ function HomeFloatingActions() {
     }
 
     return () => {
+      window.clearTimeout(initializeInstallUi);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
@@ -259,6 +273,17 @@ function HomeFloatingActions() {
 
   const addToHome = async () => {
     setInstallHelp("");
+
+    if (openInChrome) {
+      const installUrl = new URL(window.location.href);
+      installUrl.searchParams.set("install", "1");
+      installUrl.hash = "";
+      const chromeTarget = installUrl.toString().replace(/^https?:\/\//, "");
+      const fallbackUrl = encodeURIComponent(installUrl.toString());
+      window.location.href = `intent://${chromeTarget}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${fallbackUrl};end`;
+      return;
+    }
+
     if (installPrompt) {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
@@ -270,12 +295,10 @@ function HomeFloatingActions() {
       return;
     }
 
-    const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     setInstallHelp(
-      isiOS
+      isIOSDevice()
         ? "iPhone·iPad에서는 자동 설치가 지원되지 않습니다. Safari의 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택해 주세요."
-        : "현재 브라우저에서는 자동 설치를 사용할 수 없습니다. 브라우저 메뉴에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택해 주세요.",
+        : "Chrome에서 설치 준비 중입니다. 잠시 후 홈 화면 추가 버튼을 다시 눌러 주세요.",
     );
   };
 
@@ -335,9 +358,9 @@ function HomeFloatingActions() {
               <small>모현제일교회</small>
             </div>
           </div>
-          <p>홈 화면에서 모현제일교회 홈페이지를 앱처럼 바로 이용할 수 있습니다.</p>
+          <p>홈 화면에서 모현제일교회를 앱처럼 바로 이용하세요.</p>
           <button className="home-install-button" type="button" onClick={addToHome}>
-            홈 화면 추가
+            {openInChrome ? "Chrome에서 설치" : "홈 화면 추가"}
           </button>
           {installHelp && <p className="home-install-help" role="status">{installHelp}</p>}
         </div>
@@ -453,17 +476,19 @@ export default function Home() {
               aria-hidden={index !== activeSlide}
             >
               <picture>
-                <source media="(max-width: 720px)" srcSet={slide.mobileImage} />
                 <img
                   src={slide.image}
                   alt={index === activeSlide ? slide.alt : ""}
                   loading={index <= 1 ? "eager" : "lazy"}
                   fetchPriority={index === 0 ? "high" : "auto"}
                   decoding="async"
-                  style={{ objectPosition: slide.position }}
+                  style={{
+                    objectPosition: slide.position,
+                    "--hero-mobile-position": slide.mobilePosition,
+                  } as CSSProperties}
                 />
               </picture>
-              <div className={`hero-overlay hero-overlay-${slide.tone}`} aria-hidden="true" />
+              <div className="hero-overlay" aria-hidden="true" />
             </figure>
           ))}
         </div>
@@ -471,14 +496,13 @@ export default function Home() {
         <div className="hero-frame" aria-hidden="true" />
 
         <div className="hero-content-wrap">
-          <div className={`hero-copy hero-copy-${heroSlides[activeSlide].tone}`}>
-            <p className="hero-eyebrow">{heroSlides[activeSlide].eyebrow}</p>
-            <h1 key={`title-${activeSlide}`}>
-              {heroSlides[activeSlide].title.map((line) => (
+          <div className="hero-copy">
+            <p className="hero-eyebrow">{heroEyebrow}</p>
+            <h1>
+              {heroTitle.map((line) => (
                 <span key={line}>{line}</span>
               ))}
             </h1>
-            <p className="hero-caption">{heroSlides[activeSlide].caption}</p>
           </div>
 
           <div className="hero-controller">
@@ -499,11 +523,6 @@ export default function Home() {
               </button>
             </div>
           </div>
-
-          <p className="hero-verse">
-            <span>“너희는 세상의 빛이라”</span>
-            마태복음 5:14
-          </p>
         </div>
       </section>
 
@@ -545,7 +564,7 @@ export default function Home() {
                 <span>{sermons[0].type}</span>
                 <time>{sermons[0].date}</time>
               </div>
-              <h3>{sermons[0].title}</h3>
+              <h3 className={titleClassName(sermons[0].title, "sermon-title", 17)}>{sermons[0].title}</h3>
               <p>{sermons[0].detail}</p>
               <a
                 className="sermon-play-link"
@@ -570,7 +589,7 @@ export default function Home() {
                   <span>0{index + 2}</span>
                   <div>
                     <p>{sermon.type}</p>
-                    <h3>{sermon.title}</h3>
+                    <h3 className={titleClassName(sermon.title, "sermon-title", 13)}>{sermon.title}</h3>
                     <p className="sermon-card-detail">{sermon.detail}</p>
                     <time>{sermon.date}</time>
                   </div>

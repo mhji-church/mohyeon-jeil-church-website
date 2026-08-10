@@ -20,7 +20,6 @@ export default async function MemberPasswordPage({
   }
   if (!member.forcePasswordChange) redirect(returnTo);
   return (
-    <>
       <main className="member-auth-shell member-login-shell">
         <section className="member-auth-intro">
           <span>SECURITY CHECK</span>
@@ -41,6 +40,5 @@ export default async function MemberPasswordPage({
           <PasswordChangeForm returnTo={returnTo} />
         </section>
       </main>
-    </>
   );
 }

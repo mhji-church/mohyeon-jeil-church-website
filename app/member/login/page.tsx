@@ -18,7 +18,6 @@ export default async function MemberLoginPage({
   if (await getMemberSession()) redirect(returnTo);
 
   return (
-    <>
       <main className="member-auth-shell member-login-shell">
         <section className="member-auth-intro">
           <span>CHURCH MEMBER</span>
@@ -30,7 +29,6 @@ export default async function MemberLoginPage({
         </section>
         <section className="member-auth-card member-login-card">
           <header>
-            <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
             <div>
               <span>WELCOME BACK</span>
               <h2>아이디와 비밀번호를 입력해 주세요</h2>
@@ -42,6 +40,5 @@ export default async function MemberLoginPage({
           </p>
         </section>
       </main>
-    </>
   );
 }

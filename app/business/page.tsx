@@ -33,11 +33,11 @@ export default async function BusinessPage() {
 
   return (
     <ContentPage
-      eyebrow="CHURCH DIRECTORY"
+      eyebrow="MEMBER BUSINESS DIRECTORY"
       title="성도사업장"
       description="믿음 안에서 서로를 응원하고 지역과 함께하는 사업장을 소개합니다."
       current="성도사업장"
-      heroImage="/assets/hero-flowers.webp"
+      heroImage="/assets/hero-flowers-4k.webp"
     >
       <section className="content-section">
         <div className="page-width">
@@ -51,7 +51,7 @@ export default async function BusinessPage() {
           </div>
           {businesses.length === 0 ? (
             <div className="sample-notice business-empty-notice">
-              <span>CHURCH DIRECTORY</span>
+              <span>MEMBER BUSINESS DIRECTORY</span>
               <div>
                 <h2>현재 등록된 성도사업장이 없습니다.</h2>
                 <p>사업장 정보가 등록되면 이곳에 표시됩니다.</p>

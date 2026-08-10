@@ -3,7 +3,7 @@ import ContentPage from "../components/ContentPage";
 
 export const metadata: Metadata = {
   title: "교회 소개 | 모현제일교회",
-  description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회를 소개합니다.",
+  description: "말씀으로 바로 서고 사랑으로 지역을 섬기는 모현제일교회를 소개합니다.",
 };
 
 const values = [
@@ -36,7 +36,7 @@ export default function AboutPage() {
     <ContentPage
       eyebrow="ABOUT OUR CHURCH"
       title="교회 소개"
-      description="말씀을 따라 예배하고 사랑으로 지역을 섬기는 공동체입니다."
+      description="말씀으로 바로 서고 사랑으로 지역을 섬기는 교회입니다."
       current="교회 소개"
       heroImage="/assets/hero-spring.webp"
     >
@@ -44,13 +44,16 @@ export default function AboutPage() {
         <div className="page-width about-intro-grid">
           <div className="content-kicker">
             <span>MOHYEON JEIL CHURCH</span>
-            <strong>말씀 중심의 예배와<br />사랑의 섬김이 있는 교회</strong>
+            <strong>
+              <span>말씀 중심의 예배와</span>
+              <span>사랑의 섬김이 있는 교회</span>
+            </strong>
           </div>
           <div className="about-intro-copy">
             <p>
-              모현제일교회는 대한예수교장로회 합동 교단에 소속된 교회로서,
-              말씀 중심의 예배, 믿음 안에서의 교제와 나눔, 주님의 사랑으로
-              지역에 대한 섬김을 복음적 사명으로 여기는 건강한 교회입니다.
+              모현제일교회는 대한예수교장로회 합동 교단에 소속된 건강한 교회입니다.
+              말씀 중심의 예배를 드리고 믿음 안에서 교제하며 주님의 사랑으로
+              지역사회를 섬기는 공동체를 세워가고 있습니다.
             </p>
             <dl>
               <div>

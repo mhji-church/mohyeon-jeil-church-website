@@ -7,7 +7,6 @@ export default async function MemberPage() {
   const member = await requireMemberPage("/member");
 
   return (
-    <>
       <main className="member-profile-page">
         <header className="member-profile-heading">
           <span>MY ACCOUNT</span>
@@ -20,6 +19,5 @@ export default async function MemberPage() {
 
         <MemberProfileForm member={member} />
       </main>
-    </>
   );
 }

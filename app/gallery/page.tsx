@@ -43,7 +43,7 @@ export default async function GalleryPage({
       title="갤러리"
       description="모현제일교회의 예배와 섬김, 교제의 순간들을 함께 나눕니다."
       current="갤러리"
-      heroImage="/assets/hero-flowers.webp"
+      heroImage="/assets/hero-flowers-4k.webp"
     >
       <GalleryBoard
         albums={albums}

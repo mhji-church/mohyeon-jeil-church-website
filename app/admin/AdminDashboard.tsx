@@ -83,7 +83,7 @@ const typeMeta = {
   },
   business: {
     label: "성도사업장",
-    eyebrow: "CHURCH DIRECTORY",
+    eyebrow: "MEMBER BUSINESS DIRECTORY",
     description: "성도 사업장의 정보와 대표 이미지를 등록합니다.",
   },
 } satisfies Record<ContentType, { label: string; eyebrow: string; description: string }>;

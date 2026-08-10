@@ -47,7 +47,6 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
   const [menuOpen, setMenuOpen] = useState(false);
   const [worshipOpen, setWorshipOpen] = useState(false);
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [member, setMember] = useState<HeaderMember | null>(initialMember);
 
   useEffect(() => {
@@ -81,13 +80,6 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
       }
       window.removeEventListener("member-profile-updated", loadMember);
     };
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
@@ -140,7 +132,7 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
 
   return (
     <>
-      <header className={`site-header${scrolled ? " is-scrolled" : ""}`}>
+      <header className="site-header">
         <div className="header-inner">
           <Link className="brand" href="/" aria-label="모현제일교회 홈">
             <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
@@ -149,14 +141,18 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
           <nav className="desktop-nav" aria-label="주요 메뉴">
             {menuItems.map((item) => (
               <div className={`desktop-nav-item${item.children ? " has-submenu" : ""}`} key={item.label}>
-                <Link href={item.href} prefetch={false}>{item.label}</Link>
+                {item.children ? (
+                  <a href={item.href}>{item.label}</a>
+                ) : (
+                  <Link href={item.href} prefetch={false}>{item.label}</Link>
+                )}
                 {item.children && (
                   <div className="desktop-submenu" aria-label={`${item.label} 하위 메뉴`}>
                     {item.children.map((child) => (
-                      <Link href={child.href} prefetch={false} key={child.label}>
+                      <a href={child.href} key={child.label}>
                         {child.label}
                         <ArrowIcon />
-                      </Link>
+                      </a>
                     ))}
                   </div>
                 )}
@@ -260,10 +256,10 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
                   hidden={!worshipOpen}
                 >
                   {item.children.map((child) => (
-                    <Link href={child.href} prefetch={false} key={child.label} onClick={closeMenu}>
+                    <a href={child.href} key={child.label} onClick={closeMenu}>
                       {child.label}
                       <ArrowIcon />
-                    </Link>
+                    </a>
                   ))}
                 </div>
               </div>

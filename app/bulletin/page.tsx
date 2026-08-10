@@ -17,8 +17,8 @@ export default async function BulletinPage() {
       eyebrow="WEEKLY BULLETIN"
       title="주보"
       description="예배 순서와 한 주간의 교회 소식을 주보로 확인하세요."
+      heroImage="/assets/hero-bulletin.webp"
       current="주보"
-      heroImage="/assets/hero-worship.webp"
     >
       <BulletinBoard bulletins={bulletins} />
     </ContentPage>

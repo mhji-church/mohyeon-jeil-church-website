@@ -30,7 +30,7 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
       title="교회소식"
       description="예배와 교제, 지역을 섬기는 공동체의 소식을 전합니다."
       current="교회소식"
-      heroImage="/assets/hero-sign.webp"
+      heroImage="/assets/hero-church-news.webp"
     >
       <section className="content-section">
         <div className="page-width">
