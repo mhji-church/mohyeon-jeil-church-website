@@ -14,6 +14,25 @@ type BusinessDetails = {
   website: string;
 };
 
+const BUSINESS_PAGE_SIZE = 6;
+
+type BusinessPageProps = {
+  searchParams: Promise<{ page?: string | string[] }>;
+};
+
+function getPageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
+
+function businessPageHref(page: number) {
+  return page <= 1 ? "/business" : `/business?page=${page}`;
+}
+
 function parseBusinessDetails(content: string): BusinessDetails {
   try {
     const parsed = JSON.parse(content) as Partial<BusinessDetails>;
@@ -28,8 +47,19 @@ function parseBusinessDetails(content: string): BusinessDetails {
   }
 }
 
-export default async function BusinessPage() {
+export default async function BusinessPage({ searchParams }: BusinessPageProps) {
   const businesses = await listContentPosts({ type: "business" });
+  const requestedPage = Number.parseInt(String((await searchParams).page ?? "1"), 10);
+  const totalPages = Math.max(1, Math.ceil(businesses.length / BUSINESS_PAGE_SIZE));
+  const currentPage = Math.min(
+    totalPages,
+    Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1),
+  );
+  const pageBusinesses = businesses.slice(
+    (currentPage - 1) * BUSINESS_PAGE_SIZE,
+    currentPage * BUSINESS_PAGE_SIZE,
+  );
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   return (
     <ContentPage
@@ -59,7 +89,7 @@ export default async function BusinessPage() {
             </div>
           ) : (
             <div className="business-grid">
-              {businesses.map((business) => {
+              {pageBusinesses.map((business) => {
                 const details = parseBusinessDetails(business.content);
                 const websiteInput = details.website.trim();
                 const website = websiteInput && !/^https?:\/\/?$/i.test(websiteInput)
@@ -68,13 +98,18 @@ export default async function BusinessPage() {
                     : `https://${websiteInput}`
                   : "";
                 return (
-                  <article className="business-card" key={business.id}>
+                  <article
+                    className={`business-card${
+                      business.title === "보림종합공사"
+                        ? " business-card--bottom-focus"
+                        : ""
+                    }`}
+                    key={business.id}
+                  >
                     <div className="business-image">
                       <img
                         src={business.images[0]}
                         alt={`${business.title} 대표 이미지`}
-                        loading="lazy"
-                        decoding="async"
                       />
                     </div>
                     <div className="business-copy">
@@ -112,6 +147,27 @@ export default async function BusinessPage() {
               })}
             </div>
           )}
+          {totalPages > 1 ? (
+            <nav className="business-pagination" aria-label="성도사업장 페이지">
+              {currentPage > 1 ? (
+                <a href={businessPageHref(currentPage - 1)} aria-label="이전 페이지">←</a>
+              ) : (
+                <span aria-disabled="true">←</span>
+              )}
+              {pageNumbers.map((number) =>
+                number === currentPage ? (
+                  <strong aria-current="page" key={number}>{number}</strong>
+                ) : (
+                  <a href={businessPageHref(number)} key={number}>{number}</a>
+                ),
+              )}
+              {currentPage < totalPages ? (
+                <a href={businessPageHref(currentPage + 1)} aria-label="다음 페이지">→</a>
+              ) : (
+                <span aria-disabled="true">→</span>
+              )}
+            </nav>
+          ) : null}
           <a className="business-directory-mobile-apply" href="/business/apply">
             사업장 등록 신청 <b aria-hidden="true">→</b>
           </a>

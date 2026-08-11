@@ -3,6 +3,7 @@ import {
   hasExternalR2,
   putExternalObject,
 } from "../../../../lib/external-r2";
+import { externalMediaUrl } from "../../../../lib/media-path";
 import { deleteUploadedImages } from "../../../../lib/content";
 
 const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
             : `content/${type}`;
     const key = `${directory}/${crypto.randomUUID()}-${safeName(file.name)}`;
     await putExternalObject(key, file, user.email);
-    uploaded.push(`/api/media?store=external&key=${encodeURIComponent(key)}`);
+    uploaded.push(externalMediaUrl(key));
   }
   return Response.json({ images: uploaded }, { status: 201 });
 }

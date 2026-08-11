@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useState } from "react";
+import KakaoChurchMap from "./components/KakaoChurchMap";
 
 const heroTitle = ["말씀으로 바로 서고", "사랑으로 함께하는 교회"];
 const heroEyebrow = "MOHYEON JEIL CHURCH";
@@ -736,12 +737,7 @@ export default function Home() {
 
       <section className="visit-section" id="visit">
         <div className="visit-map">
-          <img
-            src="/assets/church-map.png"
-            alt="모현제일교회 위치 지도"
-            loading="lazy"
-            decoding="async"
-          />
+          <KakaoChurchMap />
         </div>
         <div className="visit-copy">
           <p className="section-kicker light">VISIT US</p>

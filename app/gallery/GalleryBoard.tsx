@@ -1,9 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
 import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
+
+const GALLERY_PAGE_SIZE = 6;
+
+function getPageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
 
 export default function GalleryBoard({
   albums,
@@ -16,9 +27,32 @@ export default function GalleryBoard({
   modalAlbums: GalleryModalAlbum[];
   initialAlbumId: string;
 }) {
+  const boardRef = useRef<HTMLElement>(null);
+  const previousPageRef = useRef(1);
+  const [page, setPage] = useState(1);
   const [viewer, setViewer] = useState<GalleryModalAlbum | null>(
     modalAlbums.find((item) => item.id === initialAlbumId) ?? null,
   );
+  const totalPages = Math.max(1, Math.ceil(albums.length / GALLERY_PAGE_SIZE));
+  const pageAlbums = useMemo(
+    () => albums.slice((page - 1) * GALLERY_PAGE_SIZE, page * GALLERY_PAGE_SIZE),
+    [albums, page],
+  );
+  const pageNumbers = useMemo(
+    () => getPageNumbers(page, totalPages),
+    [page, totalPages],
+  );
+
+  useEffect(() => {
+    if (previousPageRef.current === page) return;
+    previousPageRef.current = page;
+    const board = boardRef.current;
+    if (!board) return;
+
+    const headerOffset = window.matchMedia("(max-width: 720px)").matches ? 68 : 88;
+    const targetTop = board.getBoundingClientRect().top + window.scrollY - headerOffset;
+    window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+  }, [page]);
 
   const openViewer = (album: GalleryModalAlbum) => {
     setViewer(album);
@@ -35,7 +69,7 @@ export default function GalleryBoard({
   };
 
   return (
-    <section className="content-section gallery-board">
+    <section className="content-section gallery-board" ref={boardRef}>
       <div className="page-width">
         <header className="content-list-heading">
           <div>
@@ -45,8 +79,8 @@ export default function GalleryBoard({
           <span>총 {albums.length}건</span>
         </header>
 
-        <div className="gallery-album-grid">
-          {albums.map((album, index) => {
+        <div className="gallery-album-grid" data-count={pageAlbums.length}>
+          {pageAlbums.map((album) => {
             const modalAlbum = modalAlbums.find((item) => item.id === album.id);
             const cardContent = (
               <>
@@ -57,9 +91,9 @@ export default function GalleryBoard({
                 <span>{album.imageCount} PHOTOS</span>
               </div>
               <div className="gallery-album-copy">
-                <div>
+                <div className="gallery-album-meta">
+                  <span>{album.category || "CHURCH LIFE"}</span>
                   <time>{album.date}</time>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
                 </div>
                 <h3>{album.title}</h3>
                 <p>{album.excerpt}</p>
@@ -94,11 +128,35 @@ export default function GalleryBoard({
           })}
         </div>
 
-        <nav className="gallery-pagination" aria-label="갤러리 페이지">
-          <button type="button" disabled aria-label="이전 페이지">←</button>
-          <strong aria-current="page">1</strong>
-          <button type="button" disabled aria-label="다음 페이지">→</button>
-        </nav>
+        {totalPages > 1 ? (
+          <nav className="gallery-pagination" aria-label="갤러리 페이지">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1}
+              aria-label="이전 페이지"
+            >
+              ←
+            </button>
+            {pageNumbers.map((number) =>
+              number === page ? (
+                <strong aria-current="page" key={number}>{number}</strong>
+              ) : (
+                <button type="button" onClick={() => setPage(number)} key={number}>
+                  {number}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={page === totalPages}
+              aria-label="다음 페이지"
+            >
+              →
+            </button>
+          </nav>
+        ) : null}
       </div>
 
       {viewer ? (

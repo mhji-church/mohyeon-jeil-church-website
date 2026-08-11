@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { YouTubePlaylistType } from "../../lib/youtube";
 
 export type ArchiveVideo = {
@@ -25,6 +25,75 @@ type VideoArchivePageProps = {
 };
 
 const PAGE_SIZE = 8;
+
+function getMobilePageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 3) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 1, totalPages - 2));
+  return [start, start + 1, start + 2];
+}
+
+function getDesktopPageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
+}
+
+function getDisplayTitle(title: string, playlistType: YouTubePlaylistType) {
+  if (playlistType !== "worship") return title;
+
+  return title.replace(/모현제일교회/g, "").replace(/\s+/g, " ").trim();
+}
+
+function FittedArchiveTitle({ title }: { title: string }) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+
+  useLayoutEffect(() => {
+    const heading = titleRef.current;
+    if (!heading) return;
+
+    let cancelled = false;
+    const fitTitle = () => {
+      heading.style.removeProperty("font-size");
+      const minSize = 8.5;
+      const maxSize = Number.parseFloat(window.getComputedStyle(heading).fontSize) || 15;
+      heading.style.fontSize = `${maxSize}px`;
+      if (heading.scrollWidth <= heading.clientWidth) return;
+
+      let lower = minSize;
+      let upper = maxSize;
+      for (let index = 0; index < 8; index += 1) {
+        const middle = (lower + upper) / 2;
+        heading.style.fontSize = `${middle}px`;
+        if (heading.scrollWidth <= heading.clientWidth) lower = middle;
+        else upper = middle;
+      }
+      heading.style.fontSize = `${Math.floor(lower * 10) / 10}px`;
+    };
+
+    fitTitle();
+    void document.fonts.ready.then(() => {
+      if (!cancelled) fitTitle();
+    });
+    window.addEventListener("resize", fitTitle);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", fitTitle);
+    };
+  }, [title]);
+
+  return (
+    <h3 ref={titleRef} title={title}>
+      {title}
+    </h3>
+  );
+}
 
 function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
   return (
@@ -63,6 +132,14 @@ export default function VideoArchivePage({
   const pageVideos = useMemo(
     () => playlistVideos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [page, playlistVideos],
+  );
+  const mobilePageNumbers = useMemo(
+    () => getMobilePageNumbers(page, totalPages),
+    [page, totalPages],
+  );
+  const desktopPageNumbers = useMemo(
+    () => getDesktopPageNumbers(page, totalPages),
+    [page, totalPages],
   );
 
   useEffect(() => {
@@ -160,43 +237,47 @@ export default function VideoArchivePage({
           </div>
 
           <div className="archive-grid">
-            {pageVideos.map((video) => (
-              <article className="archive-card" key={video.videoId}>
-                <button
-                  className="archive-thumbnail"
-                  type="button"
-                  onClick={() => setPlaying(video)}
-                  aria-label={`${video.title} 사이트에서 재생`}
-                >
-                  <img
-                    src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.videoId}/maxresdefault.jpg`}
-                    alt={`${video.title} 유튜브 썸네일`}
-                    loading="lazy"
-                    decoding="async"
-                    onError={(event) => {
-                      event.currentTarget.src = `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
-                    }}
-                  />
-                  <PlayIcon />
-                </button>
-                <div className="archive-card-copy">
-                  <div className="archive-meta">
-                    <span>{video.category}</span>
-                    <time>{video.date}</time>
-                  </div>
-                  <h3>{video.title}</h3>
-                  {video.detail && <p>{video.detail}</p>}
-                  <a
-                    href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`${video.title} 유튜브에서 보기`}
+            {pageVideos.map((video) => {
+              const displayTitle = getDisplayTitle(video.title, playlistType);
+
+              return (
+                <article className="archive-card" key={video.videoId}>
+                  <button
+                    className="archive-thumbnail"
+                    type="button"
+                    onClick={() => setPlaying(video)}
+                    aria-label={`${displayTitle} 사이트에서 재생`}
                   >
-                    유튜브에서 보기 <ArrowIcon diagonal />
-                  </a>
-                </div>
-              </article>
-            ))}
+                    <img
+                      src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.videoId}/maxresdefault.jpg`}
+                      alt={`${displayTitle} 유튜브 썸네일`}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        event.currentTarget.src = `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
+                      }}
+                    />
+                    <PlayIcon />
+                  </button>
+                  <div className="archive-card-copy">
+                    <div className="archive-meta">
+                      <span>{video.category}</span>
+                      <time>{video.date}</time>
+                    </div>
+                    <FittedArchiveTitle title={displayTitle} />
+                    {video.detail && <p>{video.detail}</p>}
+                    <a
+                      href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`${displayTitle} 유튜브에서 보기`}
+                    >
+                      유튜브에서 보기 <ArrowIcon diagonal />
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
           <div
@@ -214,11 +295,16 @@ export default function VideoArchivePage({
             </button>
             {Array.from({ length: totalPages }, (_, index) => index + 1).map((number) => (
               <button
-                className={number === page ? "is-active" : ""}
+                className={[
+                  number === page ? "is-active" : "",
+                  mobilePageNumbers.includes(number) ? "" : "is-mobile-hidden",
+                  desktopPageNumbers.includes(number) ? "" : "is-desktop-hidden",
+                ].filter(Boolean).join(" ")}
                 type="button"
                 key={number}
                 onClick={() => changePage(number)}
                 aria-current={number === page ? "page" : undefined}
+                aria-label={`${number}페이지`}
               >
                 {String(number).padStart(2, "0")}
               </button>
@@ -245,7 +331,7 @@ export default function VideoArchivePage({
 
 
       {playing && (
-        <div className="video-modal" role="dialog" aria-modal="true" aria-label={`${playing.title} 영상`}>
+        <div className="video-modal" role="dialog" aria-modal="true" aria-label={`${getDisplayTitle(playing.title, playlistType)} 영상`}>
           <button
             className="video-modal-backdrop"
             type="button"
@@ -259,14 +345,14 @@ export default function VideoArchivePage({
             <div className="video-modal-frame">
               <iframe
                 src={`https://www.youtube-nocookie.com/embed/${playing.videoId}?autoplay=1&rel=0`}
-                title={playing.title}
+                title={getDisplayTitle(playing.title, playlistType)}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
             </div>
             <div className="video-modal-copy">
               <span>{playing.date}</span>
-              <strong>{playing.title}</strong>
+              <strong>{getDisplayTitle(playing.title, playlistType)}</strong>
             </div>
           </div>
         </div>

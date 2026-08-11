@@ -989,13 +989,22 @@ export default function AdminDashboard({
                       />
                     </label>
                   </div>
-                  <p>
-                    {form.type === "bulletin"
-                      ? "규격과 방향에 관계없이 등록할 수 있습니다. 1면부터 선택하고, 등록 후 화살표로 순서를 바꾸세요."
-                      : form.type === "gallery"
-                        ? "첫 번째 사진이 대표 이미지가 됩니다. 큰 원본과 휴대전화 사진도 저장할 때 자동 최적화됩니다."
-                        : "규격과 방향에 관계없이 대표 이미지 한 장을 선택하세요. 저장할 때 자동 최적화 후 업로드됩니다."}
-                  </p>
+                  {form.type === "business" ? (
+                    <div className="admin-business-image-guide">
+                      <strong>권장 이미지 규격</strong>
+                      <span>16:9 가로형 · 1600×900px 이상</span>
+                      <p>
+                        1920×1080px을 권장합니다. 간판·상호와 주요 피사체는 사진
+                        가장자리에 붙이지 말고 중앙에 배치해 주세요.
+                      </p>
+                    </div>
+                  ) : (
+                    <p>
+                      {form.type === "bulletin"
+                        ? "규격과 방향에 관계없이 등록할 수 있습니다. 1면부터 선택하고, 등록 후 화살표로 순서를 바꾸세요."
+                        : "첫 번째 사진이 대표 이미지가 됩니다. 큰 원본과 휴대전화 사진도 저장할 때 자동 최적화됩니다."}
+                    </p>
+                  )}
                   <p className="admin-upload-help">
                     JPG·PNG·WEBP·HEIC·HEIF·AVIF·BMP·TIFF·GIF·SVG 지원 · 원본 최대 80MB ·
                     큰 이미지는 자동 최적화 · 움직이는 GIF는 최대 4MB

@@ -371,19 +371,30 @@ export default function BusinessApplicationForm({
           </label>
           <label className="business-image-field">
             <span>대표 이미지 <small>선택 · 1장</small></span>
+            <div className="business-image-guide" id="business-image-guide">
+              <strong>권장 이미지 규격</strong>
+              <span>16:9 가로형 · 1600×900px 이상</span>
+              <p>
+                1920×1080px을 권장합니다. 간판·상호와 주요 피사체는 사진 가장자리에
+                붙이지 말고 중앙에 배치해 주세요.
+              </p>
+            </div>
             <input
               type="file"
               accept="image/*,.heic,.heif,.avif,.tif,.tiff"
+              aria-describedby="business-image-guide business-image-file-note"
               onChange={(event) => selectImage(event.target.files?.[0] ?? null)}
             />
-            {imagePreview ? (
+            {imagePreview && (
               <div className="business-image-preview">
                 <img src={imagePreview} alt="선택한 대표 이미지 미리보기" />
                 <button type="button" onClick={() => selectImage(null)}>이미지 삭제</button>
               </div>
-            ) : (
-              <small>규격과 비율은 제한하지 않으며, 큰 이미지는 자동으로 최적화합니다.</small>
             )}
+            <small id="business-image-file-note">
+              JPG·PNG·WEBP를 권장하며, 원본은 최대 80MB까지 선택할 수 있습니다.
+              큰 이미지는 업로드할 때 자동으로 최적화합니다.
+            </small>
           </label>
           <label className="business-form-consent">
             <input type="checkbox" required />

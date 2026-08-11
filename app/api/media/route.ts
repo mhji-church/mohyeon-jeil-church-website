@@ -3,10 +3,8 @@ import { getMemberSession } from "../../member-auth";
 import { getUploadedMediaAccess } from "../../../lib/content";
 import { getExternalObject } from "../../../lib/external-r2";
 
-export async function GET(request: Request) {
-  const key = new URL(request.url).searchParams.get("key");
-  const external = new URL(request.url).searchParams.get("store") === "external";
-  if (!key || !external || !/^(gallery|bulletins|businesses|content\/[a-z-]+)\//.test(key)) {
+export async function serveExternalMedia(key: string | null) {
+  if (!key || !/^(gallery|bulletins|businesses|content\/[a-z-]+)\//.test(key)) {
     return new Response("Not found", { status: 404 });
   }
   const access = await getUploadedMediaAccess(key);
@@ -38,4 +36,11 @@ export async function GET(request: Request) {
     );
   }
   return new Response(body, { headers });
+}
+
+export async function GET(request: Request) {
+  const searchParams = new URL(request.url).searchParams;
+  const external = searchParams.get("store") === "external";
+  if (!external) return new Response("Not found", { status: 404 });
+  return serveExternalMedia(searchParams.get("path") ?? searchParams.get("key"));
 }

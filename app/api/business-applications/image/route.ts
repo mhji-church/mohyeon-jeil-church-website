@@ -4,6 +4,7 @@ import {
   hasExternalR2,
   putExternalObject,
 } from "../../../../lib/external-r2";
+import { externalMediaUrl } from "../../../../lib/media-path";
 
 const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const maxBytes = 5 * 1024 * 1024;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
   }
   await putExternalObject(key, file, `member:${member.id}`);
   return Response.json(
-    { image: `/api/media?store=external&key=${encodeURIComponent(key)}` },
+    { image: externalMediaUrl(key) },
     { status: 201 },
   );
 }

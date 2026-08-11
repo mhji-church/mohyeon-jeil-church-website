@@ -10,6 +10,7 @@ import {
 } from "../../../../lib/content";
 import { requireAdminApi } from "../../../admin-auth";
 import { hasExternalR2, putExternalObject } from "../../../../lib/external-r2";
+import { externalMediaUrl } from "../../../../lib/media-path";
 import { getKoreaDate } from "../../../../lib/korea-date";
 
 const allowedTypes = new Set<ContentType>(["bulletin", "news", "gallery", "business"]);
@@ -70,7 +71,7 @@ async function uploadPendingImages(
             ? "businesses"
             : "bulletins";
       const key = `${directory}/${crypto.randomUUID()}-${safeName(file.name)}`;
-      const url = `/api/media?store=external&key=${encodeURIComponent(key)}`;
+      const url = externalMediaUrl(key);
       await putExternalObject(key, file, uploadedBy);
       uploaded.push(url);
       uploadedById.set(id, url);

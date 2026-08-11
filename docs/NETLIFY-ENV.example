@@ -9,3 +9,4 @@ ADMIN_PASSWORD=replace-with-strong-password
 ADMIN_SESSION_SECRET=replace-with-long-random-value
 MEMBER_SESSION_SECRET=replace-with-another-long-random-value
 YOUTUBE_API_KEY=replace-with-youtube-data-api-key
+NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY=replace-with-kakao-javascript-key

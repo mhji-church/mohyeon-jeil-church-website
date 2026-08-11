@@ -31,6 +31,7 @@ export default function AdminBusinessApplications({
   const [applications, setApplications] = useState<BusinessApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [filter, setFilter] = useState<BusinessApplicationStatus | "all">("all");
   const [selected, setSelected] = useState<BusinessApplication | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -68,6 +69,14 @@ export default function AdminBusinessApplications({
       completed: applications.filter((item) => item.status === "completed").length,
     }),
     [applications],
+  );
+
+  const visibleApplications = useMemo(
+    () =>
+      filter === "all"
+        ? applications
+        : applications.filter((application) => application.status === filter),
+    [applications, filter],
   );
 
   async function saveApplication(event: React.FormEvent<HTMLFormElement>) {
@@ -161,7 +170,13 @@ export default function AdminBusinessApplications({
             ["reviewed", "검토 중"],
             ["completed", "처리 완료"],
           ] as const).map(([key, label]) => (
-            <button type="button" key={key}>
+            <button
+              type="button"
+              className={filter === key ? "is-active" : ""}
+              onClick={() => setFilter(key)}
+              key={key}
+              aria-pressed={filter === key}
+            >
               <span>{label}</span>
               <strong>{counts[key]}</strong>
               <small>신청 건수</small>
@@ -175,13 +190,19 @@ export default function AdminBusinessApplications({
           <header>
             <div>
               <h2>사업장 등록 신청</h2>
-              <span>총 {applications.length}건</span>
+              <span>총 {visibleApplications.length}건</span>
             </div>
           </header>
           {loading ? (
             <div className="admin-empty">신청 목록을 불러오고 있습니다.</div>
-          ) : applications.length === 0 ? (
-            <div className="admin-empty"><strong>접수된 신청이 없습니다.</strong></div>
+          ) : visibleApplications.length === 0 ? (
+            <div className="admin-empty">
+              <strong>
+                {applications.length === 0
+                  ? "접수된 신청이 없습니다."
+                  : "선택한 상태의 신청이 없습니다."}
+              </strong>
+            </div>
           ) : (
             <div className="admin-table-wrap">
               <table className="admin-business-application-table">
@@ -197,7 +218,7 @@ export default function AdminBusinessApplications({
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map((application) => (
+                  {visibleApplications.map((application) => (
                     <tr key={application.id}>
                       <td>
                         <strong>{application.businessName}</strong>

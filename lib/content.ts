@@ -1,4 +1,5 @@
 import { deleteExternalObjects } from "./external-r2";
+import { externalMediaKey, externalMediaUrl } from "./media-path";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 
 export type ContentType = "bulletin" | "news" | "gallery" | "business";
@@ -229,7 +230,17 @@ export async function ensureContentStore() {
   contentStoreReady = true;
 }
 
+function publicMediaUrl(url: string) {
+  if (url.startsWith("/api/media/object/")) return url;
+  if (!url.startsWith("/api/media?")) return url;
+  const params = new URLSearchParams(url.slice(url.indexOf("?")));
+  const key = params.get("path") ?? params.get("key");
+  if (!key) return url;
+  return externalMediaUrl(key);
+}
+
 function mapRow(row: Record<string, unknown>): ContentPost {
+  const images = JSON.parse(String(row.images ?? "[]")) as string[];
   return {
     id: String(row.id),
     type: row.type as ContentType,
@@ -238,7 +249,7 @@ function mapRow(row: Record<string, unknown>): ContentPost {
     excerpt: String(row.excerpt ?? ""),
     category: String(row.category ?? ""),
     content: String(row.content ?? ""),
-    images: JSON.parse(String(row.images ?? "[]")) as string[],
+    images: images.map(publicMediaUrl),
     status: row.status as ContentStatus,
     sortOrder: Number(row.sort_order ?? 0),
     createdAt: String(row.created_at ?? ""),
@@ -299,10 +310,17 @@ export async function getContentPost(id: string): Promise<ContentPost | null> {
 }
 
 export function uploadedObjectKey(url: string) {
+  if (url.startsWith("/api/media/object/")) {
+    const token = url.slice("/api/media/object/".length).split(/[?#]/, 1)[0];
+    const key = externalMediaKey(token);
+    return key && /^(gallery|bulletins|businesses|content\/[a-z-]+)\//.test(key)
+      ? { store: "external" as const, key }
+      : null;
+  }
   if (!url.startsWith("/api/media?")) return null;
   const query = url.slice(url.indexOf("?"));
   const params = new URLSearchParams(query);
-  const key = params.get("key");
+  const key = params.get("path") ?? params.get("key");
   if (!key) return null;
   if (
     params.get("store") === "external" &&

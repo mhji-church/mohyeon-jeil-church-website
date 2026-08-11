@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ContentPage from "../components/ContentPage";
 import { listContentPosts } from "../../lib/content";
+import NewsAccordionController from "./MobileNewsCollapse";
 
 export const metadata: Metadata = {
   title: "교회소식 | 모현제일교회",
@@ -84,6 +85,7 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
               </div>
             )}
           </div>
+          <NewsAccordionController enabled={!selectedDate} />
         </div>
       </section>
     </ContentPage>

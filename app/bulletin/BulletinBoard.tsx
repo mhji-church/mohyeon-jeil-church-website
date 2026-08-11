@@ -45,7 +45,7 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
       <div className="page-width">
         <header className="content-list-heading">
           <div>
-            <p>2026 BULLETIN</p>
+            <p>BULLETIN</p>
             <h2>주보 보기</h2>
           </div>
           <span>총 {bulletins.length}건</span>
@@ -63,7 +63,8 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                 <img
                   src={latest.images[0]}
                   alt={`${latest.title} 첫 번째 면`}
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                   decoding="async"
                 />
                 <span className="bulletin-new-label">NEW</span>
