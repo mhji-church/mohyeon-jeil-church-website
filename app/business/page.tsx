@@ -74,10 +74,9 @@ export default async function BusinessPage({ searchParams }: BusinessPageProps) 
           <div className="business-directory-heading">
             <div>
               <span>MEMBER BUSINESS DIRECTORY</span>
-              <h2>성도님의 사업장을 소개해 주세요.</h2>
-              <p>승인된 교인 회원은 온라인으로 사업장 등록을 신청할 수 있습니다.</p>
+              <h2>우리 교회 성도사업장을 소개합니다.</h2>
+              <p>믿음 안에서 서로 응원하며 함께 성장하는 사업장을 만나보세요.</p>
             </div>
-            <a href="/business/apply">사업장 등록 신청 <b aria-hidden="true">→</b></a>
           </div>
           {businesses.length === 0 ? (
             <div className="sample-notice business-empty-notice">
@@ -168,9 +167,6 @@ export default async function BusinessPage({ searchParams }: BusinessPageProps) 
               )}
             </nav>
           ) : null}
-          <a className="business-directory-mobile-apply" href="/business/apply">
-            사업장 등록 신청 <b aria-hidden="true">→</b>
-          </a>
         </div>
       </section>
     </ContentPage>

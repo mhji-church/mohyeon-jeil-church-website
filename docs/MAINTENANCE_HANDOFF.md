@@ -31,7 +31,7 @@
 | `app/` | 페이지, UI 컴포넌트, Route Handler API, 인증 보조 코드 |
 | `app/page.tsx` | 메인 4K 히어로, 설교·소식 요약, PWA 설치 UI |
 | `app/components/` | 공통 헤더·푸터, 콘텐츠 레이아웃, 영상 목록, 확대 이미지 |
-| `app/admin/` | 관리자 로그인 이후 게시물·회원·사업장 신청 관리 UI |
+| `app/admin/` | 관리자 로그인 이후 게시물·회원 관리 UI |
 | `app/api/` | 공개·교인·관리자 API와 미디어 프록시 |
 | `lib/` | 콘텐츠, 회원, 사업장, Turso, R2, YouTube 도메인 로직 |
 | `db/` | Drizzle용 테이블 정의와 libSQL 클라이언트 |
@@ -52,9 +52,8 @@
 - `/news`: 날짜 쿼리와 `#news-YYYY-MM-DD` 앵커로 해당 소식을 펼치고 브라우저 앵커 이동을 사용한다.
 - `/gallery`: 목록·표지 이미지는 공개하지만 상세 앨범과 표지 이후 이미지는 승인된 교인 또는 관리자에게만 제공한다. 앨범 모달, 직접 링크 쿼리, 키보드·스와이프·썸네일 이동을 제공한다.
 - `/business`: 공개된 성도사업장 목록과 선택적 외부 웹사이트 링크.
-- `/business/apply`: 승인된 교인 전용 사업장 신청. 이미지 최적화·업로드 후 관리자 검토를 거친다.
 - `/member/signup`, `/member/login`, `/member`, `/member/password`: 가입 신청, 승인 계정 로그인, 개인 정보·비밀번호 관리, 임시 비밀번호 강제 변경.
-- `/admin`, `/admin/members`, `/admin/business-applications`: 게시물 CRUD, 공개/임시저장, 이미지 업로드, 회원 승인·수정·이용 중지·비밀번호 초기화·삭제, 사업장 신청 검토·게시·삭제.
+- `/admin`, `/admin/members`: 게시물 CRUD, 공개/임시저장, 이미지 업로드, 회원 승인·수정·이용 중지·비밀번호 초기화·삭제.
 
 ## 인증과 권한
 
@@ -62,7 +61,7 @@
 
 교인 비밀번호는 PBKDF2-SHA256 100,000회와 개별 salt로 저장한다. 가입 직후 상태는 `pending`, 관리자가 `approved`로 바꿔야 로그인할 수 있으며 `suspended` 계정은 거부된다. 교인 세션은 `MEMBER_SESSION_SECRET`으로 서명한 HttpOnly 쿠키 `mhji_member_session`을 사용한다. 로그인한 헤더에는 이름과 직분을 표시하고 내 정보·로그아웃 메뉴를 제공한다.
 
-직접 보호 경로인 `/gallery/[id]`, `/business/apply`, `/member`는 `return_to`를 사용해 로그인 후 복귀한다. 현재 `app/gallery/GalleryBoard.tsx`의 비로그인 앨범 링크만 `returnTo`를 사용하지만 로그인 페이지는 `return_to`만 읽는다. 따라서 갤러리 목록에서 로그인한 경우 원래 앨범으로 복귀하지 못할 가능성이 있으며, 다음 기능 수정 때 영향 분석과 회귀 테스트를 거쳐 확인해야 한다.
+직접 보호 경로인 `/gallery/[id]`, `/member`는 `return_to`를 사용해 로그인 후 복귀한다. 현재 `app/gallery/GalleryBoard.tsx`의 비로그인 앨범 링크만 `returnTo`를 사용하지만 로그인 페이지는 `return_to`만 읽는다. 따라서 갤러리 목록에서 로그인한 경우 원래 앨범으로 복귀하지 못할 가능성이 있으며, 다음 기능 수정 때 영향 분석과 회귀 테스트를 거쳐 확인해야 한다.
 
 ## 데이터와 외부 연동
 
@@ -72,10 +71,12 @@
 
 - `content_posts`: 주보·교회소식·갤러리·성도사업장
 - `members`: 교인 계정과 승인 상태
-- `business_applications`: 성도사업장 신청
+- `business_applications`: 비활성화된 성도사업장 신청의 기존 데이터 보존용 테이블
 - `youtube_playlist_cache`: YouTube 동기화 캐시
 
 `db/schema.ts`와 `drizzle/`도 유지된다. 스키마를 바꿀 때 런타임 보장 SQL, Drizzle 스키마, 마이그레이션의 일관성을 함께 검토한다. 기존 D1 데이터는 Turso로 자동 이전되지 않는다.
+
+사업장 등록 신청 기능은 현재 공개 페이지·API·관리자 진입점에서 제거되어 있다. 폼과 디자인을 다시 사용할 때는 `docs/BUSINESS_APPLICATION_BACKUP.md`의 복원 지점을 따른다.
 
 ### Cloudflare R2
 

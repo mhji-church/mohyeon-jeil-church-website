@@ -75,6 +75,11 @@ export default function GalleryBoard({
           <div>
             <p>CHURCH ALBUM</p>
             <h2>교회 앨범</h2>
+            {!isMember ? (
+              <span className="gallery-login-notice">
+                로그인 후 앨범을 보실 수 있습니다.
+              </span>
+            ) : null}
           </div>
           <span>총 {albums.length}건</span>
         </header>
@@ -95,12 +100,11 @@ export default function GalleryBoard({
                   <span>{album.category || "CHURCH LIFE"}</span>
                   <time>{album.date}</time>
                 </div>
-                <h3>{album.title}</h3>
-                <p>{album.excerpt}</p>
-                <strong>
-                  <span>{isMember ? "앨범 보기" : "교인 로그인 후 앨범 보기"}</span>
+                <div className="gallery-album-title-row">
+                  <h3>{album.title}</h3>
                   <i aria-hidden="true">→</i>
-                </strong>
+                </div>
+                <p>{album.excerpt}</p>
               </div>
               </>
             );

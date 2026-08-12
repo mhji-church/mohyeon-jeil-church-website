@@ -655,10 +655,6 @@ export default function AdminDashboard({
             <i>05</i>
             <span>회원 관리</span>
           </a>
-          <a href="/admin/business-applications">
-            <i>06</i>
-            <span>사업장 신청 관리</span>
-          </a>
         </nav>
         <div className="admin-account">
           <span>{userName}</span>
