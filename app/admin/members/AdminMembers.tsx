@@ -198,6 +198,9 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
           <a className="is-active" href="/admin/members">
             <i>05</i><span>회원 관리</span><b>{counts.all}</b>
           </a>
+          <a href="/admin/archive">
+            <i>06</i><span>예배 아카이브</span>
+          </a>
         </nav>
         <div className="admin-account">
           <span>{userName}</span>

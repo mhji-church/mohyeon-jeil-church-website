@@ -28,7 +28,7 @@ const menuItems = [
 // 일반 링크로 자동 전환되고 "준비 중" 표시는 사라집니다.
 const worshipArchive = {
   label: "예배 아카이브",
-  href: null as string | null,
+  href: "/archive" as string | null,
 };
 
 function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
@@ -67,14 +67,16 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
         // 상태를 비로그인으로 덮어쓰지 않는다. 401 응답일 때만 해제한다.
         .catch(() => undefined);
     };
-    const scheduled = "requestIdleCallback" in window
-      ? window.requestIdleCallback(loadMember, { timeout: 800 })
+    const requestIdle = window.requestIdleCallback;
+    const scheduled = typeof requestIdle === "function"
+      ? requestIdle(loadMember, { timeout: 800 })
       : window.setTimeout(loadMember, 120);
     window.addEventListener("member-profile-updated", loadMember);
     return () => {
       active = false;
-      if ("cancelIdleCallback" in window && typeof scheduled === "number") {
-        window.cancelIdleCallback(scheduled);
+      const cancelIdle = window.cancelIdleCallback;
+      if (typeof cancelIdle === "function") {
+        cancelIdle(scheduled);
       } else {
         window.clearTimeout(scheduled);
       }

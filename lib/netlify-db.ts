@@ -76,6 +76,11 @@ export async function ensureNetlifySchema() {
         `CREATE UNIQUE INDEX IF NOT EXISTS members_username_unique ON members(username)`,
         `CREATE TABLE IF NOT EXISTS business_applications (id TEXT PRIMARY KEY NOT NULL, member_id TEXT NOT NULL, applicant_name TEXT NOT NULL, applicant_phone TEXT NOT NULL, business_name TEXT NOT NULL, category TEXT NOT NULL, owner_name TEXT NOT NULL, business_phone TEXT NOT NULL DEFAULT '', address TEXT NOT NULL, description TEXT NOT NULL, website TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
         `CREATE TABLE IF NOT EXISTS youtube_playlist_cache (playlist_type TEXT PRIMARY KEY NOT NULL, videos_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+        `CREATE TABLE IF NOT EXISTS archive_videos (id TEXT PRIMARY KEY NOT NULL, type TEXT NOT NULL CHECK(type IN ('worship', 'attendance')), date TEXT NOT NULL, service_type TEXT NOT NULL, title TEXT NOT NULL, preacher TEXT NOT NULL DEFAULT '', youtube_id TEXT NOT NULL UNIQUE, youtube_url TEXT NOT NULL, thumbnail_url TEXT NOT NULL DEFAULT '', duration_seconds INTEGER, note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+        `CREATE INDEX IF NOT EXISTS archive_videos_date_idx ON archive_videos(date DESC)`,
+        `CREATE INDEX IF NOT EXISTS archive_videos_type_service_idx ON archive_videos(type, service_type)`,
+        `CREATE TABLE IF NOT EXISTS member_app_access (member_id TEXT NOT NULL, app_code TEXT NOT NULL, access_level TEXT NOT NULL DEFAULT 'none' CHECK(access_level IN ('none', 'worship', 'full')), granted_by TEXT, granted_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(member_id, app_code))`,
+        `CREATE INDEX IF NOT EXISTS member_app_access_level_idx ON member_app_access(app_code, access_level)`,
       ];
       for (const sql of statements) await db.prepare(sql).run();
     })().catch((error) => {

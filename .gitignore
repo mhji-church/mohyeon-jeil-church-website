@@ -44,3 +44,11 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# Local archive migration data contains unlisted YouTube URLs.
+/data/archive-videos.seed.json
+/data/archive-videos.*.json
+/artifacts/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

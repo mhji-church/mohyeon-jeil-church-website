@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const contentPosts = sqliteTable("content_posts", {
   id: text("id").primaryKey(),
@@ -54,3 +54,32 @@ export const businessApplications = sqliteTable("business_applications", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const archiveVideos = sqliteTable("archive_videos", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  date: text("date").notNull(),
+  serviceType: text("service_type").notNull(),
+  title: text("title").notNull(),
+  preacher: text("preacher").notNull().default(""),
+  youtubeId: text("youtube_id").notNull().unique(),
+  youtubeUrl: text("youtube_url").notNull(),
+  thumbnailUrl: text("thumbnail_url").notNull().default(""),
+  durationSeconds: integer("duration_seconds"),
+  note: text("note").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const memberAppAccess = sqliteTable(
+  "member_app_access",
+  {
+    memberId: text("member_id").notNull(),
+    appCode: text("app_code").notNull(),
+    accessLevel: text("access_level").notNull().default("none"),
+    grantedBy: text("granted_by"),
+    grantedAt: text("granted_at"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [primaryKey({ columns: [table.memberId, table.appCode] })],
+);
