@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/app/admin-auth";
 import { ARCHIVE_APP_CODE, setArchiveAccess, type ArchiveAccessLevel } from "@/lib/archive";
 import { ensureNetlifySchema, getNetlifyDb } from "@/lib/netlify-db";
+import { getMember } from "@/lib/members";
 
 const LEVELS = new Set<ArchiveAccessLevel>(["none", "worship", "full"]);
 
@@ -22,6 +23,9 @@ export async function PATCH(request: Request) {
   const body = await request.json().catch(() => null) as { memberId?: string; accessLevel?: ArchiveAccessLevel } | null;
   if (!body?.memberId || !body.accessLevel || !LEVELS.has(body.accessLevel)) {
     return Response.json({ error: "회원과 아카이브 등급을 확인해 주세요." }, { status: 400 });
+  }
+  if (!(await getMember(body.memberId))) {
+    return Response.json({ error: "회원을 찾을 수 없습니다." }, { status: 404 });
   }
   await setArchiveAccess(body.memberId, body.accessLevel, admin.email);
   return Response.json({ ok: true });

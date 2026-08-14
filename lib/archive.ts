@@ -5,6 +5,9 @@ export type { ArchiveAccessLevel, ArchiveVideo, ArchiveVideoAdmin, ArchiveVideoT
 
 export const ARCHIVE_APP_CODE = "worship_archive";
 
+const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_THUMBNAIL_HOSTS = new Set(["i.ytimg.com", "img.youtube.com"]);
+
 type Row = Record<string, unknown>;
 
 function mapVideo(row: Row): ArchiveVideoAdmin {
@@ -27,19 +30,39 @@ function mapVideo(row: Row): ArchiveVideoAdmin {
 
 export function extractYouTubeId(value: string) {
   const trimmed = value.trim();
-  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  if (YOUTUBE_ID_PATTERN.test(trimmed)) return trimmed;
   try {
     const url = new URL(trimmed);
-    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? null;
-    if (url.hostname.endsWith("youtube.com")) {
-      if (url.pathname === "/watch") return url.searchParams.get("v");
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    let candidate: string | null = null;
+    if (hostname === "youtu.be" || hostname === "www.youtu.be") {
+      candidate = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname === "/watch") candidate = url.searchParams.get("v");
       const parts = url.pathname.split("/").filter(Boolean);
-      if (["embed", "shorts", "live"].includes(parts[0] ?? "")) return parts[1] ?? null;
+      if (["embed", "shorts", "live"].includes(parts[0] ?? "")) candidate = parts[1] ?? null;
     }
+    return candidate && YOUTUBE_ID_PATTERN.test(candidate) ? candidate : null;
   } catch {
     return null;
   }
-  return null;
+}
+
+export function getSafeArchiveThumbnailUrl(value: string, youtubeId: string) {
+  const fallback = `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
+  if (!value.trim()) return fallback;
+  try {
+    const url = new URL(value.trim());
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (url.protocol !== "https:" || !YOUTUBE_THUMBNAIL_HOSTS.has(hostname)) return fallback;
+    if (!url.pathname.split("/").includes(youtubeId)) return fallback;
+    url.username = "";
+    url.password = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return fallback;
+  }
 }
 
 export async function listArchiveVideos(options: {
@@ -78,8 +101,10 @@ export async function listArchiveVideos(options: {
     args.push(options.month.padStart(2, "0"));
   }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? 8));
-  const page = Math.max(1, options.page ?? 1);
+  const requestedPageSize = Number.isFinite(options.pageSize) ? Math.trunc(options.pageSize as number) : 8;
+  const requestedPage = Number.isFinite(options.page) ? Math.trunc(options.page as number) : 1;
+  const pageSize = Math.min(50, Math.max(1, requestedPageSize));
+  const page = Math.max(1, requestedPage);
   const direction = options.sort === "oldest" ? "ASC" : "DESC";
   const db = getNetlifyDb();
   const totalRow = await db.prepare(`SELECT COUNT(*) AS count FROM archive_videos ${clause}`).bind(...args).first<{ count: number }>();
@@ -128,14 +153,21 @@ export async function setArchiveAccess(memberId: string, level: ArchiveAccessLev
 export async function upsertArchiveVideo(input: Omit<ArchiveVideoAdmin, "createdAt" | "updatedAt">) {
   await ensureNetlifySchema();
   const youtubeId = extractYouTubeId(input.youtubeUrl);
-  if (!youtubeId || youtubeId.length !== 11) throw new Error("올바른 유튜브 URL을 입력해 주세요.");
+  if (!youtubeId) throw new Error("올바른 유튜브 URL을 입력해 주세요.");
+  if (input.type !== "worship" && input.type !== "attendance") throw new Error("영상 분류를 확인해 주세요.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error("영상 날짜를 확인해 주세요.");
   if (!input.title.trim() || !input.serviceType.trim()) throw new Error("영상 제목과 예배 종류를 입력해 주세요.");
+  const durationSeconds = input.durationSeconds == null ? null : Math.trunc(input.durationSeconds);
+  if (durationSeconds != null && (!Number.isFinite(durationSeconds) || durationSeconds < 0)) {
+    throw new Error("영상 길이를 확인해 주세요.");
+  }
+  const thumbnailUrl = getSafeArchiveThumbnailUrl(input.thumbnailUrl, youtubeId);
+  const youtubeUrl = `https://youtu.be/${youtubeId}`;
   await getNetlifyDb()
     .prepare(`INSERT INTO archive_videos (id, type, date, service_type, title, preacher, youtube_id, youtube_url, thumbnail_url, duration_seconds, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET type = excluded.type, date = excluded.date, service_type = excluded.service_type, title = excluded.title, preacher = excluded.preacher, youtube_id = excluded.youtube_id, youtube_url = excluded.youtube_url, thumbnail_url = excluded.thumbnail_url, duration_seconds = excluded.duration_seconds, note = excluded.note, updated_at = CURRENT_TIMESTAMP`)
-    .bind(input.id, input.type, input.date, input.serviceType.trim(), input.title.trim(), input.preacher.trim(), youtubeId, input.youtubeUrl.trim(), input.thumbnailUrl.trim(), input.durationSeconds, input.note.trim())
+    .bind(input.id, input.type, input.date, input.serviceType.trim(), input.title.trim(), input.preacher.trim(), youtubeId, youtubeUrl, thumbnailUrl, durationSeconds, input.note.trim())
     .run();
 }
 

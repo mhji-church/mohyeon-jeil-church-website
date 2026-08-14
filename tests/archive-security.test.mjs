@@ -30,6 +30,14 @@ test("attendance thumbnails are replaced before authorization", () => {
   assert.match(source, /!canPlayArchiveVideo/);
   assert.match(source, /PLACEHOLDER/);
   assert.match(source, /private, no-store/);
+  assert.match(source, /getSafeArchiveThumbnailUrl/);
+});
+
+test("YouTube URLs and thumbnail fetches only accept exact trusted hosts", () => {
+  const source = read("lib/archive.ts");
+  assert.match(source, /hostname === "youtube\.com" \|\| hostname\.endsWith\("\.youtube\.com"\)/);
+  assert.match(source, /YOUTUBE_THUMBNAIL_HOSTS/);
+  assert.doesNotMatch(source, /hostname\.endsWith\("youtube\.com"\)/);
 });
 
 test("archive mutations and member access changes require homepage admin auth", () => {

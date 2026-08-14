@@ -20,9 +20,12 @@ export async function POST(request: Request) {
   if (!body) return Response.json({ error: "등록 정보를 확인해 주세요." }, { status: 400 });
   try {
     const id = typeof body.id === "string" && body.id ? body.id : crypto.randomUUID();
+    if (body.type !== "worship" && body.type !== "attendance") {
+      return Response.json({ error: "영상 분류를 확인해 주세요." }, { status: 400 });
+    }
     await upsertArchiveVideo({
       id,
-      type: body.type === "attendance" ? "attendance" : "worship",
+      type: body.type,
       date: String(body.date ?? ""),
       serviceType: String(body.serviceType ?? ""),
       title: String(body.title ?? ""),
