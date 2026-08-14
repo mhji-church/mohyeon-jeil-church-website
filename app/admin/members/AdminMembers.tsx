@@ -184,7 +184,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
   }
 
   return (
-    <main className="admin-shell">
+    <main className="admin-shell admin-members-shell">
       <aside className="admin-sidebar">
         <Link className="admin-brand" href="/" aria-label="모현제일교회 홈페이지">
           <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
@@ -206,7 +206,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
         </div>
       </aside>
 
-      <section className="admin-workspace">
+      <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">
           <div>
             <span>CHURCH MEMBERS</span>

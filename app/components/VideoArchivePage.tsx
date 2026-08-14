@@ -123,7 +123,6 @@ export default function VideoArchivePage({
   playlistType,
 }: VideoArchivePageProps) {
   const archiveSectionRef = useRef<HTMLElement>(null);
-  const archivePaginationRef = useRef<HTMLDivElement>(null);
   const previousPageRef = useRef(1);
   const [page, setPage] = useState(1);
   const [playing, setPlaying] = useState<ArchiveVideo | null>(null);
@@ -175,16 +174,13 @@ export default function VideoArchivePage({
     previousPageRef.current = page;
     const timer = window.setTimeout(() => {
       const archiveSection = archiveSectionRef.current;
-      const pagination = archivePaginationRef.current;
-      if (!archiveSection || !pagination) return;
+      if (!archiveSection) return;
 
       const mobile = window.matchMedia("(max-width: 720px)").matches;
       const headerOffset = mobile ? 68 : 76;
+      const contentRevealOffset = mobile ? 42 : 76;
       const sectionTop = archiveSection.getBoundingClientRect().top + window.scrollY;
-      const paginationBottom = pagination.getBoundingClientRect().bottom + window.scrollY;
-      const targetTop = mobile
-        ? sectionTop - headerOffset + 42
-        : paginationBottom - window.innerHeight + 28;
+      const targetTop = sectionTop - headerOffset + contentRevealOffset;
 
       window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
     }, 80);
@@ -280,11 +276,7 @@ export default function VideoArchivePage({
             })}
           </div>
 
-          <div
-            className="archive-pagination"
-            ref={archivePaginationRef}
-            aria-label="영상 목록 페이지"
-          >
+          <div className="archive-pagination" aria-label="영상 목록 페이지">
             <button
               type="button"
               onClick={() => changePage(page - 1)}

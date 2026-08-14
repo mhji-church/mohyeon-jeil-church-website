@@ -10,7 +10,9 @@ const CHURCH = {
 } as const;
 
 const KAKAO_MAP_LINK = `https://map.kakao.com/link/map/${encodeURIComponent(CHURCH.name)},${CHURCH.latitude},${CHURCH.longitude}`;
-const KAKAO_ROUTE_LINK = `https://map.kakao.com/link/to/${encodeURIComponent(CHURCH.name)},${CHURCH.latitude},${CHURCH.longitude}`;
+const MAP_SCROLL_IDLE_MS = 650;
+const MAP_INTERACTION_TIMEOUT_MS = 5000;
+const MAP_TOUCH_INTERACTION_TIMEOUT_MS = 10000;
 // Kakao's JavaScript key is a browser-visible identifier protected by the
 // registered localhost/mhji.kr domains. Keep this fallback for Netlify builds
 // while allowing local or future hosting environments to override it.
@@ -20,6 +22,8 @@ type KakaoMapInstance = {
   addControl(control: unknown, position: unknown): void;
   relayout(): void;
   setCenter(position: unknown): void;
+  setDraggable(draggable: boolean): void;
+  setZoomable(zoomable: boolean): void;
 };
 
 type KakaoMapsApi = {
@@ -157,7 +161,9 @@ function findChurchPosition(maps: KakaoMapsApi) {
 
 export default function KakaoChurchMap() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const interactionControlRef = useRef<(enabled: boolean) => void>(() => {});
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [isMapInteractive, setIsMapInteractive] = useState(false);
   const appKey =
     process.env.NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY?.trim() ||
     PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY;
@@ -171,6 +177,7 @@ export default function KakaoChurchMap() {
 
     let cancelled = false;
     let removeResizeListener = () => {};
+    let removeInteractionListeners = () => {};
 
     loadKakaoMaps(appKey)
       .then(async (maps) => {
@@ -193,6 +200,114 @@ export default function KakaoChurchMap() {
           zIndex: 10,
         });
 
+        const mapContainer = containerRef.current;
+        let pointerInside = false;
+        let interactionActive = true;
+        let lastPageWheelAt = performance.now();
+        let interactionTimer: number | undefined;
+
+        const clearInteractionTimer = () => {
+          if (interactionTimer !== undefined) {
+            window.clearTimeout(interactionTimer);
+            interactionTimer = undefined;
+          }
+        };
+        const setMapInteraction = (enabled: boolean) => {
+          if (interactionActive === enabled) return;
+          interactionActive = enabled;
+          map.setZoomable(enabled);
+          map.setDraggable(enabled);
+          mapContainer.dataset.interactive = String(enabled);
+          setIsMapInteractive(enabled);
+        };
+        const scheduleInteractionTimeout = (delay = MAP_INTERACTION_TIMEOUT_MS) => {
+          clearInteractionTimer();
+          interactionTimer = window.setTimeout(() => {
+            setMapInteraction(false);
+          }, delay);
+        };
+        interactionControlRef.current = (enabled) => {
+          clearInteractionTimer();
+          setMapInteraction(enabled);
+          if (enabled) scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
+        };
+        const activateDesktopMap = () => {
+          if (!pointerInside) return;
+          if (performance.now() - lastPageWheelAt < MAP_SCROLL_IDLE_MS) return;
+          setMapInteraction(true);
+          scheduleInteractionTimeout();
+        };
+        const handleWindowWheel = (event: WheelEvent) => {
+          const wheelInsideMap = event.target instanceof Node && mapContainer.contains(event.target);
+          if (wheelInsideMap && interactionActive) {
+            scheduleInteractionTimeout();
+            return;
+          }
+
+          lastPageWheelAt = performance.now();
+          if (interactionActive) setMapInteraction(false);
+        };
+        const handlePointerEnter = (event: PointerEvent) => {
+          if (event.pointerType === "touch") return;
+          pointerInside = true;
+          activateDesktopMap();
+        };
+        const handlePointerMove = (event: PointerEvent) => {
+          if (event.pointerType === "touch") return;
+          pointerInside = true;
+          activateDesktopMap();
+        };
+        const handlePointerLeave = (event: PointerEvent) => {
+          if (event.pointerType === "touch") return;
+          pointerInside = false;
+          clearInteractionTimer();
+          setMapInteraction(false);
+        };
+        const handleTouchStart = (event: TouchEvent) => {
+          if (event.touches.length < 2) {
+            if (interactionActive) {
+              scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
+            }
+            return;
+          }
+          setMapInteraction(true);
+          scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
+        };
+        const handleTouchMove = () => {
+          if (interactionActive) {
+            scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
+          }
+        };
+        const handleTouchEnd = () => {
+          if (interactionActive) {
+            scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
+          }
+        };
+
+        setMapInteraction(false);
+        window.addEventListener("wheel", handleWindowWheel, { capture: true, passive: true });
+        mapContainer.addEventListener("pointerenter", handlePointerEnter);
+        mapContainer.addEventListener("pointermove", handlePointerMove);
+        mapContainer.addEventListener("pointerleave", handlePointerLeave);
+        mapContainer.addEventListener("touchstart", handleTouchStart, {
+          capture: true,
+          passive: true,
+        });
+        mapContainer.addEventListener("touchmove", handleTouchMove, { capture: true });
+        mapContainer.addEventListener("touchend", handleTouchEnd, { capture: true });
+        mapContainer.addEventListener("touchcancel", handleTouchEnd, { capture: true });
+        removeInteractionListeners = () => {
+          clearInteractionTimer();
+          window.removeEventListener("wheel", handleWindowWheel, { capture: true });
+          mapContainer.removeEventListener("pointerenter", handlePointerEnter);
+          mapContainer.removeEventListener("pointermove", handlePointerMove);
+          mapContainer.removeEventListener("pointerleave", handlePointerLeave);
+          mapContainer.removeEventListener("touchstart", handleTouchStart, { capture: true });
+          mapContainer.removeEventListener("touchmove", handleTouchMove, { capture: true });
+          mapContainer.removeEventListener("touchend", handleTouchEnd, { capture: true });
+          mapContainer.removeEventListener("touchcancel", handleTouchEnd, { capture: true });
+        };
+
         const handleResize = () => {
           map.relayout();
           map.setCenter(position);
@@ -208,6 +323,8 @@ export default function KakaoChurchMap() {
     return () => {
       cancelled = true;
       removeResizeListener();
+      removeInteractionListeners();
+      interactionControlRef.current = () => {};
     };
   }, [appKey]);
 
@@ -216,8 +333,9 @@ export default function KakaoChurchMap() {
       <div
         className="kakao-map-canvas"
         ref={containerRef}
-        role="application"
-        aria-label={`${CHURCH.name} 주변 카카오 지도. 마우스나 손가락으로 확대, 축소, 이동할 수 있습니다.`}
+        role="region"
+        aria-describedby="kakao-map-interaction-hint"
+        aria-label={`${CHURCH.name} 주변 카카오 지도`}
       />
 
       {status !== "ready" && (
@@ -231,14 +349,35 @@ export default function KakaoChurchMap() {
         <a href={KAKAO_MAP_LINK} target="_blank" rel="noreferrer">
           큰 지도 보기
         </a>
-        <a href={KAKAO_ROUTE_LINK} target="_blank" rel="noreferrer">
-          길찾기
-        </a>
       </div>
 
-      <p className="kakao-map-mobile-hint" aria-hidden="true">
-        두 손가락으로 확대·축소할 수 있습니다
+      <p
+        id="kakao-map-interaction-hint"
+        className={`kakao-map-interaction-hint${isMapInteractive ? " is-active" : ""}`}
+      >
+        <span className="kakao-map-desktop-hint">
+          {isMapInteractive
+            ? "지도 조작 중 · 바깥으로 이동하면 페이지 스크롤"
+            : "페이지 스크롤 우선 · 마우스를 움직이면 지도 조작"}
+        </span>
       </p>
+
+      {status === "ready" && (
+        <button
+          className={`kakao-map-touch-toggle${isMapInteractive ? " is-active" : ""}`}
+          type="button"
+          aria-pressed={isMapInteractive}
+          aria-label={
+            isMapInteractive
+              ? "지도 조작을 끝내고 페이지 스크롤로 돌아가기"
+              : "지도를 활성화하고 한 손가락으로 위치 움직이기"
+          }
+          onClick={() => interactionControlRef.current(!isMapInteractive)}
+        >
+          <strong>{isMapInteractive ? "페이지 스크롤로 돌아가기" : "지도 움직이기"}</strong>
+          <span>{isMapInteractive ? "누르면 지도 조작 해제" : "누른 뒤 한 손가락으로 이동"}</span>
+        </button>
+      )}
     </div>
   );
 }

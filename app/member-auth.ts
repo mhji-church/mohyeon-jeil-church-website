@@ -43,10 +43,16 @@ export async function clearMemberSessionCookie() {
 }
 
 export async function getMemberSession() {
-  const secret = sessionSecret();
-  if (!secret) return null;
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
+  return getMemberSessionFromToken(token);
+}
+
+export async function getMemberSessionFromToken(
+  token: string | null | undefined,
+) {
+  const secret = sessionSecret();
+  if (!secret) return null;
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;

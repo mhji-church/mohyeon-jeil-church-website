@@ -20,7 +20,10 @@ function rscDevFallbackGuard() {
 
         try {
           const token = decodeURIComponent(url.pathname.slice(prefix.length));
-          const result = await serveExternalMedia(externalMediaKey(token));
+          const result = await serveExternalMedia(
+            externalMediaKey(token),
+            request.headers.cookie ?? null,
+          );
           response.statusCode = result.status;
           result.headers.forEach((value, name) => response.setHeader(name, value));
           if (!result.body) {

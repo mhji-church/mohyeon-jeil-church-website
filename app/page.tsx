@@ -777,6 +777,14 @@ export default function Home() {
             >
               카카오맵에서 길찾기 <ArrowIcon diagonal />
             </a>
+            <a
+              className="visit-link visit-link-video"
+              href="https://www.youtube.com/shorts/ee2SpzejB6k?feature=share"
+              target="_blank"
+              rel="noreferrer"
+            >
+              오시는 길 영상으로 보기 <ArrowIcon diagonal />
+            </a>
           </div>
         </div>
       </section>

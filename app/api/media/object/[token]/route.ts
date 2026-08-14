@@ -2,9 +2,9 @@ import { externalMediaKey } from "../../../../../lib/media-path";
 import { serveExternalMedia } from "../../route";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
-  return serveExternalMedia(externalMediaKey(token));
+  return serveExternalMedia(externalMediaKey(token), request.headers.get("cookie"));
 }

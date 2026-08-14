@@ -1,17 +1,30 @@
-import { getAdminSession } from "../../credential-auth";
-import { getMemberSession } from "../../member-auth";
+import { getAdminSessionFromToken } from "../../credential-auth";
+import { getMemberSessionFromToken } from "../../member-auth";
 import { getUploadedMediaAccess } from "../../../lib/content";
 import { getExternalObject } from "../../../lib/external-r2";
 
-export async function serveExternalMedia(key: string | null) {
+function cookieValue(cookieHeader: string | null, name: string) {
+  if (!cookieHeader) return null;
+  for (const item of cookieHeader.split(";")) {
+    const separator = item.indexOf("=");
+    if (separator < 0 || item.slice(0, separator).trim() !== name) continue;
+    return item.slice(separator + 1).trim();
+  }
+  return null;
+}
+
+export async function serveExternalMedia(
+  key: string | null,
+  cookieHeader: string | null,
+) {
   if (!key || !/^(gallery|bulletins|businesses|content\/[a-z-]+)\//.test(key)) {
     return new Response("Not found", { status: 404 });
   }
   const access = await getUploadedMediaAccess(key);
   if (access !== "public") {
     const [member, admin] = await Promise.all([
-      getMemberSession(),
-      getAdminSession(),
+      getMemberSessionFromToken(cookieValue(cookieHeader, "mhji_member_session")),
+      getAdminSessionFromToken(cookieValue(cookieHeader, "mhji_admin_session")),
     ]);
     if (!member && !admin) return new Response("Not found", { status: 404 });
   }
@@ -42,5 +55,8 @@ export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
   const external = searchParams.get("store") === "external";
   if (!external) return new Response("Not found", { status: 404 });
-  return serveExternalMedia(searchParams.get("path") ?? searchParams.get("key"));
+  return serveExternalMedia(
+    searchParams.get("path") ?? searchParams.get("key"),
+    request.headers.get("cookie"),
+  );
 }

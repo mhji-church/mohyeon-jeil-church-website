@@ -76,6 +76,12 @@ export async function clearAdminSessionCookie() {
 export async function getAdminSession(): Promise<AdminSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
+  return getAdminSessionFromToken(token);
+}
+
+export async function getAdminSessionFromToken(
+  token: string | null | undefined,
+): Promise<AdminSession | null> {
   if (!token) return null;
 
   const parts = token.split(".");

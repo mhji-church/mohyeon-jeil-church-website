@@ -18,6 +18,7 @@ type Props = {
   userName: string;
   userEmail: string;
   signOutPath: string;
+  initialType: ContentType;
 };
 
 type PendingImage = {
@@ -340,14 +341,9 @@ export default function AdminDashboard({
   userName,
   userEmail,
   signOutPath,
+  initialType,
 }: Props) {
-  const [activeType, setActiveType] = useState<ContentType>(() => {
-    if (typeof window === "undefined") return "bulletin";
-    const requested = new URLSearchParams(window.location.search).get("section");
-    return requested && requested in typeMeta
-      ? (requested as ContentType)
-      : "bulletin";
-  });
+  const [activeType, setActiveType] = useState<ContentType>(initialType);
   const [posts, setPosts] = useState<ContentPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -629,7 +625,7 @@ export default function AdminDashboard({
   };
 
   return (
-    <main className="admin-shell">
+    <main className="admin-shell admin-members-shell">
       <aside className="admin-sidebar">
         <Link className="admin-brand" href="/" aria-label="모현제일교회 홈페이지">
           <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
@@ -663,7 +659,7 @@ export default function AdminDashboard({
         </div>
       </aside>
 
-      <section className="admin-workspace">
+      <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">
           <div>
             <span>{typeMeta[activeType].eyebrow}</span>
@@ -680,7 +676,7 @@ export default function AdminDashboard({
           </div>
         </header>
 
-        <div className="admin-stats">
+        <div className="admin-stats admin-member-stats">
           {(Object.keys(typeMeta) as ContentType[]).map((type) => (
             <button type="button" onClick={() => setActiveType(type)} key={type}>
               <span>{typeMeta[type].label}</span>
@@ -712,7 +708,7 @@ export default function AdminDashboard({
             </div>
           ) : (
             <div className="admin-table-wrap">
-              <table>
+              <table className="admin-content-table">
                 <thead>
                   <tr>
                     <th>대표 이미지</th>

@@ -57,6 +57,8 @@ test("preserves editable defaults and conditional business links", async () => {
   assert.match(admin, /date: form\.date/);
   assert.doesNotMatch(admin, /readOnly={!editingId}/);
   assert.match(business, /websiteInput && !\/\^https\?:\\\/\\\/\?\$\/i\.test\(websiteInput\)/);
-  assert.match(video, /paginationBottom - window\.innerHeight \+ 28/);
-  assert.match(video, /sectionTop - headerOffset \+ 42/);
+  assert.match(video, /const contentRevealOffset = mobile \? 42 : 76/);
+  assert.match(video, /const targetTop = sectionTop - headerOffset \+ contentRevealOffset/);
+  assert.doesNotMatch(video, /paginationBottom/);
+  assert.doesNotMatch(video, /window\.innerHeight/);
 });
