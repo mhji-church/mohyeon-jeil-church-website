@@ -420,7 +420,7 @@ function ResponsiveYouTubeEmbed({
 
   const frameStyle: CSSProperties | undefined = useCustomControls
     ? {
-        pointerEvents: "none",
+        pointerEvents: "auto",
         ...(mobileFrameLayout !== null
           ? {
               width: mobileFrameLayout.width,
@@ -440,7 +440,7 @@ function ResponsiveYouTubeEmbed({
       >
         <iframe
           ref={frameRef}
-          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0&controls=${useCustomControls ? 0 : 1}&fs=1&playsinline=1&hl=ko&enablejsapi=1&iv_load_policy=3&disablekb=${useCustomControls ? 1 : 0}`}
+          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0&controls=1&fs=1&playsinline=1&hl=ko&enablejsapi=1&iv_load_policy=3&disablekb=0`}
           title={`${sermon.title} 설교 영상`}
           style={frameStyle}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
