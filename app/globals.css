@@ -3788,6 +3788,9 @@ svg {
 
 .featured-sermon-media iframe,
 .sermon-card-media iframe {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
@@ -4562,9 +4565,25 @@ svg {
   display: none;
 }
 
+.kakao-map-touch-shield {
+  display: none;
+}
+
 @media (pointer: coarse) {
   .kakao-map-interaction-hint {
     display: none;
+  }
+
+  .kakao-map-touch-shield {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    display: block;
+    touch-action: pan-y;
+  }
+
+  .kakao-map-touch-shield.is-disabled {
+    pointer-events: none;
   }
 
   .kakao-map-touch-toggle {
@@ -4586,6 +4605,7 @@ svg {
     text-align: left;
     box-shadow: 0 8px 22px rgba(48, 47, 60, .2);
     backdrop-filter: blur(8px);
+    touch-action: pan-y;
   }
 
   .kakao-map-touch-toggle.is-active {
@@ -5407,12 +5427,17 @@ footer {
 }
 
 .video-modal-frame {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  overflow: hidden;
   background: black;
 }
 
 .video-modal-frame iframe {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
@@ -6037,6 +6062,12 @@ footer {
     aspect-ratio: 16 / 9;
   }
 
+  .featured-sermon-media.is-playing {
+    height: max(210px, 56.25vw);
+    aspect-ratio: auto;
+    contain: layout paint;
+  }
+
   .new-label {
     top: 15px;
     left: 15px;
@@ -6359,6 +6390,18 @@ footer {
     display: none;
   }
 
+  .kakao-map-touch-shield {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    display: block;
+    touch-action: pan-y;
+  }
+
+  .kakao-map-touch-shield.is-disabled {
+    pointer-events: none;
+  }
+
   .kakao-map-touch-toggle {
     position: absolute;
     z-index: 4;
@@ -6378,6 +6421,7 @@ footer {
     text-align: left;
     box-shadow: 0 8px 22px rgba(48, 47, 60, .2);
     backdrop-filter: blur(8px);
+    touch-action: pan-y;
   }
 
   .kakao-map-touch-toggle.is-active {

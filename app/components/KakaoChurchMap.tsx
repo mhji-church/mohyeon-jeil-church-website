@@ -263,15 +263,10 @@ export default function KakaoChurchMap() {
           clearInteractionTimer();
           setMapInteraction(false);
         };
-        const handleTouchStart = (event: TouchEvent) => {
-          if (event.touches.length < 2) {
-            if (interactionActive) {
-              scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
-            }
-            return;
+        const handleTouchStart = () => {
+          if (interactionActive) {
+            scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
           }
-          setMapInteraction(true);
-          scheduleInteractionTimeout(MAP_TOUCH_INTERACTION_TIMEOUT_MS);
         };
         const handleTouchMove = () => {
           if (interactionActive) {
@@ -338,6 +333,13 @@ export default function KakaoChurchMap() {
         aria-label={`${CHURCH.name} 주변 카카오 지도`}
       />
 
+      {status === "ready" && (
+        <div
+          className={`kakao-map-touch-shield${isMapInteractive ? " is-disabled" : ""}`}
+          aria-hidden="true"
+        />
+      )}
+
       {status !== "ready" && (
         <div className={`kakao-map-status${status === "error" ? " is-error" : ""}`}>
           <img src="/assets/church-map.png" alt="모현제일교회 위치 지도" />
@@ -370,12 +372,12 @@ export default function KakaoChurchMap() {
           aria-label={
             isMapInteractive
               ? "지도 조작을 끝내고 페이지 스크롤로 돌아가기"
-              : "지도를 활성화하고 한 손가락으로 위치 움직이기"
+              : "지도 조작을 활성화하고 한 손가락으로 위치 움직이기"
           }
           onClick={() => interactionControlRef.current(!isMapInteractive)}
         >
-          <strong>{isMapInteractive ? "페이지 스크롤로 돌아가기" : "지도 움직이기"}</strong>
-          <span>{isMapInteractive ? "누르면 지도 조작 해제" : "누른 뒤 한 손가락으로 이동"}</span>
+          <strong>{isMapInteractive ? "페이지 스크롤로 돌아가기" : "지도 조작하기"}</strong>
+          <span>{isMapInteractive ? "누르면 지도 조작 해제" : "버튼을 누른 뒤 한 손가락으로 이동"}</span>
         </button>
       )}
     </div>

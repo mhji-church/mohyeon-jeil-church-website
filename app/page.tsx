@@ -199,7 +199,7 @@ function SermonPlayer({
     return (
       <div className={`${className} is-playing`}>
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0`}
+          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0&controls=1&fs=1&playsinline=1&hl=ko`}
           title={`${sermon.title} 설교 영상`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
@@ -814,7 +814,7 @@ export default function Home() {
             </button>
             <div className="video-modal-frame">
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${modalSermon.videoId}?autoplay=1&rel=0`}
+                src={`https://www.youtube-nocookie.com/embed/${modalSermon.videoId}?autoplay=1&rel=0&controls=1&fs=1&playsinline=1&hl=ko`}
                 title={`${modalSermon.title} 설교 영상`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen

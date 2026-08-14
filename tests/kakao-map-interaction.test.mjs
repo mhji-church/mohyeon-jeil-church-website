@@ -19,14 +19,18 @@ test("keeps page scrolling ahead of incidental Kakao map gestures", () => {
     component,
     /window\.addEventListener\("wheel", handleWindowWheel, \{ capture: true, passive: true \}\)/,
   );
-  assert.match(component, /event\.touches\.length < 2/);
-  assert.match(component, /지도 움직이기/);
+  assert.doesNotMatch(component, /event\.touches\.length/);
+  assert.match(component, /kakao-map-touch-shield/);
+  assert.match(component, /지도 조작하기/);
   assert.match(component, /페이지 스크롤로 돌아가기/);
-  assert.match(component, /누른 뒤 한 손가락으로 이동/);
+  assert.match(component, /버튼을 누른 뒤 한 손가락으로 이동/);
   assert.match(component, /touchmove/);
   assert.match(styles, /\.kakao-map-canvas\s*\{[\s\S]*touch-action: pan-y pinch-zoom/);
   assert.match(styles, /\.kakao-map-canvas\[data-interactive="true"\][\s\S]*touch-action: none/);
   assert.match(styles, /\.kakao-map-touch-toggle\s*\{[\s\S]*display: none/);
+  assert.match(styles, /\.kakao-map-touch-shield\s*\{[\s\S]*display: none/);
+  assert.match(styles, /\.kakao-map-touch-shield\.is-disabled\s*\{[\s\S]*pointer-events: none/);
+  assert.match(styles, /\.kakao-map-touch-shield\s*\{[\s\S]*touch-action: pan-y/);
 });
 
 test("removes the duplicate route action inside the map", () => {
