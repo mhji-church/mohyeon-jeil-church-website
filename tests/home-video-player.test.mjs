@@ -5,16 +5,38 @@ import test from "node:test";
 const homePage = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
-test("keeps mobile YouTube controls inside a stable accessible player viewport", () => {
-  assert.match(homePage, /controls=1&fs=1&playsinline=1&hl=ko/);
+test("uses slim custom mobile playback and draggable volume controls", () => {
+  assert.match(homePage, /controls=\$\{useCustomControls \? 0 : 1\}/);
+  assert.match(homePage, /iv_load_policy=3/);
+  assert.match(homePage, /disablekb=\$\{useCustomControls \? 1 : 0\}/);
+  assert.match(homePage, /pointerEvents: "none"/);
+  assert.match(homePage, /Math\.max\(480, host\.clientWidth \/ 0\.75\)/);
+  assert.match(homePage, /width: mobileFrameLayout\.width,[\s\S]*height: mobileFrameLayout\.height,[\s\S]*transform: `scale\(\$\{mobileFrameLayout\.scale\}\)`/);
+  assert.match(homePage, /style=\{frameStyle\}/);
+  assert.match(homePage, /if \(data === 0\) setHasEnded\(true\)/);
+  assert.match(homePage, /function ResponsiveYouTubeEmbed/);
+  assert.match(homePage, /enablejsapi=1/);
+  assert.match(homePage, /loadYouTubeIframeApi/);
+  assert.match(homePage, /target\.getCurrentTime\(\)/);
+  assert.match(homePage, /playerRef\.current\?\.seekTo\(nextTime, allowSeekAhead\)/);
+  assert.match(homePage, /\(event\.clientX - bounds\.left\) \/ bounds\.width/);
+  assert.match(homePage, /mobile-youtube-controls/);
+  assert.match(homePage, /className="mobile-youtube-volume"/);
+  assert.match(homePage, /playerRef\.current\?\.setVolume\(safeVolume\)/);
+  assert.match(homePage, /event\.currentTarget\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(homePage, /onPointerMove=\{\(event\) =>/);
+  assert.match(homePage, /return <ResponsiveYouTubeEmbed sermon={sermon} className={className} \/>/);
   assert.match(
     styles,
     /\.featured-sermon-media iframe,[\s\S]*position: absolute;[\s\S]*inset: 0;/,
   );
+  assert.doesNotMatch(homePage, /sermon-mobile-youtube-trigger/);
+  assert.doesNotMatch(styles, /height: max\(210px, 56\.25vw\)/);
   assert.match(
     styles,
-    /\.featured-sermon-media\.is-playing\s*\{[\s\S]*height: max\(210px, 56\.25vw\);[\s\S]*contain: layout paint;/,
+    /\.mobile-youtube-controls\.is-enabled\s*\{[\s\S]*display: flex;[\s\S]*min-height: 34px;/,
   );
+  assert.match(styles, /\.featured-sermon-media\.is-ended iframe,[\s\S]*opacity: 0;/);
   assert.match(
     styles,
     /\.video-modal-frame\s*\{[\s\S]*position: relative;[\s\S]*overflow: hidden;/,

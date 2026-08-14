@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import KakaoChurchMap from "./components/KakaoChurchMap";
 
 const heroTitle = ["말씀으로 바로 서고", "사랑으로 함께하는 교회"];
@@ -57,6 +57,62 @@ type HomeSermon = {
   href: string;
   image: string;
 };
+
+type YouTubePlayer = {
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  getPlayerState: () => number;
+  getVolume: () => number;
+  isMuted: () => boolean;
+  mute: () => void;
+  pauseVideo: () => void;
+  playVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  setVolume: (volume: number) => void;
+  unMute: () => void;
+};
+
+type YouTubeNamespace = {
+  Player: new (
+    element: HTMLIFrameElement,
+    options: {
+      events: {
+        onReady: (event: { target: YouTubePlayer }) => void;
+        onStateChange?: (event: { data: number; target: YouTubePlayer }) => void;
+      };
+    },
+  ) => YouTubePlayer;
+};
+
+type YouTubeWindow = Window & {
+  YT?: YouTubeNamespace;
+  onYouTubeIframeAPIReady?: () => void;
+};
+
+let youtubeApiPromise: Promise<YouTubeNamespace> | null = null;
+
+function loadYouTubeIframeApi() {
+  const youtubeWindow = window as YouTubeWindow;
+  if (youtubeWindow.YT?.Player) return Promise.resolve(youtubeWindow.YT);
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise<YouTubeNamespace>((resolve) => {
+    const previousReadyHandler = youtubeWindow.onYouTubeIframeAPIReady;
+    youtubeWindow.onYouTubeIframeAPIReady = () => {
+      previousReadyHandler?.();
+      if (youtubeWindow.YT) resolve(youtubeWindow.YT);
+    };
+
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  });
+
+  return youtubeApiPromise;
+}
 
 const initialSermons: HomeSermon[] = [
   {
@@ -182,6 +238,299 @@ function SermonImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
+function ResponsiveYouTubeEmbed({
+  sermon,
+  className,
+}: {
+  sermon: HomeSermon;
+  className: string;
+}) {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
+  const [useCustomControls, setUseCustomControls] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches,
+  );
+  const [mobileFrameLayout, setMobileFrameLayout] = useState<{
+    width: number;
+    height: number;
+    scale: number;
+  } | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [hasEnded, setHasEnded] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(100);
+  const [playerReady, setPlayerReady] = useState(false);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const updatePlayerLayout = () => {
+      const isMobile = mediaQuery.matches;
+      setUseCustomControls(isMobile);
+      if (isMobile && host) {
+        const frameWidth = Math.max(480, host.clientWidth / 0.75);
+        setMobileFrameLayout({
+          width: frameWidth,
+          height: frameWidth * (9 / 16),
+          scale: Number((host.clientWidth / frameWidth).toFixed(4)),
+        });
+      } else {
+        setMobileFrameLayout(null);
+      }
+    };
+
+    updatePlayerLayout();
+    const resizeObserver = new ResizeObserver(updatePlayerLayout);
+    if (host) resizeObserver.observe(host);
+    mediaQuery.addEventListener("change", updatePlayerLayout);
+    window.addEventListener("orientationchange", updatePlayerLayout);
+
+    return () => {
+      resizeObserver.disconnect();
+      mediaQuery.removeEventListener("change", updatePlayerLayout);
+      window.removeEventListener("orientationchange", updatePlayerLayout);
+    };
+  }, []);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+
+    let disposed = false;
+    let progressTimer: number | undefined;
+
+    loadYouTubeIframeApi().then((youtube) => {
+      if (disposed || !frame.isConnected) return;
+
+      new youtube.Player(frame, {
+        events: {
+          onReady: ({ target }) => {
+            if (disposed) return;
+            playerRef.current = target;
+            setPlayerReady(true);
+
+            const syncProgress = () => {
+              const nextDuration = target.getDuration();
+              const nextCurrentTime = target.getCurrentTime();
+              if (Number.isFinite(nextDuration)) setDuration(nextDuration);
+              if (Number.isFinite(nextCurrentTime)) setCurrentTime(nextCurrentTime);
+              setIsPlaying(target.getPlayerState() === 1);
+              setIsMuted(target.isMuted());
+              setVolume(target.getVolume());
+            };
+
+            syncProgress();
+            progressTimer = window.setInterval(syncProgress, 500);
+          },
+          onStateChange: ({ data }) => {
+            setIsPlaying(data === 1);
+            if (data === 0) setHasEnded(true);
+            if (data === 1) setHasEnded(false);
+          },
+        },
+      });
+    });
+
+    return () => {
+      disposed = true;
+      playerRef.current = null;
+      if (progressTimer !== undefined) window.clearInterval(progressTimer);
+    };
+  }, []);
+
+  const maxSeekTime = Math.max(duration, 1);
+  const safeCurrentTime = Math.min(currentTime, maxSeekTime);
+  const seekProgress = duration > 0 ? (safeCurrentTime / duration) * 100 : 0;
+  const seekStyle = { "--seek-progress": `${seekProgress}%` } as CSSProperties;
+  const seekTo = (value: string, allowSeekAhead: boolean) => {
+    const nextTime = Number(value);
+    if (!Number.isFinite(nextTime)) return;
+    setCurrentTime(nextTime);
+    playerRef.current?.seekTo(nextTime, allowSeekAhead);
+  };
+  const seekFromPointer = (
+    event: React.PointerEvent<HTMLInputElement>,
+    allowSeekAhead: boolean,
+  ) => {
+    if (!playerReady || duration <= 0) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+    seekTo(String(position * duration), allowSeekAhead);
+  };
+  const startPointerControl = (
+    event: React.PointerEvent<HTMLInputElement>,
+    update: (event: React.PointerEvent<HTMLInputElement>) => void,
+  ) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    update(event);
+  };
+  const updateVolume = (nextVolume: number) => {
+    const safeVolume = Math.min(100, Math.max(0, nextVolume));
+    setVolume(safeVolume);
+    playerRef.current?.setVolume(safeVolume);
+    if (safeVolume > 0) {
+      playerRef.current?.unMute();
+      setIsMuted(false);
+    }
+  };
+  const volumeFromPointer = (event: React.PointerEvent<HTMLInputElement>) => {
+    if (!playerReady) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+    updateVolume(position * 100);
+  };
+  const togglePlayback = () => {
+    if (isPlaying) {
+      playerRef.current?.pauseVideo();
+    } else {
+      if (hasEnded) {
+        playerRef.current?.seekTo(0, true);
+        setCurrentTime(0);
+        setHasEnded(false);
+      }
+      playerRef.current?.playVideo();
+    }
+    setIsPlaying((playing) => !playing);
+  };
+  const toggleMute = () => {
+    if (isMuted || volume === 0) {
+      const restoredVolume = volume > 0 ? volume : 60;
+      playerRef.current?.unMute();
+      playerRef.current?.setVolume(restoredVolume);
+      setVolume(restoredVolume);
+      setIsMuted(false);
+    } else {
+      playerRef.current?.mute();
+      setIsMuted(true);
+    }
+  };
+  const openFullscreen = () => {
+    shellRef.current?.requestFullscreen?.();
+  };
+
+  const formatTime = (seconds: number) => {
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const minutes = Math.floor(safeSeconds / 60);
+    return `${minutes}:${String(safeSeconds % 60).padStart(2, "0")}`;
+  };
+
+  const frameStyle: CSSProperties | undefined = useCustomControls
+    ? {
+        pointerEvents: "none",
+        ...(mobileFrameLayout !== null
+          ? {
+              width: mobileFrameLayout.width,
+              height: mobileFrameLayout.height,
+              transform: `scale(${mobileFrameLayout.scale})`,
+              transformOrigin: "top left",
+            }
+          : {}),
+      }
+    : undefined;
+
+  return (
+    <div ref={shellRef} className="youtube-inline-player-shell">
+      <div
+        ref={hostRef}
+        className={`${className} is-playing${hasEnded ? " is-ended" : ""}`}
+      >
+        <iframe
+          ref={frameRef}
+          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0&controls=${useCustomControls ? 0 : 1}&fs=1&playsinline=1&hl=ko&enablejsapi=1&iv_load_policy=3&disablekb=${useCustomControls ? 1 : 0}`}
+          title={`${sermon.title} 설교 영상`}
+          style={frameStyle}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+      <div className={`mobile-youtube-controls${useCustomControls ? " is-enabled" : ""}`}>
+        <button
+          type="button"
+          className="mobile-youtube-control-button"
+          onClick={togglePlayback}
+          disabled={!playerReady}
+          aria-label={isPlaying ? "영상 일시정지" : "영상 재생"}
+        >
+          <span aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
+        </button>
+        <output aria-label="현재 재생 시간">{formatTime(safeCurrentTime)}</output>
+        <label className="mobile-youtube-seek">
+          <span className="sr-only">영상 재생 위치</span>
+          <input
+            type="range"
+            min="0"
+            max={maxSeekTime}
+            step="1"
+            value={safeCurrentTime}
+            style={seekStyle}
+            disabled={!playerReady || duration <= 0}
+            onPointerDown={(event) =>
+              startPointerControl(event, (pointerEvent) => seekFromPointer(pointerEvent, true))
+            }
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                seekFromPointer(event, false);
+              }
+            }}
+            onChange={(event) => seekTo(event.currentTarget.value, false)}
+            onPointerUp={(event) => {
+              seekFromPointer(event, true);
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onKeyUp={(event) => seekTo(event.currentTarget.value, true)}
+            aria-label="영상 재생 위치 이동"
+          />
+        </label>
+        <output aria-label="전체 영상 시간">{formatTime(duration)}</output>
+        <button
+          type="button"
+          className="mobile-youtube-control-button is-sound"
+          onClick={toggleMute}
+          disabled={!playerReady}
+          aria-label={isMuted || volume === 0 ? "영상 소리 켜기" : "영상 음소거"}
+        >
+          <span aria-hidden="true">{isMuted || volume === 0 ? "끔" : "소리"}</span>
+        </button>
+        <label className="mobile-youtube-volume">
+          <span className="sr-only">영상 음량</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={isMuted ? 0 : volume}
+            style={{ "--volume-progress": `${isMuted ? 0 : volume}%` } as CSSProperties}
+            disabled={!playerReady}
+            onPointerDown={(event) => startPointerControl(event, volumeFromPointer)}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) volumeFromPointer(event);
+            }}
+            onPointerUp={(event) => {
+              volumeFromPointer(event);
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onChange={(event) => updateVolume(Number(event.currentTarget.value))}
+            aria-label="영상 음량 조절"
+          />
+        </label>
+        <button
+          type="button"
+          className="mobile-youtube-control-button is-fullscreen"
+          onClick={openFullscreen}
+          disabled={!playerReady}
+          aria-label="영상 전체화면"
+        >
+          <span aria-hidden="true">⛶</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SermonPlayer({
   sermon,
   featured = false,
@@ -196,16 +545,7 @@ function SermonPlayer({
   const className = featured ? "featured-sermon-media" : "sermon-card-media";
 
   if (isPlaying) {
-    return (
-      <div className={`${className} is-playing`}>
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${sermon.videoId}?autoplay=1&rel=0&controls=1&fs=1&playsinline=1&hl=ko`}
-          title={`${sermon.title} 설교 영상`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
-      </div>
-    );
+    return <ResponsiveYouTubeEmbed sermon={sermon} className={className} />;
   }
 
   return (
