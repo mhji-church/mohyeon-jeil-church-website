@@ -6,13 +6,16 @@ const homePage = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8
 const styles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
 test("uses slim custom mobile playback and draggable volume controls", () => {
-  assert.match(homePage, /controls=\$\{useCustomControls \? 0 : 1\}/);
+  assert.match(homePage, /controls=1&fs=1/);
   assert.match(homePage, /iv_load_policy=3/);
-  assert.match(homePage, /disablekb=\$\{useCustomControls \? 1 : 0\}/);
-  assert.match(homePage, /pointerEvents: "none"/);
+  assert.match(homePage, /disablekb=0/);
   assert.match(homePage, /Math\.max\(480, host\.clientWidth \/ 0\.75\)/);
   assert.match(homePage, /width: mobileFrameLayout\.width,[\s\S]*height: mobileFrameLayout\.height,[\s\S]*transform: `scale\(\$\{mobileFrameLayout\.scale\}\)`/);
   assert.match(homePage, /style=\{frameStyle\}/);
+  assert.match(homePage, /pointerEvents: "auto"/);
+  assert.doesNotMatch(homePage, /nativeControlsActive/);
+  assert.doesNotMatch(homePage, /유튜브 자막 설정 열기/);
+  assert.doesNotMatch(homePage, /유튜브 화질 설정 열기/);
   assert.match(homePage, /if \(data === 0\) setHasEnded\(true\)/);
   assert.match(homePage, /function ResponsiveYouTubeEmbed/);
   assert.match(homePage, /enablejsapi=1/);
