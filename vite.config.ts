@@ -71,6 +71,12 @@ function rscDevFallbackGuard() {
 }
 
 export default defineConfig({
+  build: {
+    // heic2any contains the libheif decoder. It is intentionally loaded only
+    // when an administrator selects a HEIC image, so its isolated lazy chunk
+    // can safely exceed Vite's generic 500 kB warning threshold.
+    chunkSizeWarningLimit: 3_000,
+  },
   server: {
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],

@@ -291,7 +291,11 @@ export async function changeMemberPassword(id: string, password: string) {
 
 export async function deleteMember(id: string) {
   await ensureMemberStore();
-  await getD1().prepare("DELETE FROM members WHERE id = ?").bind(id).run();
+  const db = getD1();
+  await db.batch([
+    db.prepare("DELETE FROM member_app_access WHERE member_id = ?").bind(id),
+    db.prepare("DELETE FROM members WHERE id = ?").bind(id),
+  ]);
 }
 
 async function hashPassword(password: string, suppliedSalt?: Uint8Array) {

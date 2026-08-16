@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createClient } from "@libsql/client";
 import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 import fs from "node:fs";
@@ -262,4 +263,27 @@ test("archive administration requires auth and local CRUD rejects unsafe input",
   assert.equal((await request("/api/admin/archive/videos/admin-test-video", { method: "DELETE", headers: { cookie: adminCookie } })).status, 200);
   const afterDelete = await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } });
   assert.equal((await afterDelete.json()).videos.some((video) => video.id === "admin-test-video"), false);
+});
+
+test("deleting a member also removes archive access rows", async () => {
+  const memberId = memberIds["none-user"];
+  const response = await request(`/api/admin/members?id=${encodeURIComponent(memberId)}`, {
+    method: "DELETE",
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(response.status, 200);
+
+  const client = createClient({
+    url: `file:${databasePath.replaceAll("\\", "/")}`,
+    authToken: "local-test-token",
+  });
+  try {
+    const access = await client.execute({
+      sql: "SELECT COUNT(*) AS count FROM member_app_access WHERE member_id = ?",
+      args: [memberId],
+    });
+    assert.equal(Number(access.rows[0]?.count ?? -1), 0);
+  } finally {
+    client.close();
+  }
 });
