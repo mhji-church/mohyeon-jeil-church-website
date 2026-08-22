@@ -12,7 +12,7 @@ export default function SiteLayoutChrome({
 }) {
   const pathname = usePathname();
 
-  if (pathname.startsWith("/admin")) return children;
+  if (pathname?.startsWith("/admin") || pathname?.startsWith("/archive")) return children;
 
   return (
     <>

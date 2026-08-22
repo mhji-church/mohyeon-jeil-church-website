@@ -23,6 +23,7 @@ let databasePath;
 let server;
 let serverOutput = "";
 let adminCookie;
+let websiteAdminCookie;
 const memberIds = {};
 
 function getFreePort() {
@@ -78,6 +79,9 @@ before(async () => {
       ADMIN_USERNAME: TEST_ADMIN_USERNAME,
       ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
       ADMIN_SESSION_SECRET: "local-archive-integration-admin-secret",
+      ARCHIVE_ADMIN_USERNAME: TEST_ADMIN_USERNAME,
+      ARCHIVE_ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
+      ARCHIVE_ADMIN_SESSION_SECRET: "local-archive-integration-separate-secret",
       YOUTUBE_API_KEY: "local-test-key-not-used",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -93,6 +97,7 @@ before(async () => {
   });
   assert.equal(login.status, 200);
   adminCookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  websiteAdminCookie = adminCookie;
 
   const memberRows = [
     ["none-user", "승인없음", "approved"],
@@ -130,6 +135,14 @@ before(async () => {
     body: JSON.stringify({ id: memberIds["force-user"], action: "reset-password" }),
   });
   assert.equal(reset.status, 200);
+
+  const archiveLogin = await request("/api/archive/admin/session", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
+  });
+  assert.equal(archiveLogin.status, 200);
+  adminCookie = (archiveLogin.headers.get("set-cookie") ?? "").split(";")[0];
 
   for (const video of [
     { id: "worship-video", type: "worship", date: "2026-08-10", serviceType: "주일 2부 예배", title: "테스트 예배", preacher: "테스트 목사", youtubeUrl: `https://youtu.be/${TEST_YOUTUBE_IDS.worship}`, note: "예배 메모" },
@@ -182,6 +195,14 @@ test("public archive responses and HTML do not reveal YouTube playback data", as
   const html = await pageResponse.text();
   for (const id of Object.values(TEST_YOUTUBE_IDS)) assert.doesNotMatch(html, new RegExp(id));
   assert.doesNotMatch(html, /youtube-nocookie|embedUrl|youtubeUrl|youtubeId/i);
+
+  for (const route of ["/archive/sunday", "/archive/other", "/archive/attendance"]) {
+    const sectionResponse = await request(route);
+    assert.equal(sectionResponse.status, 200);
+    const sectionHtml = await sectionResponse.text();
+    for (const id of Object.values(TEST_YOUTUBE_IDS)) assert.doesNotMatch(sectionHtml, new RegExp(id));
+    assert.doesNotMatch(sectionHtml, /youtube-nocookie|embedUrl|youtubeUrl|youtubeId/i);
+  }
 });
 
 test("playback enforces member approval, password state, and archive level", async () => {
@@ -209,13 +230,14 @@ test("attendance thumbnails are face-safe before authorization", async () => {
 
 test("archive administration requires auth and local CRUD rejects unsafe input", async () => {
   assert.equal((await request("/api/admin/archive/videos")).status, 403);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: websiteAdminCookie } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 403);
   assert.equal((await request("/api/admin/archive/videos/worship-video", { method: "DELETE" })).status, 403);
   assert.equal((await request("/api/admin/archive/access")).status, 403);
   assert.equal((await request("/api/admin/archive/access", { method: "PATCH", headers: { "content-type": "application/json" }, body: "{}" })).status, 403);
   assert.equal((await request("/api/admin/archive/youtube?url=test")).status, 403);
 
-  assert.match(adminCookie, /^mhji_admin_session=/);
+  assert.match(adminCookie, /^mhji_archive_admin_session=/);
 
   const maliciousHost = await request("/api/admin/archive/videos", {
     method: "POST",
@@ -239,6 +261,20 @@ test("archive administration requires auth and local CRUD rejects unsafe input",
     }),
   });
   assert.equal(create.status, 201);
+  const duplicate = await request("/api/admin/archive/videos", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({
+      id: "admin-test-video-duplicate",
+      type: "worship",
+      date: "2026-08-13",
+      serviceType: "특별예배",
+      title: "중복 등록 차단",
+      youtubeUrl: `https://youtu.be/${TEST_YOUTUBE_IDS.admin}`,
+    }),
+  });
+  assert.equal(duplicate.status, 400);
+  assert.match((await duplicate.json()).error, /이미 등록된/);
   const adminList = await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } });
   assert.equal(adminList.status, 200);
   const stored = (await adminList.json()).videos.find((video) => video.id === "admin-test-video");
@@ -269,7 +305,7 @@ test("deleting a member also removes archive access rows", async () => {
   const memberId = memberIds["none-user"];
   const response = await request(`/api/admin/members?id=${encodeURIComponent(memberId)}`, {
     method: "DELETE",
-    headers: { cookie: adminCookie },
+    headers: { cookie: websiteAdminCookie },
   });
   assert.equal(response.status, 200);
 

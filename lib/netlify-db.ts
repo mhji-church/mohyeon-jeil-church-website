@@ -81,6 +81,9 @@ export async function ensureNetlifySchema() {
         `CREATE INDEX IF NOT EXISTS archive_videos_type_service_idx ON archive_videos(type, service_type)`,
         `CREATE TABLE IF NOT EXISTS member_app_access (member_id TEXT NOT NULL, app_code TEXT NOT NULL, access_level TEXT NOT NULL DEFAULT 'none' CHECK(access_level IN ('none', 'worship', 'full')), granted_by TEXT, granted_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(member_id, app_code))`,
         `CREATE INDEX IF NOT EXISTS member_app_access_level_idx ON member_app_access(app_code, access_level)`,
+        `CREATE TABLE IF NOT EXISTS archive_audit_logs (id TEXT PRIMARY KEY NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+        `CREATE INDEX IF NOT EXISTS archive_audit_logs_created_idx ON archive_audit_logs(created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS archive_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL, updated_by TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
       ];
       for (const sql of statements) await db.prepare(sql).run();
     })().catch((error) => {

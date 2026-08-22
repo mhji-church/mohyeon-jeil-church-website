@@ -1,4 +1,4 @@
-import { requireAdminApi } from "@/app/admin-auth";
+import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
 import { extractYouTubeId } from "@/lib/archive";
 
 function parseIsoDuration(value: string) {
@@ -22,7 +22,7 @@ function classifyTitle(title: string) {
 }
 
 export async function GET(request: Request) {
-  if (!(await requireAdminApi())) return Response.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+  if (!(await requireArchiveAdminApi())) return Response.json({ error: "아카이브 관리자 권한이 필요합니다." }, { status: 403 });
   const url = new URL(request.url).searchParams.get("url") ?? "";
   const videoId = extractYouTubeId(url);
   if (!videoId) return Response.json({ error: "올바른 유튜브 URL을 입력해 주세요." }, { status: 400 });

@@ -3,7 +3,7 @@
 ## 구성
 
 - 교회 홈페이지 회원 계정과 `mhji_member_session` 쿠키를 그대로 사용합니다.
-- 아카이브 경로는 `/archive`, 관리자 경로는 `/admin/archive`입니다.
+- 아카이브 경로는 `/archive`, 독립 관리자 경로는 `/archive/admin`입니다.
 - 영상 파일은 서버에 업로드하지 않습니다. 관리자가 YouTube 일부 공개 URL을 등록하는 기존 방식을 유지합니다.
 - 공개 목록 API는 날짜, 제목, 예배 종류, 설교자 등 메타데이터만 반환합니다.
 - YouTube ID와 재생 주소는 승인된 회원의 등급을 서버에서 확인한 뒤 재생 API가 반환합니다.
@@ -16,7 +16,7 @@
 | `worship` | 가능 | 불가 |
 | `full` | 가능 | 가능 |
 
-회원 가입과 승인은 홈페이지의 기존 회원 관리 절차를 사용합니다. 승인 후에도 관리자가 `/admin/archive`의 `열람 등급`에서 별도로 등급을 부여해야 합니다.
+회원 가입과 승인은 홈페이지의 기존 회원 관리 절차를 사용합니다. 승인 후에도 아카이브 관리자가 `/archive/admin`의 `열람 등급`에서 별도로 등급을 부여해야 합니다. 홈페이지 관리자와 아카이브 관리자는 서로 다른 계정과 세션을 사용합니다.
 
 ## 데이터 이전
 
@@ -43,6 +43,9 @@ node scripts/import-archive-videos.mjs C:\private\archive-videos.seed.json
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET`
+- `ARCHIVE_ADMIN_USERNAME`
+- `ARCHIVE_ADMIN_PASSWORD`
+- `ARCHIVE_ADMIN_SESSION_SECRET`
 - `YOUTUBE_API_KEY`
 
 실제 값은 Netlify 환경변수에만 저장하고 저장소에는 커밋하지 않습니다.

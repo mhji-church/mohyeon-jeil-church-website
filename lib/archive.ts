@@ -163,7 +163,13 @@ export async function upsertArchiveVideo(input: Omit<ArchiveVideoAdmin, "created
   }
   const thumbnailUrl = getSafeArchiveThumbnailUrl(input.thumbnailUrl, youtubeId);
   const youtubeUrl = `https://youtu.be/${youtubeId}`;
-  await getNetlifyDb()
+  const db = getNetlifyDb();
+  const duplicate = await db
+    .prepare("SELECT id FROM archive_videos WHERE youtube_id = ? AND id <> ? LIMIT 1")
+    .bind(youtubeId, input.id)
+    .first<{ id: string }>();
+  if (duplicate) throw new Error("이미 등록된 유튜브 영상입니다.");
+  await db
     .prepare(`INSERT INTO archive_videos (id, type, date, service_type, title, preacher, youtube_id, youtube_url, thumbnail_url, duration_seconds, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET type = excluded.type, date = excluded.date, service_type = excluded.service_type, title = excluded.title, preacher = excluded.preacher, youtube_id = excluded.youtube_id, youtube_url = excluded.youtube_url, thumbnail_url = excluded.thumbnail_url, duration_seconds = excluded.duration_seconds, note = excluded.note, updated_at = CURRENT_TIMESTAMP`)

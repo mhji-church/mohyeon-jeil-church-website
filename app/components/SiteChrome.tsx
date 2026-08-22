@@ -28,7 +28,7 @@ const menuItems = [
 // 일반 링크로 자동 전환되고 "준비 중" 표시는 사라집니다.
 const worshipArchive = {
   label: "예배 아카이브",
-  href: "/archive" as string | null,
+  href: null as string | null,
 };
 
 function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {

@@ -1,12 +1,13 @@
-import { requireAdminApi } from "@/app/admin-auth";
+import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
 import { ARCHIVE_APP_CODE, setArchiveAccess, type ArchiveAccessLevel } from "@/lib/archive";
 import { ensureNetlifySchema, getNetlifyDb } from "@/lib/netlify-db";
 import { getMember } from "@/lib/members";
+import { recordArchiveAudit } from "@/lib/archive-audit";
 
 const LEVELS = new Set<ArchiveAccessLevel>(["none", "worship", "full"]);
 
 export async function GET() {
-  if (!(await requireAdminApi())) return Response.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+  if (!(await requireArchiveAdminApi())) return Response.json({ error: "아카이브 관리자 권한이 필요합니다." }, { status: 403 });
   await ensureNetlifySchema();
   const result = await getNetlifyDb().prepare(`SELECT members.id, members.name, members.username, members.status,
     COALESCE(member_app_access.access_level, 'none') AS access_level
@@ -18,7 +19,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await requireAdminApi();
+  const admin = await requireArchiveAdminApi();
   if (!admin) return Response.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
   const body = await request.json().catch(() => null) as { memberId?: string; accessLevel?: ArchiveAccessLevel } | null;
   if (!body?.memberId || !body.accessLevel || !LEVELS.has(body.accessLevel)) {
@@ -28,5 +29,6 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "회원을 찾을 수 없습니다." }, { status: 404 });
   }
   await setArchiveAccess(body.memberId, body.accessLevel, admin.email);
+  await recordArchiveAudit({ actor: admin.email, action: "access.update", targetType: "member", targetId: body.memberId, summary: "회원 아카이브 열람 등급 변경", details: { accessLevel: body.accessLevel } });
   return Response.json({ ok: true });
 }

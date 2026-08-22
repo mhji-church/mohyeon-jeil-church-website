@@ -1,0 +1,6 @@
+import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
+import { getArchiveSettings, getArchiveSystemStatus, saveArchiveSettings } from "@/lib/archive-settings";
+import { recordArchiveAudit } from "@/lib/archive-audit";
+export const dynamic = "force-dynamic";
+export async function GET(request: Request) { const admin = await requireArchiveAdminApi(); const settings = await getArchiveSettings(); return Response.json(admin && new URL(request.url).searchParams.get("admin") === "1" ? { settings, status: await getArchiveSystemStatus() } : { settings: { recentCount: settings.recentCount, defaultSort: settings.defaultSort } }); }
+export async function PATCH(request: Request) { const admin = await requireArchiveAdminApi(); if (!admin) return Response.json({ error: "아카이브 관리자 권한이 필요합니다." }, { status: 403 }); const body = await request.json().catch(() => null); if (!body || typeof body !== "object") return Response.json({ error: "설정값을 확인해 주세요." }, { status: 400 }); const settings = await saveArchiveSettings(body as Record<string, unknown>, admin.email); await recordArchiveAudit({ actor: admin.email, action: "settings.update", targetType: "archive_settings", summary: "아카이브 운영 설정 변경" }); return Response.json({ ok: true, settings }); }
