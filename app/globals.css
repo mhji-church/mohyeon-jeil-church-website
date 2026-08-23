@@ -2346,6 +2346,11 @@ select {
   width: 150px;
 }
 
+.admin-members-table th:nth-child(3),
+.admin-members-table td:nth-child(3) {
+  width: 180px;
+}
+
 .admin-members-table th:nth-child(4),
 .admin-members-table td:nth-child(4),
 .admin-members-table th:nth-child(5),
@@ -2360,7 +2365,7 @@ select {
 
 .admin-members-table th:last-child,
 .admin-members-table td:last-child {
-  width: 286px;
+  width: 390px;
 }
 
 .admin-members-table td:not(:first-child):not(:last-child) {
@@ -2418,6 +2423,11 @@ select {
   min-height: 38px;
   padding-inline: 10px;
   font-size: 12px;
+  white-space: nowrap;
+}
+
+.member-row-actions .admin-temporary-password-button {
+  min-width: 132px;
 }
 
 .member-row-actions button:last-child {
@@ -3702,6 +3712,11 @@ svg {
     font-size: clamp(9px, .78vw, 11px);
     white-space: nowrap;
   }
+
+  .member-row-actions .admin-temporary-password-button {
+    min-width: 0;
+    flex-grow: 2.1;
+  }
 }
 
 @media (max-width: 980px) {
@@ -3787,6 +3802,11 @@ svg {
     padding-inline: 3px;
     font-size: 9px;
     white-space: nowrap;
+  }
+
+  .member-row-actions .admin-temporary-password-button {
+    min-width: 0;
+    flex-grow: 2.1;
   }
 }
 
@@ -8563,7 +8583,7 @@ body.modal-open { overflow: hidden; }
   }
 
   .admin-members-table .member-row-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-content-table .admin-row-actions button,
@@ -8572,6 +8592,11 @@ body.modal-open { overflow: hidden; }
     min-height: 42px;
     padding-inline: 4px;
     font-size: 11px;
+  }
+
+  .admin-members-table .member-row-actions .admin-temporary-password-button {
+    min-width: 0;
+    white-space: nowrap;
   }
 
   .admin-editor-backdrop,

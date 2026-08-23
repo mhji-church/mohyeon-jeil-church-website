@@ -307,13 +307,14 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
                           )}
                           <button type="button" onClick={() => setEditing(member)}>정보</button>
                           <button
+                            className="admin-temporary-password-button"
                             type="button"
                             onClick={() => {
                               setPasswordResetError("");
                               setConfirmPasswordReset(member);
                             }}
                           >
-                            비밀번호
+                            임시 비밀번호 발급
                           </button>
                           <button type="button" onClick={() => setConfirmDelete(member)}>삭제</button>
                         </div>
