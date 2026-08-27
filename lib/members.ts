@@ -173,11 +173,42 @@ export async function listMembers() {
   const result = await getD1()
     .prepare(
       `SELECT * FROM members
-       ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
-       created_at DESC`,
+       ORDER BY created_at DESC`,
     )
     .all<Record<string, unknown>>();
   return result.results.map(mapMember);
+}
+
+export async function countPendingMembers() {
+  await ensureMemberStore();
+  const row = await getD1()
+    .prepare("SELECT COUNT(*) AS count FROM members WHERE status = 'pending'")
+    .first<{ count: number | string }>();
+  return Number(row?.count ?? 0);
+}
+
+export async function countApprovedMembers() {
+  await ensureMemberStore();
+  const row = await getD1()
+    .prepare("SELECT COUNT(*) AS count FROM members WHERE status = 'approved'")
+    .first<{ count: number | string }>();
+  return Number(row?.count ?? 0);
+}
+
+export async function getAdminMemberSummary() {
+  await ensureMemberStore();
+  const row = await getD1()
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_count
+       FROM members`,
+    )
+    .first<{ pending_count: number | string | null; approved_count: number | string | null }>();
+  return {
+    pendingCount: Number(row?.pending_count ?? 0),
+    approvedCount: Number(row?.approved_count ?? 0),
+  };
 }
 
 export async function updateMember(

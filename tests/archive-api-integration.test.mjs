@@ -129,6 +129,11 @@ before(async () => {
     });
     assert.equal(update.status, 200);
   }
+  const pendingSummaryResponse = await request("/api/admin/members?summary=pending", {
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(pendingSummaryResponse.status, 200);
+  assert.deepEqual(await pendingSummaryResponse.json(), { pendingCount: 1 });
   const reset = await request("/api/admin/members", {
     method: "PATCH",
     headers: { "content-type": "application/json", cookie: adminCookie },

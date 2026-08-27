@@ -285,6 +285,38 @@ export async function listContentPosts(options?: {
   return result.results.map(mapRow);
 }
 
+export async function getAdminContentSummary(month: string) {
+  await ensureContentStore();
+  const db = getD1();
+  const countRow = await db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM content_posts
+       WHERE substr(replace(replace(trim(date), '.', '-'), '/', '-'), 1, 7) = ?`,
+    )
+    .bind(month)
+    .first<{ count: number | string }>();
+  const recentResult = await db
+    .prepare(
+      `SELECT * FROM content_posts
+       ORDER BY
+         CASE
+           WHEN trim(coalesce(date, '')) <> ''
+             THEN replace(replace(trim(date), '.', '-'), '/', '-')
+           ELSE substr(coalesce(nullif(created_at, ''), ''), 1, 10)
+         END DESC,
+         sort_order DESC,
+         coalesce(nullif(updated_at, ''), created_at, '') DESC,
+         id DESC
+       LIMIT 6`,
+    )
+    .all<Record<string, unknown>>();
+  return {
+    monthlyCount: Number(countRow?.count ?? 0),
+    recentPosts: recentResult.results.map(mapRow),
+  };
+}
+
 export async function listPublicGalleryPosts(
   limit = 100,
 ): Promise<GalleryListItem[]> {

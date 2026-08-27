@@ -2,6 +2,57 @@ import { createClient, type Client, type InStatement } from "@libsql/client";
 
 type BoundValue = string | number | bigint | null | Uint8Array;
 
+const transientReadErrorCodes = new Set([
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+const readRetryDelayMs = 150;
+
+function isReadStatement(sql: string) {
+  return /^(?:SELECT|PRAGMA|EXPLAIN)\b/i.test(sql.trimStart());
+}
+
+function isTransientReadError(error: unknown) {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  for (let depth = 0; current && depth < 6 && !seen.has(current); depth += 1) {
+    seen.add(current);
+    if (typeof current === "object") {
+      const candidate = current as { code?: unknown; message?: unknown; cause?: unknown };
+      if (typeof candidate.code === "string" && transientReadErrorCodes.has(candidate.code)) {
+        return true;
+      }
+      if (
+        typeof candidate.message === "string" &&
+        /(?:read ECONNRESET|socket hang up|other side closed|connection reset)/i.test(candidate.message)
+      ) {
+        return true;
+      }
+      current = candidate.cause;
+      continue;
+    }
+    break;
+  }
+  return false;
+}
+
+async function executeRead(
+  client: Client,
+  statement: { sql: string; args: BoundValue[] },
+) {
+  try {
+    return await client.execute(statement);
+  } catch (error) {
+    if (!isReadStatement(statement.sql) || !isTransientReadError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, readRetryDelayMs));
+    return client.execute(statement);
+  }
+}
+
 class PreparedStatement {
   constructor(
     private readonly client: Client,
@@ -14,12 +65,12 @@ class PreparedStatement {
   }
 
   async first<T = Record<string, unknown>>(): Promise<T | null> {
-    const result = await this.client.execute({ sql: this.sql, args: this.args });
+    const result = await executeRead(this.client, { sql: this.sql, args: this.args });
     return (result.rows[0] as T | undefined) ?? null;
   }
 
   async all<T = Record<string, unknown>>() {
-    const result = await this.client.execute({ sql: this.sql, args: this.args });
+    const result = await executeRead(this.client, { sql: this.sql, args: this.args });
     return { results: result.rows as unknown as T[] };
   }
 

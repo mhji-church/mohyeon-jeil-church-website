@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Member, MemberStatus } from "../../../lib/members";
+import AdminPagination from "../AdminPagination";
+import AdminSidebar from "../AdminSidebar";
 
 type Props = {
   userName: string;
   userEmail: string;
   signOutPath: string;
+  initialPendingMemberCount: number | null;
 };
 
 const statusLabel: Record<MemberStatus, string> = {
@@ -21,12 +24,16 @@ function formatDate(value: string | null) {
   return value.slice(0, 10).replaceAll("-", ".");
 }
 
-export default function AdminMembers({ userName, userEmail, signOutPath }: Props) {
+export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<MemberStatus | "all">("all");
+  const filterValue = searchParams.get("status");
+  const filter: MemberStatus | "all" = ["pending", "approved", "suspended"].includes(filterValue ?? "") ? filterValue as MemberStatus : "all";
   const [editing, setEditing] = useState<Member | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Member | null>(null);
   const [confirmPasswordReset, setConfirmPasswordReset] = useState<Member | null>(null);
@@ -37,6 +44,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
   const [saving, setSaving] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [passwordResetError, setPasswordResetError] = useState("");
+  const listStartRef = useRef<HTMLElement>(null);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -64,16 +72,6 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
     return () => window.clearTimeout(timer);
   }, [loadMembers]);
 
-  const counts = useMemo(
-    () => ({
-      all: members.length,
-      pending: members.filter((member) => member.status === "pending").length,
-      approved: members.filter((member) => member.status === "approved").length,
-      suspended: members.filter((member) => member.status === "suspended").length,
-    }),
-    [members],
-  );
-
   const visibleMembers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return members.filter((member) => {
@@ -85,6 +83,30 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
         .includes(term);
     });
   }, [filter, members, search]);
+
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const totalPages = Math.max(1, Math.ceil(visibleMembers.length / 10));
+  const currentPage = Math.min(Math.max(Number.isInteger(requestedPage) ? requestedPage : 1, 1), totalPages);
+  const paginatedMembers = visibleMembers.slice((currentPage - 1) * 10, currentPage * 10);
+
+  const changePage = useCallback((page: number, replace = false) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page <= 1) params.delete("page"); else params.set("page", String(page));
+    const url = `${pathname}${params.size ? `?${params}` : ""}`;
+    if (replace) router.replace(url); else router.push(url);
+    window.requestAnimationFrame(() => listStartRef.current?.scrollIntoView({ block: "start" }));
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!loading && requestedPage !== currentPage) changePage(currentPage, true);
+  }, [changePage, currentPage, loading, requestedPage]);
+
+  const changeFilter = (status: MemberStatus | "all") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (status === "all") params.delete("status"); else params.set("status", status);
+    params.delete("page");
+    router.push(`${pathname}${params.size ? `?${params}` : ""}`);
+  };
 
   async function changeStatus(member: Member, status: MemberStatus) {
     const response = await fetch("/api/admin/members", {
@@ -105,6 +127,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
           : `${member.name} 회원을 승인 대기로 변경했습니다.`,
     );
     await loadMembers();
+    window.dispatchEvent(new Event("admin-members-updated"));
   }
 
   async function saveMember(event: React.FormEvent<HTMLFormElement>) {
@@ -133,6 +156,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
       setNotice(`${editing.name} 회원 정보를 수정했습니다.`);
       setEditing(null);
       await loadMembers();
+      window.dispatchEvent(new Event("admin-members-updated"));
     }
     setSaving(false);
   }
@@ -181,30 +205,12 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
     setNotice(`${confirmDelete.name} 회원을 삭제했습니다.`);
     setConfirmDelete(null);
     await loadMembers();
+    window.dispatchEvent(new Event("admin-members-updated"));
   }
 
   return (
     <main className="admin-shell admin-members-shell">
-      <aside className="admin-sidebar">
-        <Link className="admin-brand" href="/" aria-label="모현제일교회 홈페이지">
-          <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
-          <span>WEBSITE ADMIN</span>
-        </Link>
-        <nav aria-label="관리 메뉴">
-          <a href="/admin?section=bulletin"><i>01</i><span>주보 관리</span></a>
-          <a href="/admin?section=news"><i>02</i><span>교회소식 관리</span></a>
-          <a href="/admin?section=gallery"><i>03</i><span>갤러리 관리</span></a>
-          <a href="/admin?section=business"><i>04</i><span>성도사업장 관리</span></a>
-          <a className="is-active" href="/admin/members">
-            <i>05</i><span>회원 관리</span><b>{counts.all}</b>
-          </a>
-        </nav>
-        <div className="admin-account">
-          <span>{userName}</span>
-          <small>{userEmail}</small>
-          <a href={signOutPath}>로그아웃</a>
-        </div>
-      </aside>
+      <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} />
 
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">
@@ -213,49 +219,31 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
             <h1>회원 관리</h1>
             <p>가입 신청을 확인하고 교인 계정의 승인과 이용 상태를 관리합니다.</p>
           </div>
-          <div>
-            <a href="/member/signup" target="_blank">회원가입 페이지 보기</a>
-            <button type="button" onClick={() => void loadMembers()}>목록 새로고침</button>
-          </div>
+          <div><button type="button" onClick={() => void loadMembers()}>목록 새로고침</button></div>
         </header>
-
-        <div className="admin-stats admin-member-stats">
-          {([
-            ["all", "전체 회원"],
-            ["pending", "승인 대기"],
-            ["approved", "승인 회원"],
-            ["suspended", "이용 중지"],
-          ] as const).map(([key, label]) => (
-            <button
-              type="button"
-              className={filter === key ? "is-active" : ""}
-              onClick={() => setFilter(key)}
-              key={key}
-            >
-              <span>{label}</span>
-              <strong>{counts[key]}</strong>
-              <small>등록 계정</small>
-            </button>
-          ))}
-        </div>
 
         {notice && <div className="admin-notice" role="status">{notice}</div>}
 
-        <section className="admin-list-panel">
+        <section className="admin-list-panel admin-members-list-panel" ref={listStartRef}>
           <header className="admin-members-header">
             <div>
-              <h2>교인 회원 목록</h2>
-              <span>총 {visibleMembers.length}명</span>
+              <h2>전체 회원</h2>
+              <span>총 {members.length}명{filter !== "all" || search ? ` · 표시 ${visibleMembers.length}명` : ""}</span>
             </div>
-            <label>
+            <div className="admin-member-list-tools">
+              <div className="admin-member-filters" role="group" aria-label="회원 상태 필터">
+                {([['all', '전체'], ['pending', '승인 대기'], ['approved', '승인'], ['suspended', '이용 중지']] as const).map(([key, label]) => <button type="button" className={filter === key ? "is-active" : ""} aria-pressed={filter === key} onClick={() => changeFilter(key)} key={key}>{label}</button>)}
+              </div>
+              <label>
               <span className="sr-only">회원 검색</span>
               <input
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => { setSearch(event.target.value); if (currentPage !== 1) changePage(1, true); }}
                 placeholder="이름·아이디·연락처 검색"
               />
-            </label>
+              </label>
+            </div>
           </header>
           {loading ? (
             <div className="admin-empty">회원 목록을 불러오고 있습니다.</div>
@@ -278,7 +266,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleMembers.map((member) => (
+                  {paginatedMembers.map((member) => (
                     <tr key={member.id}>
                       <td>
                         <strong>{member.name}</strong>
@@ -325,6 +313,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath }: Props
               </table>
             </div>
           )}
+          <AdminPagination currentPage={currentPage} totalPages={totalPages} onPageChange={changePage} />
         </section>
       </section>
 

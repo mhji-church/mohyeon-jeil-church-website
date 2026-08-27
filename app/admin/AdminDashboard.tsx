@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type {
   ContentPost,
   ContentPostInput,
@@ -13,12 +13,17 @@ import {
   isBusinessCategory,
 } from "../../lib/business-categories";
 import { formatPhoneNumber } from "../../lib/phone";
+import AdminPagination from "./AdminPagination";
+import AdminSidebar from "./AdminSidebar";
 
 type Props = {
   userName: string;
   userEmail: string;
   signOutPath: string;
   initialType: ContentType;
+  initialPendingMemberCount: number | null;
+  initialCreate: boolean;
+  initialEditId: string | null;
 };
 
 type PendingImage = {
@@ -342,28 +347,57 @@ export default function AdminDashboard({
   userEmail,
   signOutPath,
   initialType,
+  initialPendingMemberCount,
+  initialCreate,
+  initialEditId,
 }: Props) {
-  const [activeType, setActiveType] = useState<ContentType>(initialType);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeType = initialType;
   const [posts, setPosts] = useState<ContentPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(initialCreate);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ContentPostInput>(emptyPost("bulletin"));
-  const [newsText, setNewsText] = useState("");
+  const [form, setForm] = useState<ContentPostInput>(() => emptyPost(initialType));
+  const [newsText, setNewsText] = useState(initialCreate && initialType === "news" ? "| " : "");
   const [uploading, setUploading] = useState(false);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<ContentPost | null>(null);
+  const listStartRef = useRef<HTMLElement>(null);
+  const handledInitialEdit = useRef(false);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
-    const response = await fetch("/api/admin/posts", { cache: "no-store" });
-    const data = (await response.json()) as { posts?: ContentPost[]; error?: string };
-    if (!response.ok) setNotice(data.error ?? "게시물을 불러오지 못했습니다.");
-    setPosts(data.posts ?? []);
-    setLoading(false);
-  }, []);
+    try {
+      const response = await fetch("/api/admin/posts", { cache: "no-store" });
+      const data = (await response.json().catch(() => ({}))) as {
+        posts?: ContentPost[];
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error ?? "게시물을 불러오지 못했습니다.");
+      const nextPosts = data.posts ?? [];
+      setPosts(nextPosts);
+      if (initialEditId && !handledInitialEdit.current) {
+        handledInitialEdit.current = true;
+        const post = nextPosts.find((item) => item.id === initialEditId && item.type === initialType);
+        if (post) {
+          setEditingId(post.id);
+          setForm({ type: post.type, title: post.title, date: post.date, excerpt: post.excerpt, category: post.category, content: post.content, images: [...post.images], status: post.status, sortOrder: post.sortOrder });
+          setNewsText(post.type === "news" ? toNewsText(post.content) : "");
+          setEditorOpen(true);
+        } else {
+          setNotice("수정할 콘텐츠를 찾지 못했습니다.");
+        }
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "게시물을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [initialEditId, initialType]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadPosts(), 0);
@@ -375,17 +409,24 @@ export default function AdminDashboard({
     [activeType, posts],
   );
 
-  const counts = useMemo(
-    () =>
-      (Object.keys(typeMeta) as ContentType[]).reduce(
-        (result, type) => {
-          result[type] = posts.filter((post) => post.type === type).length;
-          return result;
-        },
-        { bulletin: 0, news: 0, gallery: 0, business: 0 },
-      ),
-    [posts],
-  );
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const totalPages = Math.max(1, Math.ceil(visiblePosts.length / 10));
+  const currentPage = Math.min(Math.max(Number.isInteger(requestedPage) ? requestedPage : 1, 1), totalPages);
+  const paginatedPosts = visiblePosts.slice((currentPage - 1) * 10, currentPage * 10);
+
+  const changePage = useCallback((page: number, replace = false) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("edit");
+    params.delete("new");
+    if (page <= 1) params.delete("page"); else params.set("page", String(page));
+    const url = `${pathname}${params.size ? `?${params}` : ""}`;
+    if (replace) router.replace(url); else router.push(url);
+    window.requestAnimationFrame(() => listStartRef.current?.scrollIntoView({ block: "start" }));
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!loading && requestedPage !== currentPage) changePage(currentPage, true);
+  }, [changePage, currentPage, loading, requestedPage]);
 
   const startCreate = () => {
     const next = emptyPost(activeType);
@@ -396,6 +437,10 @@ export default function AdminDashboard({
     setNotice("");
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
     setPendingImages([]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("edit");
+    params.set("new", "1");
+    router.replace(`${pathname}?${params}`);
   };
 
   const startEdit = (post: ContentPost) => {
@@ -416,6 +461,10 @@ export default function AdminDashboard({
     setNotice("");
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
     setPendingImages([]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("new");
+    params.set("edit", post.id);
+    router.replace(`${pathname}?${params}`);
   };
 
   const updateField = <K extends keyof ContentPostInput>(
@@ -484,6 +533,10 @@ export default function AdminDashboard({
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
     setPendingImages([]);
     setEditorOpen(false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("edit");
+    params.delete("new");
+    router.replace(`${pathname}${params.size ? `?${params}` : ""}`);
   };
 
   const moveImage = (index: number, amount: number) => {
@@ -589,6 +642,7 @@ export default function AdminDashboard({
       closeEditor();
       setNotice(editingId ? "게시물을 수정했습니다." : "새 게시물을 등록했습니다.");
       await loadPosts();
+      if (!editingId) changePage(1, true);
     } catch (error) {
       if (uploadedImages.length) {
         await fetch("/api/admin/uploads", {
@@ -626,38 +680,7 @@ export default function AdminDashboard({
 
   return (
     <main className="admin-shell admin-members-shell">
-      <aside className="admin-sidebar">
-        <Link className="admin-brand" href="/" aria-label="모현제일교회 홈페이지">
-          <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
-          <span>WEBSITE ADMIN</span>
-        </Link>
-        <nav aria-label="콘텐츠 관리 메뉴">
-          {(Object.keys(typeMeta) as ContentType[]).map((type, index) => (
-            <button
-              type="button"
-              className={activeType === type ? "is-active" : ""}
-              onClick={() => {
-                setActiveType(type);
-                setEditorOpen(false);
-              }}
-              key={type}
-            >
-              <i>0{index + 1}</i>
-              <span>{typeMeta[type].label} 관리</span>
-              <b>{counts[type]}</b>
-            </button>
-          ))}
-          <a className="admin-members-nav" href="/admin/members">
-            <i>05</i>
-            <span>회원 관리</span>
-          </a>
-        </nav>
-        <div className="admin-account">
-          <span>{userName}</span>
-          <small>{userEmail}</small>
-          <a href={signOutPath}>로그아웃</a>
-        </div>
-      </aside>
+      <AdminSidebar active={activeType} userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} />
 
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">
@@ -666,33 +689,16 @@ export default function AdminDashboard({
             <h1>{typeMeta[activeType].label} 관리</h1>
             <p>{typeMeta[activeType].description}</p>
           </div>
-          <div>
-            <a href={`/${activeType === "bulletin" ? "bulletin" : activeType}`} target="_blank">
-              홈페이지에서 보기
-            </a>
-            <button type="button" onClick={startCreate}>
-              + 새 {typeMeta[activeType].label} 등록
-            </button>
-          </div>
+          <div><button type="button" onClick={startCreate}>+ 새 {typeMeta[activeType].label} 등록</button></div>
         </header>
-
-        <div className="admin-stats admin-member-stats">
-          {(Object.keys(typeMeta) as ContentType[]).map((type) => (
-            <button type="button" onClick={() => setActiveType(type)} key={type}>
-              <span>{typeMeta[type].label}</span>
-              <strong>{counts[type]}</strong>
-              <small>등록 게시물</small>
-            </button>
-          ))}
-        </div>
 
         {notice && <div className="admin-notice" role="status">{notice}</div>}
 
-        <section className="admin-list-panel">
+        <section className="admin-list-panel admin-content-list-panel" ref={listStartRef}>
           <header>
             <div>
               <h2>등록된 {typeMeta[activeType].label}</h2>
-              <span>총 {visiblePosts.length}건</span>
+              <span>총 {visiblePosts.length}{activeType === "business" ? "곳" : "건"}</span>
             </div>
             <button type="button" onClick={() => void loadPosts()} aria-label="목록 새로고침">
               새로고침
@@ -720,7 +726,7 @@ export default function AdminDashboard({
                   </tr>
                 </thead>
                 <tbody>
-                  {visiblePosts.map((post) => (
+                  {paginatedPosts.map((post) => (
                     <tr key={post.id}>
                       <td>
                         {post.images[0] ? (
@@ -752,6 +758,7 @@ export default function AdminDashboard({
               </table>
             </div>
           )}
+          <AdminPagination currentPage={currentPage} totalPages={totalPages} onPageChange={changePage} />
         </section>
       </section>
 

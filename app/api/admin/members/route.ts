@@ -1,4 +1,5 @@
 import {
+  countPendingMembers,
   deleteMember,
   listMembers,
   resetMemberPassword,
@@ -18,10 +19,13 @@ async function authorize() {
   return { denied: null, user };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const { denied } = await authorize();
   if (denied) return denied;
   try {
+    if (new URL(request.url).searchParams.get("summary") === "pending") {
+      return Response.json({ pendingCount: await countPendingMembers() });
+    }
     return Response.json({ members: await listMembers() });
   } catch {
     return Response.json(

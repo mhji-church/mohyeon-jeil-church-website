@@ -123,7 +123,15 @@ function validateInput(value: unknown): ContentPostInput | null {
 export async function GET() {
   const denied = await authorize();
   if (denied) return denied;
-  return Response.json({ posts: await listContentPosts({ includeDrafts: true, limit: 200 }) });
+  try {
+    return Response.json({ posts: await listContentPosts({ includeDrafts: true, limit: 200 }) });
+  } catch (error) {
+    console.error("[admin posts GET] content list read failed", error);
+    return Response.json(
+      { error: "게시물을 불러오지 못했습니다. 잠시 후 새로고침해 주세요." },
+      { status: 503 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
