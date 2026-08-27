@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import ContentPage from "../components/ContentPage";
 import BulletinBoard from "./BulletinBoard";
-import { listContentPosts } from "../../lib/content";
+import { listPublicContentPostPage } from "../../lib/content";
 
 export const metadata: Metadata = {
   title: "주보 | 모현제일교회",
@@ -10,8 +10,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function BulletinPage() {
-  const bulletins = await listContentPosts({ type: "bulletin" });
+export default async function BulletinPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
+  const requestedPage = (await searchParams).page;
+  const page = await listPublicContentPostPage({
+    type: "bulletin",
+    page: typeof requestedPage === "string" ? requestedPage : undefined,
+  });
   return (
     <ContentPage
       eyebrow="WEEKLY BULLETIN"
@@ -20,7 +24,7 @@ export default async function BulletinPage() {
       heroImage="/assets/hero-bulletin.webp"
       current="주보"
     >
-      <BulletinBoard bulletins={bulletins} />
+      <BulletinBoard {...page} />
     </ContentPage>
   );
 }

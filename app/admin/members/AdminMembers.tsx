@@ -105,7 +105,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     const params = new URLSearchParams(searchParams.toString());
     if (status === "all") params.delete("status"); else params.set("status", status);
     params.delete("page");
-    router.push(`${pathname}${params.size ? `?${params}` : ""}`);
+    router.push(`${pathname}${params.size ? `?${params}` : ""}`, { scroll: false });
   };
 
   async function changeStatus(member: Member, status: MemberStatus) {

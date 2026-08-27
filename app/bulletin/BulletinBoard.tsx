@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import ZoomableImage from "../components/ZoomableImage";
 import type { ContentPost } from "../../lib/content";
+import PublicPagination from "../components/PublicPagination";
 
-export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] }) {
+type Props = { posts: ContentPost[]; totalCount: number; currentPage: number; totalPages: number };
+
+export default function BulletinBoard({ posts, totalCount, currentPage, totalPages }: Props) {
   const [viewer, setViewer] = useState<ContentPost | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [direction, setDirection] = useState<"next" | "prev">("next");
-  const latest = bulletins[0];
-  const archive = bulletins.slice(1);
+  const latest = currentPage === 1 ? posts[0] : null;
+  const archive = currentPage === 1 ? posts.slice(1) : posts;
 
   const movePage = useCallback((amount: number) => {
     if (!viewer) return;
@@ -41,19 +44,19 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
   };
 
   return (
-    <section className="content-section">
+    <section className="content-section" id="bulletin-list-start">
       <div className="page-width">
         <header className="content-list-heading">
           <div>
             <p>BULLETIN</p>
             <h2>주보 보기</h2>
           </div>
-          <span>총 {bulletins.length}건</span>
+          <span>총 {totalCount}건</span>
         </header>
 
-        {latest ? (
+        {posts.length > 0 ? (
           <>
-            <article className="bulletin-latest">
+            {latest && <article className="bulletin-latest">
               <button
                 className="bulletin-latest-cover"
                 type="button"
@@ -84,7 +87,7 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                   <span>마우스 휠과 손가락으로 확대할 수 있습니다.</span>
                 </div>
               </div>
-            </article>
+            </article>}
 
             <section className="bulletin-archive" aria-labelledby="bulletin-archive-title">
               <header>
@@ -92,7 +95,7 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                   <p>PAST BULLETINS</p>
                   <h3 id="bulletin-archive-title">지난 주보</h3>
                 </div>
-                <span>{archive.length}건</span>
+                <span>{currentPage === 1 ? `${archive.length}건` : `${currentPage}페이지`}</span>
               </header>
               <div className="bulletin-list">
                 {archive.map((bulletin, index) => (
@@ -104,7 +107,7 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                     aria-label={`${bulletin.title} 보기`}
                   >
                     <span className="bulletin-list-number">
-                      {String(index + 1).padStart(2, "0")}
+                      {String((currentPage - 1) * 10 + index + (currentPage === 1 ? 2 : 1)).padStart(2, "0")}
                     </span>
                     <time>{bulletin.date}</time>
                     <strong>{bulletin.title}</strong>
@@ -113,6 +116,7 @@ export default function BulletinBoard({ bulletins }: { bulletins: ContentPost[] 
                 ))}
               </div>
             </section>
+            <PublicPagination currentPage={currentPage} totalPages={totalPages} listStartId="bulletin-list-start" />
           </>
         ) : (
           <div className="bulletin-empty">

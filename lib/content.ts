@@ -1,6 +1,11 @@
 import { deleteExternalObjects } from "./external-r2";
 import { externalMediaKey, externalMediaUrl } from "./media-path";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
+import {
+  contentPageForRow,
+  normalizeContentPage,
+  PUBLIC_CONTENT_PAGE_SIZE,
+} from "./public-pagination";
 
 export type ContentType = "bulletin" | "news" | "gallery" | "business";
 export type ContentStatus = "published" | "draft";
@@ -32,6 +37,14 @@ export type ContentPostInput = Omit<
   ContentPost,
   "id" | "createdAt" | "updatedAt"
 >;
+
+export type ContentPostPage = {
+  posts: ContentPost[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  targetPage: number | null;
+};
 
 const schemaStatement = `CREATE TABLE IF NOT EXISTS content_posts (
   id TEXT PRIMARY KEY NOT NULL,
@@ -283,6 +296,60 @@ export async function listContentPosts(options?: {
     .bind(...values, limit)
     .all<Record<string, unknown>>();
   return result.results.map(mapRow);
+}
+
+export async function listPublicContentPostPage(options: {
+  type: "bulletin" | "news";
+  page?: string;
+  targetDate?: string | null;
+  pageSize?: number;
+}): Promise<ContentPostPage> {
+  await ensureContentStore();
+  const db = getD1();
+  const pageSize = Math.min(Math.max(options.pageSize ?? PUBLIC_CONTENT_PAGE_SIZE, 1), 50);
+  const countRow = await db
+    .prepare("SELECT COUNT(*) AS count FROM content_posts WHERE type = ? AND status = 'published'")
+    .bind(options.type)
+    .first<{ count: number | string }>();
+  const totalCount = Number(countRow?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  let targetPage: number | null = null;
+  if (options.targetDate) {
+    const targetRow = await db
+      .prepare(
+        `WITH ordered AS (
+          SELECT date, ROW_NUMBER() OVER (
+            ORDER BY date DESC, sort_order DESC, created_at DESC, id DESC
+          ) AS row_number
+          FROM content_posts
+          WHERE type = ? AND status = 'published'
+        )
+        SELECT row_number FROM ordered WHERE date = ? ORDER BY row_number LIMIT 1`,
+      )
+      .bind(options.type, options.targetDate)
+      .first<{ row_number: number | string }>();
+    if (targetRow) targetPage = contentPageForRow(Number(targetRow.row_number), pageSize);
+  }
+
+  const currentPage = targetPage ?? normalizeContentPage(options.page, totalPages);
+  const result = await db
+    .prepare(
+      `SELECT * FROM content_posts
+       WHERE type = ? AND status = 'published'
+       ORDER BY date DESC, sort_order DESC, created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(options.type, pageSize, (currentPage - 1) * pageSize)
+    .all<Record<string, unknown>>();
+
+  return {
+    posts: result.results.map(mapRow),
+    totalCount,
+    currentPage,
+    totalPages,
+    targetPage,
+  };
 }
 
 export async function getAdminContentSummary(month: string) {
