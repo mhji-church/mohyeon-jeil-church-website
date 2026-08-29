@@ -1,5 +1,48 @@
 export type ArchiveVideoType = "worship" | "attendance";
 export type ArchiveAccessLevel = "none" | "worship" | "full";
+export type ArchiveAnalysisStatus = "not_started" | "queued" | "processing" | "completed" | "needs_review" | "failed" | "cancelled";
+export type ArchiveSongCategory = "opening" | "offertory" | "choir" | "special" | "other";
+export type ArchiveAnalysisSource = "caption" | "vision" | "audio" | "manual" | "combined" | "metadata";
+
+export type ArchiveAnalysisSong = {
+  id: string;
+  order: number;
+  title: string;
+  category: ArchiveSongCategory;
+  hymnNumber: number | null;
+  startSeconds: number | null;
+  endSeconds: number | null;
+  confidence: number;
+  source: ArchiveAnalysisSource;
+  manuallyEdited: boolean;
+  evidence: string;
+};
+
+export type ArchiveVideoAnalysis = {
+  status: ArchiveAnalysisStatus;
+  analysisVersion: string;
+  analyzedAt: string | null;
+  analysisError: string | null;
+  overallConfidence: number | null;
+  manualVerifiedAt: string | null;
+  manualVerifiedBy: string | null;
+  songs: ArchiveAnalysisSong[];
+  sermon: {
+    title: string | null;
+    biblePassage: string | null;
+    preacher: string | null;
+    startSeconds: number | null;
+    confidence: number | null;
+    manuallyEdited: boolean;
+  };
+  representativePrayer: {
+    name: string | null;
+    role: string | null;
+    startSeconds: number | null;
+    confidence: number | null;
+    manuallyEdited: boolean;
+  };
+};
 
 export type ArchiveVideo = {
   id: string;
@@ -12,6 +55,7 @@ export type ArchiveVideo = {
   note: string;
   createdAt: string;
   updatedAt: string;
+  analysis?: ArchiveVideoAnalysis | null;
 };
 
 export type ArchiveVideoAdmin = ArchiveVideo & {

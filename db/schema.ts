@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const contentPosts = sqliteTable("content_posts", {
   id: text("id").primaryKey(),
@@ -69,6 +69,84 @@ export const archiveVideos = sqliteTable("archive_videos", {
   note: text("note").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveVideoAnalyses = sqliteTable("archive_video_analyses", {
+  videoId: text("video_id").primaryKey(),
+  status: text("status").notNull().default("not_started"),
+  analysisVersion: text("analysis_version").notNull().default("metadata-v1"),
+  analyzedAt: text("analyzed_at"),
+  analysisError: text("analysis_error"),
+  overallConfidence: real("overall_confidence"),
+  manualVerifiedAt: text("manual_verified_at"),
+  manualVerifiedBy: text("manual_verified_by"),
+  sermonTitle: text("sermon_title"),
+  sermonBiblePassage: text("sermon_bible_passage"),
+  sermonPreacher: text("sermon_preacher"),
+  sermonStartSeconds: integer("sermon_start_seconds"),
+  sermonConfidence: real("sermon_confidence"),
+  sermonManuallyEdited: integer("sermon_manually_edited", { mode: "boolean" }).notNull().default(false),
+  prayerName: text("prayer_name"),
+  prayerRole: text("prayer_role"),
+  prayerStartSeconds: integer("prayer_start_seconds"),
+  prayerConfidence: real("prayer_confidence"),
+  prayerManuallyEdited: integer("prayer_manually_edited", { mode: "boolean" }).notNull().default(false),
+  rawEvidenceJson: text("raw_evidence_json").notNull().default("{}"),
+  costJson: text("cost_json").notNull().default("{}"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveAnalysisSongs = sqliteTable("archive_analysis_songs", {
+  id: text("id").primaryKey(),
+  videoId: text("video_id").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("opening"),
+  hymnNumber: integer("hymn_number"),
+  startSeconds: integer("start_seconds"),
+  endSeconds: integer("end_seconds"),
+  confidence: real("confidence").notNull().default(0),
+  source: text("source").notNull().default("manual"),
+  manuallyEdited: integer("manually_edited", { mode: "boolean" }).notNull().default(false),
+  evidence: text("evidence").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveSongs = sqliteTable("archive_songs", {
+  id: text("id").primaryKey(),
+  displayTitle: text("display_title").notNull(),
+  baseTitle: text("base_title").notNull(),
+  normalizedBaseTitle: text("normalized_base_title").notNull().unique(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveSongNames = sqliteTable("archive_song_names", {
+  id: text("id").primaryKey(),
+  songId: text("song_id").notNull(),
+  aliasText: text("alias_text").notNull(),
+  normalizedAlias: text("normalized_alias").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveVideoSongs = sqliteTable("archive_video_songs", {
+  id: text("id").primaryKey(),
+  videoId: text("video_id").notNull(),
+  songId: text("song_id").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const archiveSongConflicts = sqliteTable("archive_song_conflicts", {
+  id: text("id").primaryKey(),
+  inputTitle: text("input_title").notNull(),
+  normalizedValue: text("normalized_value").notNull(),
+  candidateSongIdsJson: text("candidate_song_ids_json").notNull().default("[]"),
+  status: text("status").notNull().default("open"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  resolvedAt: text("resolved_at"),
 });
 
 export const memberAppAccess = sqliteTable(

@@ -17,4 +17,6 @@ const testFiles = readdirSync(new URL("../tests/", import.meta.url))
   .filter((name) => name.endsWith(".test.mjs"))
   .sort()
   .map((name) => fileURLToPath(new URL(`../tests/${name}`, import.meta.url)));
-run(process.execPath, ["--test", ...testFiles]);
+// Several suites start their own Vite preview against temporary databases.
+// Run files serially so those dev servers do not compete for shared Vite caches.
+run(process.execPath, ["--test", "--test-concurrency=1", ...testFiles]);

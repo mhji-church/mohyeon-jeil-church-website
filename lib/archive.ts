@@ -1,5 +1,6 @@
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
-import type { ArchiveAccessLevel, ArchiveVideo, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
+import { attachArchiveAnalyses } from "./archive-analysis";
+import type { ArchiveAccessLevel, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
 
 export type { ArchiveAccessLevel, ArchiveVideo, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
 
@@ -74,6 +75,7 @@ export async function listArchiveVideos(options: {
   sort?: "newest" | "oldest";
   page?: number;
   pageSize?: number;
+  analysis?: "admin" | "public" | false;
 } = {}) {
   await ensureNetlifySchema();
   const where: string[] = [];
@@ -88,9 +90,22 @@ export async function listArchiveVideos(options: {
     where.push("service_type IN ('수요예배', '특별예배')");
   }
   if (options.search?.trim()) {
-    where.push("(date LIKE ? OR service_type LIKE ? OR title LIKE ? OR preacher LIKE ? OR note LIKE ?)");
+    where.push(`(date LIKE ? OR service_type LIKE ? OR title LIKE ? OR preacher LIKE ? OR note LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM archive_video_analyses a
+        WHERE a.video_id = archive_videos.id
+          AND (a.sermon_title LIKE ? OR a.sermon_bible_passage LIKE ? OR a.sermon_preacher LIKE ? OR a.prayer_name LIKE ? OR a.prayer_role LIKE ?)
+      )
+      OR EXISTS (
+        SELECT 1 FROM archive_analysis_songs s
+        WHERE s.video_id = archive_videos.id AND s.title LIKE ?
+      )
+      OR EXISTS (
+        SELECT 1 FROM archive_video_songs vs JOIN archive_songs song ON song.id = vs.song_id LEFT JOIN archive_song_names alias ON alias.song_id = song.id
+        WHERE vs.video_id = archive_videos.id AND (song.display_title LIKE ? OR song.base_title LIKE ? OR alias.alias_text LIKE ?)
+      ))`);
     const term = `%${options.search.trim()}%`;
-    args.push(term, term, term, term, term);
+    args.push(term, term, term, term, term, term, term, term, term, term, term, term, term, term);
   }
   if (options.year && /^\d{4}$/.test(options.year)) {
     where.push("substr(date, 1, 4) = ?");
@@ -112,8 +127,12 @@ export async function listArchiveVideos(options: {
     .prepare(`SELECT * FROM archive_videos ${clause} ORDER BY date ${direction}, CASE service_type WHEN '주일 2부 예배' THEN 0 WHEN '주일 1부 예배' THEN 1 ELSE 2 END, created_at ${direction} LIMIT ? OFFSET ?`)
     .bind(...args, pageSize, (page - 1) * pageSize)
     .all<Row>();
+  const videos = result.results.map(mapVideo);
+  const analyzedVideos = options.analysis === false
+    ? videos
+    : await attachArchiveAnalyses(videos, options.analysis !== "admin");
   return {
-    videos: result.results.map(mapVideo),
+    videos: analyzedVideos,
     total: Number(totalRow?.count ?? 0),
     page,
     pageSize,
@@ -179,5 +198,8 @@ export async function upsertArchiveVideo(input: Omit<ArchiveVideoAdmin, "created
 
 export async function deleteArchiveVideo(id: string) {
   await ensureNetlifySchema();
-  await getNetlifyDb().prepare("DELETE FROM archive_videos WHERE id = ?").bind(id).run();
+  const db = getNetlifyDb();
+  await db.prepare("DELETE FROM archive_analysis_songs WHERE video_id = ?").bind(id).run();
+  await db.prepare("DELETE FROM archive_video_analyses WHERE video_id = ?").bind(id).run();
+  await db.prepare("DELETE FROM archive_videos WHERE id = ?").bind(id).run();
 }

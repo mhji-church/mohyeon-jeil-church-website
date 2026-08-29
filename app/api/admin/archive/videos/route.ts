@@ -1,6 +1,9 @@
 import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
+import { saveArchiveVideoAnalysis } from "@/lib/archive-analysis";
 import { listArchiveVideos, upsertArchiveVideo, type ArchiveVideoType } from "@/lib/archive";
 import { recordArchiveAudit } from "@/lib/archive-audit";
+import type { ArchiveVideoAnalysis } from "@/lib/archive-shared";
+import { syncArchiveVideoSongs } from "@/lib/archive-songs";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,7 @@ export async function GET(request: Request) {
     sort: params.get("sort") === "oldest" ? "oldest" : "newest",
     page: Number(params.get("page") || 1),
     pageSize: 10,
+    analysis: "admin",
   }));
 }
 
@@ -42,6 +46,23 @@ export async function POST(request: Request) {
       durationSeconds: body.durationSeconds == null || body.durationSeconds === "" ? null : Number(body.durationSeconds),
       note: String(body.note ?? ""),
     });
+    if (body.type === "worship") {
+      const songTitles = String(body.songsText ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+      const manualContent: ArchiveVideoAnalysis = {
+        status: "completed",
+        analysisVersion: "manual-entry-v1",
+        analyzedAt: null,
+        analysisError: null,
+        overallConfidence: 1,
+        manualVerifiedAt: null,
+        manualVerifiedBy: admin.email,
+        songs: songTitles.map((title, index) => ({ id: crypto.randomUUID(), order: index + 1, title, category: "opening", hymnNumber: null, startSeconds: null, endSeconds: null, confidence: 1, source: "manual", manuallyEdited: true, evidence: "관리자 직접 입력" })),
+        sermon: { title: String(body.sermonTitle ?? "").trim() || null, biblePassage: String(body.biblePassage ?? "").trim() || null, preacher: String(body.preacher ?? "").trim() || null, startSeconds: null, confidence: 1, manuallyEdited: true },
+        representativePrayer: { name: String(body.prayerName ?? "").trim() || null, role: String(body.prayerRole ?? "").trim() || null, startSeconds: null, confidence: 1, manuallyEdited: true },
+      };
+      await saveArchiveVideoAnalysis(id, manualContent, admin.email);
+      await syncArchiveVideoSongs(id, songTitles);
+    }
     await recordArchiveAudit({ actor: admin.email, action: body.id ? "video.update" : "video.create", targetType: "archive_video", targetId: id, summary: `${String(body.title ?? "영상")} ${body.id ? "수정" : "등록"}`, details: { type: String(body.type), serviceType: String(body.serviceType ?? "") } });
     return Response.json({ ok: true, id }, { status: 201 });
   } catch (error) {

@@ -8,14 +8,15 @@ import { ArchiveShell } from "@/app/archive/ArchiveShell";
 
 type Props = { userName: string; userEmail: string; signOutPath: string; mode?: "manage" | "new" };
 type AccessMember = { id: string; name: string; username: string; status: string; accessLevel: ArchiveAccessLevel };
-type FormState = { id: string; type: "worship" | "attendance"; date: string; serviceType: string; title: string; preacher: string; youtubeUrl: string; thumbnailUrl: string; durationSeconds: string; note: string };
+type FormState = { id: string; type: "worship" | "attendance"; date: string; serviceType: string; title: string; preacher: string; youtubeUrl: string; thumbnailUrl: string; durationSeconds: string; note: string; songsText: string; sermonTitle: string; biblePassage: string; prayerName: string; prayerRole: string };
 type Notice = { message: string; tone: "success" | "error" } | null;
 type VideoTypeFilter = "" | "worship" | "attendance";
 type ServiceFilter = "" | "sunday" | "other";
 type Settings = { recentCount: 4 | 8 | 12; defaultSort: "newest" | "oldest"; defaultServiceType: string; defaultPreacher: string; autoInspectYoutube: boolean; afterSave: "list" | "continue" };
 type SystemStatus = { database: string; youtubeApi: boolean; total: number; worship: number; attendance: number; latest: string };
+type SongSuggestion = { id: string; displayTitle: string; aliases: string[]; usageCount: number };
 
-const emptyForm: FormState = { id: "", type: "worship", date: "", serviceType: "주일 2부 예배", title: "", preacher: "담임목사", youtubeUrl: "", thumbnailUrl: "", durationSeconds: "", note: "" };
+const emptyForm: FormState = { id: "", type: "worship", date: "", serviceType: "주일 2부 예배", title: "", preacher: "담임목사", youtubeUrl: "", thumbnailUrl: "", durationSeconds: "", note: "", songsText: "", sermonTitle: "", biblePassage: "", prayerName: "", prayerRole: "" };
 const accessLabels: Record<ArchiveAccessLevel, string> = { none: "권한 없음", worship: "예배 영상", full: "전체 기록" };
 
 export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = "manage" }: Props) {
@@ -39,6 +40,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   const [settings, setSettings] = useState<Settings>({ recentCount: 4, defaultSort: "newest", defaultServiceType: "주일 2부 예배", defaultPreacher: "담임목사", autoInspectYoutube: true, afterSave: "list" });
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [songSuggestions, setSongSuggestions] = useState<SongSuggestion[]>([]);
 
   const loadVideos = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), sort });
@@ -59,10 +61,14 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
     setMembers(data.members ?? []);
   }, []);
 
-  useEffect(() => { if (mode === "manage") void loadVideos(); }, [loadVideos, mode]);
-  useEffect(() => { if (tab === "access") void loadMembers(); }, [loadMembers, tab]);
+  useEffect(() => { if (mode !== "manage") return; const timer = setTimeout(() => void loadVideos(), 0); return () => clearTimeout(timer); }, [loadVideos, mode]);
+  useEffect(() => { if (tab !== "access") return; const timer = setTimeout(() => void loadMembers(), 0); return () => clearTimeout(timer); }, [loadMembers, tab]);
   useEffect(() => { if (tab !== "settings" && mode !== "new") return; fetch("/api/archive/settings?admin=1", { cache: "no-store" }).then((response) => response.json()).then((data) => { if (data.settings) { setSettings(data.settings); setForm((current) => current.id || current.youtubeUrl || current.title ? current : { ...current, serviceType: data.settings.defaultServiceType, preacher: data.settings.defaultPreacher }); } if (data.status) setSystemStatus(data.status); }).catch(() => setNotice({ message: "운영 설정을 불러오지 못했습니다.", tone: "error" })); }, [mode, tab]);
-  useEffect(() => { setTab(requestedTab === "access" || requestedTab === "settings" ? requestedTab : "videos"); }, [requestedTab]);
+  useEffect(() => {
+    const currentLine = form.songsText.split(/\r?\n/).at(-1)?.trim() ?? "";
+    const timer = setTimeout(() => { if (currentLine.length < 1) { setSongSuggestions([]); return; } fetch(`/api/admin/archive/songs?q=${encodeURIComponent(currentLine)}&limit=6`, { cache: "no-store" }).then((response) => response.json()).then((data) => setSongSuggestions(data.songs ?? [])).catch(() => setSongSuggestions([])); }, currentLine.length < 1 ? 0 : 160);
+    return () => clearTimeout(timer);
+  }, [form.songsText]);
   useEffect(() => {
     if (mode === "new" || !form.id) return;
     const previousOverflow = document.body.style.overflow;
@@ -73,6 +79,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   }, [form.id, mode]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) { setForm((current) => ({ ...current, [key]: value })); }
+  function chooseSongSuggestion(title: string) { setForm((current) => { const lines = current.songsText.split(/\r?\n/); lines[lines.length - 1] = title; return { ...current, songsText: lines.join("\n") }; }); setSongSuggestions([]); }
 
   async function inspectYouTube() {
     if (!form.youtubeUrl.trim() || loadingYoutube) return;
@@ -80,9 +87,22 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
     setNotice(null);
     try {
       const response = await fetch(`/api/admin/archive/youtube?url=${encodeURIComponent(form.youtubeUrl)}`, { cache: "no-store" });
-      const data = await response.json() as Partial<FormState> & { durationSeconds?: number | null; error?: string };
+      const data = await response.json() as Partial<FormState> & { durationSeconds?: number | null; error?: string; descriptionFields?: { songs?: string[]; sermonTitle?: string; biblePassage?: string; prayerName?: string; prayerRole?: string } };
       if (!response.ok) throw new Error(data.error);
-      setForm((current) => ({ ...current, type: data.type === "attendance" ? "attendance" : "worship", date: data.date || current.date, serviceType: data.serviceType || current.serviceType, title: data.title || current.title, thumbnailUrl: data.thumbnailUrl || current.thumbnailUrl, durationSeconds: data.durationSeconds == null ? "" : String(data.durationSeconds) }));
+      setForm((current) => ({
+        ...current,
+        type: data.type === "attendance" ? "attendance" : "worship",
+        date: data.date || current.date,
+        serviceType: data.serviceType || current.serviceType,
+        title: data.title || current.title,
+        thumbnailUrl: data.thumbnailUrl || current.thumbnailUrl,
+        durationSeconds: data.durationSeconds == null ? current.durationSeconds : String(data.durationSeconds),
+        songsText: data.descriptionFields?.songs?.length ? data.descriptionFields.songs.join("\n") : current.songsText,
+        sermonTitle: data.descriptionFields?.sermonTitle || current.sermonTitle,
+        biblePassage: data.descriptionFields?.biblePassage || current.biblePassage,
+        prayerName: data.descriptionFields?.prayerName || current.prayerName,
+        prayerRole: data.descriptionFields?.prayerRole || current.prayerRole,
+      }));
       setNotice({ message: "유튜브 정보가 자동 입력되었습니다. 내용을 확인한 뒤 저장해 주세요.", tone: "success" });
     } catch (error) {
       setNotice({ message: error instanceof Error ? error.message : "유튜브 정보를 확인하지 못했습니다.", tone: "error" });
@@ -113,7 +133,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   }
 
   function edit(video: ArchiveVideoAdmin) {
-    setForm({ id: video.id, type: video.type, date: video.date, serviceType: video.serviceType, title: video.title, preacher: video.preacher, youtubeUrl: video.youtubeUrl, thumbnailUrl: video.thumbnailUrl, durationSeconds: video.durationSeconds == null ? "" : String(video.durationSeconds), note: video.note });
+    setForm({ id: video.id, type: video.type, date: video.date, serviceType: video.serviceType, title: video.title, preacher: video.preacher, youtubeUrl: video.youtubeUrl, thumbnailUrl: video.thumbnailUrl, durationSeconds: video.durationSeconds == null ? "" : String(video.durationSeconds), note: video.note, songsText: video.analysis?.songs.filter((song) => song.category !== "offertory").map((song) => song.title).join("\n") ?? "", sermonTitle: video.analysis?.sermon.title ?? "", biblePassage: video.analysis?.sermon.biblePassage ?? "", prayerName: video.analysis?.representativePrayer.name ?? "", prayerRole: video.analysis?.representativePrayer.role ?? "" });
   }
 
   async function remove(video: ArchiveVideoAdmin) {
@@ -163,6 +183,18 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   const serviceOptions = form.type === "attendance" ? ["주일예배", "수요예배", "특별예배"] : ["주일 1부 예배", "주일 2부 예배", "수요예배", "특별예배"];
   const totalPages = Math.max(1, Math.ceil(total / 10));
   const hasFilters = Boolean(search || typeFilter || serviceFilter || sort !== "newest");
+  const contentPanel = form.type === "worship" ? (
+    <section className="archive-content-editor">
+      <div className="archive-content-heading"><h3>예배 내용</h3><p>공개 화면에 표시할 내용을 직접 입력해 주세요.</p></div>
+      <label className="archive-songs-field"><span>찬양</span><textarea value={form.songsText} onChange={(event) => update("songsText", event.target.value)} rows={4} placeholder={"한 줄에 한 곡씩 입력해 주세요.\n예: 내 평생에 가는 길"} /><small>봉헌 찬양은 입력하지 않아도 됩니다. 기존 대표 제목이나 별칭을 입력하면 아래에 같은 곡이 표시됩니다.</small>{songSuggestions.length > 0 && <span className="archive-song-suggestions" role="listbox" aria-label="기존 찬양곡 자동완성">{songSuggestions.map((song) => <button type="button" role="option" aria-selected="false" key={song.id} onClick={() => chooseSongSuggestion(song.displayTitle)}><strong>{song.displayTitle}</strong><small>{song.aliases.join(" · ") || `${song.usageCount}회 사용`}</small></button>)}</span>}</label>
+      <div className="archive-content-grid">
+        <label><span>설교 제목</span><input value={form.sermonTitle} onChange={(event) => update("sermonTitle", event.target.value)} /></label>
+        <label><span>본문</span><input value={form.biblePassage} onChange={(event) => update("biblePassage", event.target.value)} placeholder="예: 마태복음 6:33" /></label>
+        <label><span>대표기도자</span><input value={form.prayerName} onChange={(event) => update("prayerName", event.target.value)} /></label>
+        <label><span>직분</span><input value={form.prayerRole} onChange={(event) => update("prayerRole", event.target.value)} placeholder="예: 집사" /></label>
+      </div>
+    </section>
+  ) : null;
 
   const videoForm = (variant: "page" | "drawer") => (
     <form className={`archive-admin-form archive-editor-form admin-card admin-form is-${variant}`} onSubmit={save}>
@@ -173,6 +205,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
       <label className="archive-youtube-field youtube-url-field"><span>유튜브 URL</span><div><input value={form.youtubeUrl} onChange={(event) => update("youtubeUrl", event.target.value)} onBlur={() => { if (settings.autoInspectYoutube) void inspectYouTube(); }} placeholder="https://www.youtube.com/watch?v=..." required /><button className="secondary-btn" type="button" onClick={() => void inspectYouTube()} disabled={loadingYoutube}>{loadingYoutube ? "확인 중" : "정보 불러오기"}</button></div><small>구분, 날짜, 예배 종류, 제목, 길이와 썸네일을 자동으로 확인합니다.</small></label>
       <div className="archive-editor-grid"><label><span>구분</span><select value={form.type} onChange={(event) => { const type = event.target.value as FormState["type"]; setForm((current) => ({ ...current, type, serviceType: type === "attendance" ? "주일예배" : "주일 2부 예배" })); }}><option value="worship">예배 전체 실황</option><option value="attendance">교인 출석 현황</option></select></label><label><span>날짜</span><input type="date" value={form.date} onChange={(event) => update("date", event.target.value)} required /></label><label><span>예배 종류</span><select value={form.serviceType} onChange={(event) => update("serviceType", event.target.value)}>{serviceOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label><span>설교자</span><select value={form.preacher} onChange={(event) => update("preacher", event.target.value)}><option>담임목사</option><option>초청강사</option></select></label></div>
       <label><span>영상 제목</span><input value={form.title} onChange={(event) => update("title", event.target.value)} required /></label>
+      {contentPanel}
       <details key={form.id || "new"} className="archive-advanced-fields" open={Boolean(form.id)}><summary>고급 설정 <small>자동 입력값과 비고</small></summary><div className="archive-advanced-grid"><label><span>영상 길이(초)</span><input type="number" min="0" value={form.durationSeconds} onChange={(event) => update("durationSeconds", event.target.value)} placeholder="자동 입력" /></label><label><span>썸네일 URL</span><input value={form.thumbnailUrl} onChange={(event) => update("thumbnailUrl", event.target.value)} placeholder="자동 입력" /></label><label className="archive-note-field"><span>비고</span><textarea value={form.note} onChange={(event) => update("note", event.target.value)} rows={2} /></label></div></details>
       <div className="archive-admin-form-actions button-row">{form.id && <button className="secondary-btn" type="button" onClick={() => setForm(emptyForm)}>수정 취소</button>}<button className="primary-btn" type="submit" disabled={saving}>{saving ? "저장 중" : form.id ? "수정 저장" : "영상 등록"}</button></div>
     </form>
@@ -186,9 +219,9 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
         {notice && <div className={`toast-message is-${notice.tone}`} role="status" aria-live="polite"><span>{notice.message}</span><button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">×</button></div>}
         {mode === "new" ? <div className="archive-form-page">{videoForm("page")}</div> : tab === "videos" ? <>
           <section className="admin-card archive-video-list">
-            <div className="archive-list-head"><div className="admin-list-heading"><h2>등록된 영상</h2><span>총 {total}개</span></div><form className="archive-list-search" onSubmit={applySearch}><label><span className="sr-only">영상 검색</span><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="제목·날짜·설교자 검색" /></label><button className="secondary-btn" type="submit">검색</button></form></div>
+            <div className="archive-list-head"><div className="admin-list-heading"><h2>등록된 영상</h2><span>총 {total}개</span></div><form className="archive-list-search" onSubmit={applySearch}><label><span className="sr-only">영상 검색</span><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="제목·날짜·설교·찬양 검색" /></label><button className="secondary-btn" type="submit">검색</button></form></div>
             <div className="archive-list-filters"><label><span>구분</span><select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value as VideoTypeFilter); setPage(1); }}><option value="">전체 구분</option><option value="worship">예배 실황</option><option value="attendance">출석 기록</option></select></label><label><span>예배 분류</span><select value={serviceFilter} onChange={(event) => { setServiceFilter(event.target.value as ServiceFilter); setPage(1); }}><option value="">전체 예배</option><option value="sunday">주일예배</option><option value="other">기타예배</option></select></label><label><span>정렬</span><select value={sort} onChange={(event) => { setSort(event.target.value as "newest" | "oldest"); setPage(1); }}><option value="newest">최신순</option><option value="oldest">오래된순</option></select></label>{hasFilters && <button className="archive-filter-reset" type="button" onClick={resetFilters}>초기화</button>}</div>
-            <div className="table-wrap"><table className="admin-table"><thead><tr><th>날짜</th><th>구분</th><th>제목</th><th>예배 종류</th><th>길이</th><th>관리</th></tr></thead><tbody>{videos.map((video) => <tr key={video.id}><td>{video.date}</td><td>{video.type === "attendance" ? "출석 기록" : "예배 실황"}</td><td><strong>{video.title}</strong></td><td>{video.serviceType}</td><td>{formatArchiveDuration(video.durationSeconds)}</td><td><div className="admin-row-actions"><button className="small-btn" type="button" onClick={() => edit(video)}>수정</button><button className="danger-btn" type="button" onClick={() => void remove(video)}>삭제</button></div></td></tr>)}</tbody></table>{videos.length === 0 && <div className="archive-list-empty">조건에 맞는 영상이 없습니다.</div>}</div>
+            <div className="table-wrap"><table className="admin-table archive-video-table"><thead><tr><th>날짜</th><th>구분</th><th>제목</th><th>예배 종류</th><th>길이</th><th>관리</th></tr></thead><tbody>{videos.map((video) => <tr key={video.id}><td>{video.date}</td><td>{video.type === "attendance" ? "출석 기록" : "예배 실황"}</td><td><strong>{video.title}</strong></td><td>{video.serviceType}</td><td>{formatArchiveDuration(video.durationSeconds)}</td><td><div className="admin-row-actions"><button className="small-btn" type="button" onClick={() => edit(video)}>수정</button><button className="danger-btn" type="button" onClick={() => void remove(video)}>삭제</button></div></td></tr>)}</tbody></table>{videos.length === 0 && <div className="archive-list-empty">조건에 맞는 영상이 없습니다.</div>}</div>
             <footer className="archive-admin-pagination pager"><span>{total ? `${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} / 총 ${total}개` : "총 0개"}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>이전</button><b>{page} / {totalPages}페이지</b><button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>다음</button></div></footer>
           </section>
           {form.id && <div className="archive-edit-layer"><button className="archive-edit-backdrop" type="button" aria-label="영상 수정 닫기" onClick={() => setForm(emptyForm)} /><aside className="archive-edit-drawer" role="dialog" aria-modal="true" aria-label="영상 수정">{videoForm("drawer")}</aside></div>}

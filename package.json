@@ -14,11 +14,13 @@
     "test": "node scripts/run-tests.mjs",
     "validate:artifact": "test -f dist/server/index.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "db:backfill:songs": "node scripts/backfill-archive-songs.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "drizzle-orm": "0.45.2",
+    "exceljs": "^4.4.0",
     "heic2any": "^0.0.4",
     "next": "16.2.6",
     "nitro": "^3.0.260610-beta",

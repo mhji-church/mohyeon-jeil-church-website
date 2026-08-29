@@ -100,6 +100,35 @@ test("uses one responsive admin layout for every content section", () => {
   assert.match(archiveStyles, /\.archive-original-root \.archive-youtube-field \.secondary-btn/);
   assert.match(archiveStyles, /\.archive-original-root \.archive-admin-form-actions \.primary-btn/);
   assert.match(archiveStyles, /\.archive-original-root \.archive-admin-pagination\s*\{[^}]*background: var\(--surface-soft\)/);
+  assert.match(archiveStyles, /\.archive-original-root \.archive-video-table \.admin-row-actions\s*\{[^}]*grid-template-columns: repeat\(2/);
+  assert.match(archiveStyles, /\.archive-original-root \.archive-content-editor\s*\{/);
+  assert.match(archive, /예배 내용/);
+  assert.match(archive, /한 줄에 한 곡씩 입력해 주세요/);
+  assert.doesNotMatch(archive, /무료 영상 분석|예배 영상 자동 분석|youtube-oauth/);
+});
+
+test("archive worship contents are saved from direct admin input without time offsets", () => {
+  const archive = readSource("../app/admin/archive/ArchiveAdmin.tsx");
+  const route = readSource("../app/api/admin/archive/videos/route.ts");
+  const portal = readSource("../app/archive/ArchivePortal.tsx");
+  const styles = readSource("../app/archive/archive-original.css");
+
+  assert.match(archive, /songsText/);
+  assert.match(archive, /sermonTitle/);
+  assert.match(archive, /biblePassage/);
+  assert.match(archive, /prayerName/);
+  assert.match(route, /manual-entry-v1/);
+  assert.match(route, /startSeconds: null/);
+  assert.doesNotMatch(route, /queueArchiveVideoAnalysis|processNextArchiveAnalysisJob/);
+  assert.match(portal, /viewer-song-number/);
+  assert.match(portal, /sermonTitleStyle/);
+  assert.match(portal, /viewer-sermon-title/);
+  assert.ok(portal.includes("{index + 1}."));
+  assert.match(portal, /<p>설교 · \{video\.preacher \|\| "모현제일교회"\}<\/p>/);
+  assert.match(portal, /<h1>\{featured\.title\}<\/h1>/);
+  assert.doesNotMatch(portal, /찬양 \$\{publicSongs|sermonSummary/);
+  assert.match(styles, /\.viewer-song-number\s*\{/);
+  assert.match(styles, /\.viewer-sermon-title\s*\{[^}]*white-space: nowrap/);
 });
 
 test("archive admin list API forwards management filters", () => {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createClient } from "@libsql/client";
+import ExcelJS from "exceljs";
 import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 import fs from "node:fs";
@@ -21,7 +22,9 @@ const TEST_YOUTUBE_IDS = {
 let baseUrl;
 let databasePath;
 let server;
-let serverOutput = "";
+let serverStdout = "";
+let serverStderr = "";
+let serverCommand = "";
 let adminCookie;
 let websiteAdminCookie;
 const memberIds = {};
@@ -45,16 +48,30 @@ function memberCookie(memberId) {
 }
 
 async function waitForServer() {
-  const deadline = Date.now() + 30_000;
+  const readinessPaths = ["/api/archive/videos", "/archive"];
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    if (server.exitCode != null) throw new Error(`Vite exited before startup.\n${serverOutput.slice(-2000)}`);
+    if (server.exitCode != null) throw new Error(serverFailure("Vite exited before startup."));
     try {
-      const response = await fetch(`${baseUrl}/api/archive/videos`);
-      if (response.ok) return;
+      const responses = await Promise.all(readinessPaths.map((pathname) =>
+        fetch(`${baseUrl}${pathname}`, { signal: AbortSignal.timeout(5_000) })
+      ));
+      if (responses.every((response) => response.ok)) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`Timed out waiting for Vite.\n${serverOutput.slice(-2000)}`);
+  throw new Error(serverFailure("Timed out waiting for Vite."));
+}
+
+function serverFailure(message) {
+  return [
+    message,
+    `Command: ${serverCommand}`,
+    `Readiness URLs: ${baseUrl}/api/archive/videos, ${baseUrl}/archive`,
+    `Exit code: ${server?.exitCode ?? "running"}`,
+    `stdout:\n${serverStdout.slice(-4000) || "(empty)"}`,
+    `stderr:\n${serverStderr.slice(-4000) || "(empty)"}`,
+  ].join("\n");
 }
 
 async function request(pathname, options = {}) {
@@ -68,8 +85,10 @@ before(async () => {
   databasePath = path.join(tempDirectory, "preview.sqlite");
   const databaseUrl = `file:${databasePath.replaceAll("\\", "/")}`;
   const vitePath = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
-  server = spawn(process.execPath, [vitePath, "--host", "127.0.0.1", "--port", String(port)], {
-    cwd: new URL("..", import.meta.url),
+  const serverArgs = [vitePath, "--host", "127.0.0.1", "--port", String(port), "--strictPort", "--configLoader", "runner"];
+  serverCommand = [process.execPath, ...serverArgs].map((part) => JSON.stringify(part)).join(" ");
+  server = spawn(process.execPath, serverArgs, {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
     env: {
       ...process.env,
       NODE_ENV: "development",
@@ -86,8 +105,8 @@ before(async () => {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });
-  server.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
+  server.stdout.on("data", (chunk) => { serverStdout += chunk.toString(); });
+  server.stderr.on("data", (chunk) => { serverStderr += chunk.toString(); });
   await waitForServer();
 
   const login = await request("/api/admin/session", {
@@ -173,10 +192,17 @@ before(async () => {
 after(async () => {
   if (server && server.exitCode == null) {
     server.kill();
-    await Promise.race([
-      new Promise((resolve) => server.once("exit", resolve)),
-      new Promise((resolve) => setTimeout(resolve, 3000)),
+    const stopped = await Promise.race([
+      new Promise((resolve) => server.once("exit", () => resolve(true))),
+      new Promise((resolve) => setTimeout(() => resolve(false), 3000)),
     ]);
+    if (!stopped && server.exitCode == null) {
+      server.kill("SIGKILL");
+      await Promise.race([
+        new Promise((resolve) => server.once("exit", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    }
   }
   if (databasePath) {
     try {
@@ -304,6 +330,161 @@ test("archive administration requires auth and local CRUD rejects unsafe input",
   assert.equal((await request("/api/admin/archive/videos/admin-test-video", { method: "DELETE", headers: { cookie: adminCookie } })).status, 200);
   const afterDelete = await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } });
   assert.equal((await afterDelete.json()).videos.some((video) => video.id === "admin-test-video"), false);
+});
+
+test("archive stores directly entered worship contents and expands search", async () => {
+  const create = await request("/api/admin/archive/videos", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({
+      id: "analysis-fixture-video",
+      type: "worship",
+      date: "2026-05-31",
+      serviceType: "주일 1부 예배",
+      title: "2026년 5월 31일 주일 1부 예배",
+      preacher: "담임목사",
+      youtubeUrl: "https://youtu.be/QzMhKdz1Duo",
+      durationSeconds: 4200,
+      songsText: ["내 모든 시험 무거운 짐을", "넘지 못할 산이 있거든", "먼저 그 나라와 그의 의를 구하라"].join("\n"),
+      sermonTitle: "하나님의 나라를 먼저 구하라",
+      biblePassage: "마태복음 6:33",
+      prayerName: "김믿음",
+      prayerRole: "집사",
+    }),
+  });
+  assert.equal(create.status, 201);
+
+  const adminList = await request("/api/admin/archive/videos?search=하나님의%20나라", { headers: { cookie: adminCookie } });
+  assert.equal(adminList.status, 200);
+  const stored = (await adminList.json()).videos.find((video) => video.id === "analysis-fixture-video");
+  assert.equal(stored.analysis.status, "completed");
+  assert.deepEqual(stored.analysis.songs.map((song) => song.title), [
+    "내 모든 시험 무거운 짐을",
+    "넘지 못할 산이 있거든",
+    "먼저 그 나라와 그의 의를 구하라",
+  ]);
+  assert.equal(stored.analysis.songs.some((song) => /나 주님의 기쁨/.test(song.title)), false);
+  assert.equal(stored.analysis.sermon.biblePassage, "마태복음 6:33");
+  assert.equal(stored.analysis.representativePrayer.name, "김믿음");
+
+  const publicSearch = await request("/api/archive/videos?q=넘지%20못할");
+  assert.equal(publicSearch.status, 200);
+  const publicVideo = (await publicSearch.json()).videos.find((video) => video.id === "analysis-fixture-video");
+  assert.equal(publicVideo.analysis.songs.length, 3);
+});
+
+test("song statistics, history, administration, and Excel export share archive access rules", async () => {
+  assert.equal((await request("/api/archive/songs/stats")).status, 403);
+  assert.equal((await request("/api/archive/songs/stats", { headers: { cookie: memberCookie(memberIds["pending-user"]) } })).status, 403);
+
+  const statsResponse = await request("/api/archive/songs/stats?service=sunday1&period=all&limit=20", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+  assert.equal(statsResponse.status, 200);
+  assert.match(statsResponse.headers.get("cache-control") ?? "", /no-store/);
+  const stats = await statsResponse.json();
+  assert.equal(stats.summary.worshipCount, 1);
+  assert.equal(stats.summary.songCount, 3);
+  assert.equal(stats.summary.usageCount, 3);
+  const song = stats.rankings.find((item) => item.displayTitle === "넘지 못할 산이 있거든");
+  assert.ok(song);
+  assert.equal(song.sunday1Count, 1);
+
+  const history = await request(`/api/archive/songs/${encodeURIComponent(song.id)}/history?service=sunday1&period=all`, { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+  assert.equal(history.status, 200);
+  const historyBody = await history.json();
+  assert.equal(historyBody.history[0].videoId, "analysis-fixture-video");
+
+  assert.equal((await request("/api/admin/archive/songs", { headers: { cookie: websiteAdminCookie } })).status, 403);
+  const catalogResponse = await request("/api/admin/archive/songs?q=넘지", { headers: { cookie: adminCookie } });
+  assert.equal(catalogResponse.status, 200);
+  const catalog = await catalogResponse.json();
+  assert.equal(catalog.songs.length, 1);
+  assert.equal(catalog.songs[0].usageCount, 1);
+  assert.ok(Array.isArray(catalog.conflicts));
+
+  const excel = await request("/api/archive/songs/export?service=sunday1&period=all&limit=20", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+  assert.equal(excel.status, 200);
+  assert.match(excel.headers.get("content-type") ?? "", /spreadsheetml/);
+  assert.match(excel.headers.get("content-disposition") ?? "", /%EC%B0%AC%EC%96%91%ED%86%B5%EA%B3%84/);
+  const bytes = new Uint8Array(await excel.arrayBuffer());
+  assert.deepEqual(Array.from(bytes.slice(0, 2)), [0x50, 0x4b]);
+  assert.ok(bytes.length > 5000);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(bytes));
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ["찬양 순위", "사용 이력"]);
+  const rankingSheet = workbook.getWorksheet("찬양 순위");
+  const historySheet = workbook.getWorksheet("사용 이력");
+  assert.ok(rankingSheet.getColumn("B").values.includes("넘지 못할 산이 있거든"));
+  assert.equal(typeof rankingSheet.getCell("E2").value, "number");
+  assert.ok(rankingSheet.getCell("I2").value instanceof Date);
+  assert.equal(historySheet.getCell("F2").value.toString().startsWith("https://mhji.kr/archive/"), true);
+});
+
+test("representative titles, aliases, service filters, conflicts, ordering, and deletion remain consistent", async () => {
+  const videos = [
+    { id: "alias-sunday2", youtubeUrl: "https://youtu.be/ALIASVID001", date: "2026-06-07", serviceType: "주일 2부 예배", songsText: "부흥(이 땅의 황무함을 보소서)\n부흥\n이 땅의 황무함을 보소서" },
+    { id: "alias-sunday1", youtubeUrl: "https://youtu.be/ALIASVID002", date: "2026-06-07", serviceType: "주일 1부 예배", songsText: "부흥" },
+    { id: "alias-wednesday", youtubeUrl: "https://youtu.be/ALIASVID003", date: "2026-06-10", serviceType: "수요예배", songsText: "이 땅의 황무함을 보소서" },
+  ];
+  for (const video of videos) {
+    const response = await request("/api/admin/archive/videos", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({ ...video, type: "worship", title: `${video.id} 예배`, preacher: "담임목사" }),
+    });
+    assert.equal(response.status, 201);
+  }
+
+  for (const query of ["부흥", "이 땅의 황무함을 보소서", "부흥(이 땅의 황무함을 보소서)"]) {
+    const response = await request(`/api/admin/archive/songs?q=${encodeURIComponent(query)}`, { headers: { cookie: adminCookie } });
+    assert.equal(response.status, 200);
+    const matches = (await response.json()).songs.filter((item) => item.displayTitle === "부흥(이 땅의 황무함을 보소서)");
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].usageCount, 3);
+  }
+
+  const allStats = await request("/api/archive/songs/stats?service=all&period=year&year=2026&limit=100&q=%EB%B6%80%ED%9D%A5", { headers: { cookie: memberCookie(memberIds["full-user"]) } });
+  assert.equal(allStats.status, 200);
+  const consolidated = (await allStats.json()).rankings[0];
+  assert.equal(consolidated.totalCount, 3);
+  assert.equal(consolidated.sunday1Count, 1);
+  assert.equal(consolidated.sunday2Count, 1);
+  assert.equal(consolidated.wednesdayCount, 1);
+  assert.equal(consolidated.lastUsed, "2026-06-10");
+
+  for (const [service, expected] of [["sunday1", 1], ["sunday2", 1], ["wednesday", 1]]) {
+    const response = await request(`/api/archive/songs/stats?service=${service}&period=custom&start=2026-06-07&end=2026-06-10&limit=10&q=%EB%B6%80%ED%9D%A5`, { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).rankings[0].totalCount, expected);
+  }
+  assert.equal((await request("/api/archive/songs/stats?service=invalid", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 400);
+  assert.equal((await request("/api/archive/songs/stats?period=custom&start=2026-99-99", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 400);
+  assert.equal((await request("/api/archive/songs/stats?limit=37", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 400);
+
+  const reorder = await request("/api/admin/archive/videos", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({ ...videos[0], type: "worship", title: "순서 수정 예배", preacher: "담임목사", songsText: "내 평생에 가는 길\n부흥" }),
+  });
+  assert.equal(reorder.status, 201);
+  const catalog = await request("/api/admin/archive/songs?q=%EB%B6%80%ED%9D%A5", { headers: { cookie: adminCookie } });
+  const songId = (await catalog.json()).songs[0].id;
+  const history = await request(`/api/archive/songs/${songId}/history?service=sunday2&period=all&limit=50`, { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+  assert.equal((await history.json()).history.find((item) => item.videoId === "alias-sunday2").order, 2);
+
+  const collision = await request("/api/admin/archive/videos", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({ id: "alias-collision", type: "worship", youtubeUrl: "https://youtu.be/ALIASVID004", date: "2026-06-14", serviceType: "주일 2부 예배", title: "충돌 예배", songsText: "새 곡(이 땅의 황무함을 보소서)" }),
+  });
+  assert.equal(collision.status, 201);
+  const collisionCatalog = await request("/api/admin/archive/songs?q=%EC%83%88%20%EA%B3%A1", { headers: { cookie: adminCookie } });
+  const collisionBody = await collisionCatalog.json();
+  assert.equal(collisionBody.songs[0].displayTitle, "새 곡(이 땅의 황무함을 보소서)");
+  assert.ok(collisionBody.conflicts.some((item) => item.inputTitle === "새 곡(이 땅의 황무함을 보소서)"));
+
+  assert.equal((await request("/api/admin/archive/videos/alias-collision", { method: "DELETE", headers: { cookie: adminCookie } })).status, 200);
+  const afterDelete = await request("/api/admin/archive/songs?q=%EC%83%88%20%EA%B3%A1", { headers: { cookie: adminCookie } });
+  assert.equal((await afterDelete.json()).songs[0].usageCount, 0);
 });
 
 test("deleting a member also removes archive access rows", async () => {

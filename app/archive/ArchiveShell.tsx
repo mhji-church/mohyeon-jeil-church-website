@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export type ArchiveTheme = "system" | "light" | "dark";
-export type ArchiveNavKey = "home" | "sunday" | "other" | "attendance" | "videos" | "members" | "activity" | "settings";
-type IconName = "home" | "video" | "calendar" | "clipboard" | "sun" | "moon" | "monitor" | "check" | "user" | "external" | "activity" | "settings" | "search" | "play" | "lock";
+export type ArchiveNavKey = "home" | "sunday" | "other" | "songs" | "attendance" | "videos" | "members" | "activity" | "settings";
+type IconName = "home" | "video" | "calendar" | "music" | "clipboard" | "sun" | "moon" | "monitor" | "check" | "user" | "external" | "activity" | "settings" | "search" | "play" | "lock";
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></>,
   video: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3Z"/></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>,
+  music: <><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></>,
   clipboard: <><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></>,
   sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></>,
   moon: <path d="M20 15.2A8.5 8.5 0 1 1 8.8 4 7 7 0 0 0 20 15.2Z"/>,
@@ -31,11 +32,11 @@ export function ArchiveIcon({ name, size = 20, className }: { name: IconName; si
 
 const publicNav = [
   ["home", "홈", "/archive", "home"], ["sunday", "주일예배", "/archive/sunday", "video"],
-  ["other", "기타예배", "/archive/other", "calendar"], ["attendance", "출석 기록", "/archive/attendance", "clipboard"],
+  ["other", "기타예배", "/archive/other", "calendar"], ["songs", "찬양 통계", "/archive/songs", "music"], ["attendance", "출석 기록", "/archive/attendance", "clipboard"],
 ] as const;
 const adminNav = [
   ["videos", "영상 관리", "/archive/admin", "video"], ["members", "회원 관리", "/archive/admin?tab=access", "user"],
-  ["activity", "활동 기록", "/archive/admin/activity", "activity"], ["settings", "설정", "/archive/admin?tab=settings", "settings"],
+  ["songs", "찬양곡 관리", "/archive/admin/songs", "music"], ["activity", "활동 기록", "/archive/admin/activity", "activity"], ["settings", "설정", "/archive/admin?tab=settings", "settings"],
 ] as const;
 
 function ArchiveBrand({ admin = false }: { admin?: boolean }) {
@@ -53,7 +54,7 @@ function ThemePicker() {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  useEffect(() => { const saved = localStorage.getItem("mhji-archive-theme") as ArchiveTheme | null; if (["system", "light", "dark"].includes(saved ?? "")) setPreference(saved!); }, []);
+  useEffect(() => { const saved = localStorage.getItem("mhji-archive-theme") as ArchiveTheme | null; if (!["system", "light", "dark"].includes(saved ?? "")) return; const timer = setTimeout(() => setPreference(saved!), 0); return () => clearTimeout(timer); }, []);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const apply = () => { const next = preference === "system" ? (media.matches ? "dark" : "light") : preference; setResolved(next); document.querySelectorAll<HTMLElement>(".archive-original-root").forEach((element) => { element.dataset.theme = next; }); localStorage.setItem("mhji-archive-theme", preference); };

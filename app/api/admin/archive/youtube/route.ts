@@ -1,5 +1,6 @@
 import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
 import { extractYouTubeId } from "@/lib/archive";
+import { parseYouTubeDescription } from "@/lib/archive-song-parser";
 
 function parseIsoDuration(value: string) {
   const match = value.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
@@ -30,16 +31,18 @@ export async function GET(request: Request) {
   if (!apiKey) return Response.json({ error: "Netlify에 YOUTUBE_API_KEY 설정이 필요합니다." }, { status: 503 });
   const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${encodeURIComponent(apiKey)}`, { cache: "no-store" });
   if (!response.ok) return Response.json({ error: "유튜브 영상 정보를 확인하지 못했습니다." }, { status: 502 });
-  const data = await response.json() as { items?: Array<{ snippet?: { title?: string; thumbnails?: Record<string, { url?: string }> }; contentDetails?: { duration?: string } }> };
+  const data = await response.json() as { items?: Array<{ snippet?: { title?: string; description?: string; thumbnails?: Record<string, { url?: string }> }; contentDetails?: { duration?: string } }> };
   const item = data.items?.[0];
   if (!item?.snippet?.title) return Response.json({ error: "유튜브 영상을 찾을 수 없습니다." }, { status: 404 });
   const title = item.snippet.title;
   const classified = classifyTitle(title);
+  const descriptionFields = parseYouTubeDescription(item.snippet.description ?? "");
   return Response.json({
     videoId,
     title,
     ...classified,
     durationSeconds: item.contentDetails?.duration ? parseIsoDuration(item.contentDetails.duration) : null,
     thumbnailUrl: item.snippet.thumbnails?.maxres?.url || item.snippet.thumbnails?.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    descriptionFields,
   });
 }
