@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
 import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
+import AccessibleDialog from "../components/AccessibleDialog";
 
 const GALLERY_PAGE_SIZE = 6;
 
@@ -18,14 +19,16 @@ function getPageNumbers(currentPage: number, totalPages: number) {
 
 export default function GalleryBoard({
   albums,
-  isMember,
+  memberAccess,
   modalAlbums,
   initialAlbumId,
+  initialApprovalRequired,
 }: {
   albums: GalleryListItem[];
-  isMember: boolean;
+  memberAccess: "guest" | "pending" | "approved";
   modalAlbums: GalleryModalAlbum[];
   initialAlbumId: string;
+  initialApprovalRequired: boolean;
 }) {
   const boardRef = useRef<HTMLElement>(null);
   const previousPageRef = useRef(1);
@@ -33,6 +36,10 @@ export default function GalleryBoard({
   const [viewer, setViewer] = useState<GalleryModalAlbum | null>(
     modalAlbums.find((item) => item.id === initialAlbumId) ?? null,
   );
+  const [approvalOpen, setApprovalOpen] = useState(
+    memberAccess === "pending" && (initialApprovalRequired || Boolean(initialAlbumId)),
+  );
+  const isMember = memberAccess === "approved";
   const totalPages = Math.max(1, Math.ceil(albums.length / GALLERY_PAGE_SIZE));
   const pageAlbums = useMemo(
     () => albums.slice((page - 1) * GALLERY_PAGE_SIZE, page * GALLERY_PAGE_SIZE),
@@ -77,7 +84,9 @@ export default function GalleryBoard({
             <h2>교회 앨범</h2>
             {!isMember ? (
               <span className="gallery-login-notice">
-                로그인 후 앨범을 보실 수 있습니다.
+                {memberAccess === "pending"
+                  ? "회원가입 신청이 완료됐습니다. 갤러리는 관리자 승인 후 볼 수 있습니다."
+                  : "로그인 후 앨범을 보실 수 있습니다."}
               </span>
             ) : null}
           </div>
@@ -119,10 +128,20 @@ export default function GalleryBoard({
               >
                 {cardContent}
               </button>
+            ) : memberAccess === "pending" ? (
+              <button
+                className="gallery-album-card"
+                type="button"
+                onClick={() => setApprovalOpen(true)}
+                key={album.id}
+                aria-label={`${album.title} 앨범 승인 안내 보기`}
+              >
+                {cardContent}
+              </button>
             ) : (
               <Link
                 className="gallery-album-card"
-                href={`/member/login?returnTo=${encodeURIComponent(`/gallery?album=${album.id}`)}`}
+                href={`/member/login?return_to=${encodeURIComponent(`/gallery?album=${album.id}`)}`}
                 key={album.id}
                 aria-label={`${album.title} 앨범을 보기 위해 로그인`}
               >
@@ -166,6 +185,30 @@ export default function GalleryBoard({
       {viewer ? (
         <GalleryViewer key={viewer.id} album={viewer} onClose={closeViewer} />
       ) : null}
+      <AccessibleDialog
+        open={approvalOpen}
+        onClose={() => setApprovalOpen(false)}
+        labelledBy="gallery-approval-title"
+        describedBy="gallery-approval-description"
+        className="member-guide-dialog gallery-approval-dialog"
+      >
+        <button
+          className="member-dialog-close"
+          type="button"
+          onClick={() => setApprovalOpen(false)}
+          aria-label="승인 안내 닫기"
+        >
+          ×
+        </button>
+        <span>MEMBER APPROVAL</span>
+        <h2 id="gallery-approval-title">관리자 승인 후 볼 수 있습니다</h2>
+        <p id="gallery-approval-description">
+          회원가입 신청은 정상적으로 접수됐습니다. 관리자가 교인 확인을 마치면 갤러리와 회원 전용 콘텐츠를 이용할 수 있습니다.
+        </p>
+        <button data-dialog-autofocus type="button" onClick={() => setApprovalOpen(false)}>
+          확인
+        </button>
+      </AccessibleDialog>
     </section>
   );
 }

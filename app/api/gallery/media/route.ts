@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     getMemberSession(),
     getAdminSession(),
   ]);
-  if (!member && !admin) return new Response("Not found", { status: 404 });
+  if (member?.status !== "approved" && !admin) return new Response("Not found", { status: 404 });
 
   const url = new URL(request.url);
   const postId = url.searchParams.get("post_id") ?? "";

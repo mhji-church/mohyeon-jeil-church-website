@@ -9,7 +9,7 @@ export async function getArchiveWorshipViewer(): Promise<ArchiveViewer | null> {
   const admin = await getArchiveAdminSession();
   if (admin) return { kind: "admin", id: admin.username, name: "예배 아카이브 관리자", level: "full" };
   const member = await getMemberSession();
-  if (!member || member.forcePasswordChange) return null;
+  if (!member || member.status !== "approved" || member.forcePasswordChange) return null;
   const level = await getArchiveAccess(member.id);
   if (level !== "worship" && level !== "full") return null;
   return { kind: "member", id: member.id, name: member.name, level };

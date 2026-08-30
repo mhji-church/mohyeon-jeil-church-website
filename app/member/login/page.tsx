@@ -23,8 +23,8 @@ export default async function MemberLoginPage({
           <span>CHURCH MEMBER</span>
           <h1>교인 로그인</h1>
           <p>
-            승인된 모현제일교회 교인 계정으로 로그인해 주세요.
-            가입 승인 전에는 로그인할 수 없습니다.
+            회원가입 신청 때 입력한 이름과 비밀번호로 로그인해 주세요.
+            갤러리와 예배 아카이브는 관리자 승인 후 이용할 수 있습니다.
           </p>
         </section>
         <section className="member-auth-card member-login-card">

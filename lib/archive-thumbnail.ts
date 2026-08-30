@@ -28,7 +28,7 @@ export async function serveArchiveThumbnail(id: string, cookieHeader: string | n
   const video = await getArchiveVideo(id);
   if (!video) return new Response(null, { status: 404 });
   const member = await getMemberSessionFromToken(cookieValue(cookieHeader, "mhji_member_session"));
-  const level = member ? await getArchiveAccess(member.id) : "none";
+  const level = member?.status === "approved" ? await getArchiveAccess(member.id) : "none";
   if (video.type === "attendance" && !canPlayArchiveVideo(level, video.type)) return placeholder();
 
   const source = getSafeArchiveThumbnailUrl(video.thumbnailUrl, video.youtubeId);
@@ -38,11 +38,11 @@ export async function serveArchiveThumbnail(id: string, cookieHeader: string | n
     return new Response(response.body, {
       headers: {
         "Content-Type": response.headers.get("content-type") || "image/jpeg",
-        "Cache-Control": member ? "private, max-age=300" : "public, max-age=300",
+        "Cache-Control": member?.status === "approved" ? "private, max-age=300" : "public, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {
-    return placeholder(member ? "private, max-age=300" : "public, max-age=300", NEUTRAL_PLACEHOLDER);
+    return placeholder(member?.status === "approved" ? "private, max-age=300" : "public, max-age=300", NEUTRAL_PLACEHOLDER);
   }
 }

@@ -456,6 +456,9 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 @media (max-width: 560px) {
   .archive-original-root { --brand-logo-height: 24px; --brand-title-size: 14px; --brand-title-offset-y: 4px; --brand-title-gap: 7px; }
   .archive-original-root .site-header { gap: 8px; padding-inline: 8px; }
+  .archive-original-root .site-header .official-brand { grid-template-columns: auto; }
+  .archive-original-root .site-header .brand-divider,
+  .archive-original-root .site-header .brand-service { display: none; }
   .archive-original-root .header-actions { gap: 4px; }
   .archive-original-root .header-action-link, .archive-original-root .icon-button { width: 36px; min-width: 36px; min-height: 36px; }
   .archive-original-root .theme-menu { position: fixed; top: 68px; right: 10px; width: min(270px, calc(100vw - 20px)); }

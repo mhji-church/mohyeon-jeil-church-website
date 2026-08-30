@@ -15,14 +15,15 @@ export const dynamic = "force-dynamic";
 export default async function GalleryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ album?: string }>;
+  searchParams: Promise<{ album?: string; approval?: string }>;
 }) {
-  const { album: initialAlbumId = "" } = await searchParams;
+  const { album: initialAlbumId = "", approval = "" } = await searchParams;
   const [albums, member] = await Promise.all([
     listPublicGalleryPosts(),
     getMemberSession(),
   ]);
-  const memberAlbums = member
+  const approved = member?.status === "approved";
+  const memberAlbums = approved
     ? await listContentPosts({ type: "gallery" })
     : [];
   const modalAlbums: GalleryModalAlbum[] = memberAlbums.map((album) => ({
@@ -47,9 +48,10 @@ export default async function GalleryPage({
     >
       <GalleryBoard
         albums={albums}
-        isMember={Boolean(member)}
+        memberAccess={approved ? "approved" : member ? "pending" : "guest"}
         modalAlbums={modalAlbums}
         initialAlbumId={initialAlbumId}
+        initialApprovalRequired={approval === "required"}
       />
     </ContentPage>
   );

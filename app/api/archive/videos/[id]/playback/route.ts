@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const member = await getMemberSession();
   if (!member) return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  if (member.status !== "approved") {
+    return Response.json({ error: "관리자 승인 후 예배 영상을 볼 수 있습니다." }, { status: 403 });
+  }
   if (member.forcePasswordChange) {
     return Response.json({ error: "비밀번호를 변경한 뒤 영상을 시청할 수 있습니다." }, { status: 403 });
   }

@@ -3054,34 +3054,40 @@ select {
   color: #a97161;
 }
 
-.member-birthdate-fieldset > p {
-  margin: 0 0 14px;
-  color: #6d6664;
-  font-size: 14px;
-  line-height: 1.55;
-}
-
 .member-birthdate-inputs {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: end;
-  gap: 8px;
-}
-
-.member-birthdate-inputs > span {
-  padding-bottom: 16px;
-  color: #a49d99;
-  font-size: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
 }
 
 .member-birthdate-inputs label > span {
-  min-height: 34px;
+  display: flex;
+  min-height: 42px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
   color: #5e5759;
   font-size: 14px;
-  line-height: 1.25;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.member-birthdate-inputs label > span b {
+  color: #5e5759;
+  font-weight: 720;
+}
+
+.member-birthdate-inputs label > span em {
+  color: #8b8380;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 560;
 }
 
 .member-birthdate-inputs input {
+  width: 100%;
+  min-width: 0;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -3174,6 +3180,28 @@ select {
   border: 1px solid rgba(48, 47, 60, 0.2);
   background: white;
   color: #302f3c;
+}
+
+.member-approval-notice {
+  display: grid;
+  gap: 5px;
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto 24px;
+  padding: 17px 20px;
+  border: 1px solid rgba(169, 113, 97, 0.3);
+  border-radius: 8px;
+  background: #fff8f3;
+  color: #5e5759;
+}
+
+.member-approval-notice strong {
+  color: #8f5b4d;
+  font-size: 16px;
+}
+
+.member-approval-notice span {
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .accessible-dialog-backdrop {
@@ -3434,16 +3462,12 @@ select {
   }
 
   .member-birthdate-inputs {
-    gap: 4px;
+    gap: 7px;
   }
 
   .member-birthdate-inputs label > span {
-    min-height: 40px;
+    min-height: 42px;
     font-size: 14px;
-  }
-
-  .member-birthdate-inputs > span {
-    padding-bottom: 15px;
   }
 
   .member-birthdate-inputs input {
@@ -3934,7 +3958,7 @@ select {
   }
 
   .member-birthdate-inputs {
-    grid-template-columns: minmax(0, 1.5fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -8817,6 +8841,8 @@ footer {
 /* Gallery board */
 .gallery-board { background: var(--paper); }
 .gallery-login-notice { display: block; margin-top: 12px; color: #756e74; font-size: 14px; font-weight: 560; letter-spacing: -.015em; line-height: 1.65; }
+.gallery-approval-dialog { text-align: center; }
+.gallery-approval-dialog > p { max-width: 420px; margin-inline: auto; }
 .gallery-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, calc((var(--page) - 52px) / 3))); gap: 26px; align-items: start; justify-content: start; }
 .gallery-album-grid[data-count="1"] { width: min(100%, 460px); margin-inline: auto; grid-template-columns: 1fr; }
 .gallery-album-grid[data-count="2"] { width: min(100%, 950px); margin-inline: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }

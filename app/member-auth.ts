@@ -65,8 +65,13 @@ export async function getMemberSessionFromToken(
     return null;
   }
   const member = await getMember(memberId);
-  if (!member || member.status !== "approved") return null;
+  if (!member || member.status === "suspended") return null;
   return member;
+}
+
+export async function getApprovedMemberSession() {
+  const member = await getMemberSession();
+  return member?.status === "approved" ? member : null;
 }
 
 export async function requireMemberPage(returnTo = "/member") {

@@ -17,6 +17,13 @@ export default async function MemberPage() {
           </p>
         </header>
 
+        {member.status === "pending" && (
+          <div className="member-approval-notice" role="status">
+            <strong>회원가입 신청이 접수됐습니다.</strong>
+            <span>로그인은 가능하며, 갤러리와 예배 아카이브는 관리자 승인 후 볼 수 있습니다.</span>
+          </div>
+        )}
+
         <MemberProfileForm member={member} />
       </main>
   );

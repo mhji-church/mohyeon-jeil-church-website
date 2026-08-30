@@ -45,11 +45,8 @@ export async function POST(request: Request) {
         },
       );
     }
-    if (result.member.status !== "approved") {
-      return Response.json(
-        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
-        { status: 401 },
-      );
+    if (result.member.status === "suspended") {
+      return Response.json({ error: "이용이 중지된 계정입니다. 교회 관리자에게 문의해 주세요." }, { status: 403 });
     }
     await clearMemberLoginFailures(rateKey);
     await createMemberSessionCookie(result.member.id);
@@ -57,6 +54,7 @@ export async function POST(request: Request) {
     return Response.json({
       ok: true,
       forcePasswordChange: result.member.forcePasswordChange,
+      approvalPending: result.member.status === "pending",
     });
   } catch {
     return Response.json(

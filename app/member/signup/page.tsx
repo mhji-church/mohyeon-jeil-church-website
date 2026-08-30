@@ -23,7 +23,7 @@ export default function MemberSignupPage() {
         <header>
           <div>
             <span>JOIN US</span>
-            <h2>천천히 입력해 주세요</h2>
+            <h2>회원가입</h2>
           </div>
         </header>
         <SignupForm />

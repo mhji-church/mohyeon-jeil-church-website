@@ -54,4 +54,5 @@ test("archive records remain responsive, protected, and 16 by 9", () => {
   assert.match(styles, /-webkit-line-clamp: 2/);
   assert.match(styles, /@media \(max-width: 380px\)/);
   assert.match(styles, /@media \(max-width: 820px\)/);
+  assert.match(styles, /\.site-header \.brand-service \{ display: none; \}/);
 });

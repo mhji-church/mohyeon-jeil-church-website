@@ -305,12 +305,13 @@ test("accessible member signup preserves legacy accounts and safely creates name
   assert.ok(members.some((member) => member.username === "worship-user"));
 
   const pendingLogin = await loginMember("홍길동", "482915", "198.51.100.11");
-  assert.equal(pendingLogin.status, 401);
+  assert.equal(pendingLogin.status, 200);
+  assert.match(pendingLogin.headers.get("set-cookie") ?? "", /mhji_member_session=/);
   const pendingLoginPayload = await pendingLogin.json();
-  assert.doesNotMatch(JSON.stringify(pendingLoginPayload), /pending|대기|승인 전/iu);
+  assert.equal(pendingLoginPayload.approvalPending, true);
   const unknownLogin = await loginMember("존재하지않는회원", "482915", "198.51.100.12");
   assert.equal(unknownLogin.status, 401);
-  assert.deepEqual(await unknownLogin.json(), pendingLoginPayload);
+  assert.match((await unknownLogin.json()).error, /로그인 정보를 확인/);
 
   const approve = await request("/api/admin/members", {
     method: "PATCH",
@@ -379,8 +380,17 @@ test("playback enforces member approval, password state, and archive level", asy
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 403);
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["full-user"]) } })).status, 200);
   assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["force-user"]) } })).status, 403);
-  assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["pending-user"]) } })).status, 401);
+  assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["pending-user"]) } })).status, 403);
   assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["suspended-user"]) } })).status, 401);
+
+  const pendingAccess = await request("/api/archive/access", { headers: { cookie: memberCookie(memberIds["pending-user"]) } });
+  assert.equal(pendingAccess.status, 200);
+  assert.deepEqual(await pendingAccess.json(), {
+    authenticated: true,
+    approvalPending: true,
+    member: { name: "대기회원" },
+    level: "none",
+  });
 });
 
 test("attendance thumbnails are face-safe before authorization", async () => {

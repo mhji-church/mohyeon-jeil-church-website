@@ -196,7 +196,8 @@ export default function SignupForm() {
         <span aria-hidden="true">✓</span>
         <h2>회원가입 신청이 완료됐습니다.</h2>
         <p>
-          관리자 승인 후 로그인할 수 있습니다.<br />
+          지금 바로 로그인할 수 있습니다.<br />
+          갤러리와 예배 아카이브는 관리자 승인 후 볼 수 있습니다.<br />
           로그인할 때 아래 이름을 입력해 주세요.
         </p>
         <strong className="member-complete-login-name">{completeUsername}</strong>
@@ -277,10 +278,9 @@ export default function SignupForm() {
 
         <fieldset className="member-birthdate-fieldset">
           <legend>생년월일 <b>*</b></legend>
-          <p>달력에서 연도를 찾을 필요 없이 출생연도 4자리를 직접 입력해 주세요.</p>
           <div className="member-birthdate-inputs">
             <label>
-              <span>출생연도 4자리</span>
+              <span><b>출생연도</b><em>4자리</em></span>
               <input
                 ref={yearRef}
                 name="birthYear"
@@ -297,9 +297,8 @@ export default function SignupForm() {
                 required
               />
             </label>
-            <span aria-hidden="true">/</span>
             <label>
-              <span>월 2자리</span>
+              <span><b>월</b><em>2자리</em></span>
               <input
                 ref={monthRef}
                 name="birthMonth"
@@ -318,9 +317,8 @@ export default function SignupForm() {
                 required
               />
             </label>
-            <span aria-hidden="true">/</span>
             <label>
-              <span>일 2자리</span>
+              <span><b>일</b><em>2자리</em></span>
               <input
                 ref={dayRef}
                 name="birthDay"
@@ -461,12 +459,12 @@ export default function SignupForm() {
         </button>
         <span>MEMBER GUIDE</span>
         <h2 id="signup-guide-title">가입 방법을 알려드릴게요</h2>
-        <p id="signup-guide-description">아래 순서대로 천천히 입력하면 됩니다.</p>
+        <p id="signup-guide-description">아래 순서대로 입력하면 됩니다.</p>
         <ol>
           <li><b>1</b><span>이름과 휴대전화 번호를 입력해 주세요.</span></li>
           <li><b>2</b><span>생년월일은 연도·월·일을 숫자로 입력해 주세요.</span></li>
           <li><b>3</b><span>로그인에 사용할 숫자 6자리 비밀번호를 만들어 주세요.</span></li>
-          <li><b>4</b><span>신청 후 관리자 승인이 완료되면 이름으로 로그인할 수 있습니다.</span></li>
+          <li><b>4</b><span>신청 후 바로 로그인할 수 있으며, 회원 전용 콘텐츠는 관리자 승인 후 이용할 수 있습니다.</span></li>
         </ol>
         <button data-dialog-autofocus type="button" onClick={() => setGuideOpen(false)}>
           입력 시작하기

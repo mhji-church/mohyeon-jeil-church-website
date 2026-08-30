@@ -17,18 +17,45 @@ test("member signup uses one accessible short form without a separate username",
   assert.match(form, /name="birthMonth"/);
   assert.match(form, /name="birthDay"/);
   assert.doesNotMatch(form, /type="date"/);
-  assert.match(form, /달력에서 연도를 찾을 필요 없이 출생연도 4자리를 직접 입력해 주세요/);
+  assert.doesNotMatch(form, /달력에서 연도를 찾을 필요 없이/);
+  assert.match(form, /<b>출생연도<\/b><em>4자리<\/em>/);
   assert.match(form, /예: 1955년 3월 12일/);
   assert.match(form, /type=\{showPassword \? "text" : "password"\}/);
   assert.match(form, /aria-live="assertive"/);
   assert.match(form, /data-dialog-autofocus/);
   assert.match(form, /회원가입 신청이 완료됐습니다/);
-  assert.match(form, /관리자 승인 후 로그인할 수 있습니다/);
+  assert.match(form, /지금 바로 로그인할 수 있습니다/);
+  assert.match(form, /갤러리와 예배 아카이브는 관리자 승인 후 볼 수 있습니다/);
+  assert.doesNotMatch(page, /천천히 입력해 주세요/);
+  assert.doesNotMatch(form, /천천히/);
   assert.match(form, /localStorage\.setItem\(SIGNUP_COMPLETE_KEY, "1"\)/);
   assert.doesNotMatch(form, /localStorage\.setItem\([^\n]*(password|phone|birth|name)/i);
   assert.match(page, /별도의 아이디를 만들지 않고 이름으로 신청할 수 있습니다/);
   assert.match(styles, /\.member-form input:not\(\[type="checkbox"\]\)[\s\S]*min-height: 54px/);
   assert.match(styles, /\.member-form > button[\s\S]*min-height: 56px/);
+});
+
+test("pending members can sign in while protected content still requires approval", async () => {
+  const [sessionRoute, memberAuth, archiveAccess, playback, galleryPage, galleryMedia, media, galleryBoard] = await Promise.all([
+    readFile("app/api/members/session/route.ts", "utf8"),
+    readFile("app/member-auth.ts", "utf8"),
+    readFile("app/api/archive/access/route.ts", "utf8"),
+    readFile("app/api/archive/videos/[id]/playback/route.ts", "utf8"),
+    readFile("app/gallery/page.tsx", "utf8"),
+    readFile("app/api/gallery/media/route.ts", "utf8"),
+    readFile("app/api/media/route.ts", "utf8"),
+    readFile("app/gallery/GalleryBoard.tsx", "utf8"),
+  ]);
+
+  assert.match(sessionRoute, /approvalPending: result\.member\.status === "pending"/);
+  assert.doesNotMatch(memberAuth, /member\.status !== "approved"/);
+  assert.match(memberAuth, /member\.status === "suspended"/);
+  assert.match(archiveAccess, /approvalPending: true/);
+  assert.match(playback, /member\.status !== "approved"/);
+  assert.match(galleryPage, /member\?\.status === "approved"/);
+  assert.match(galleryMedia, /member\?\.status !== "approved"/);
+  assert.match(media, /member\?\.status !== "approved"/);
+  assert.match(galleryBoard, /관리자 승인 후 볼 수 있습니다/);
 });
 
 test("birth date validation keeps the existing API and database format", async () => {

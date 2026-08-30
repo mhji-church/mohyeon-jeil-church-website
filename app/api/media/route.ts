@@ -26,7 +26,7 @@ export async function serveExternalMedia(
       getMemberSessionFromToken(cookieValue(cookieHeader, "mhji_member_session")),
       getAdminSessionFromToken(cookieValue(cookieHeader, "mhji_admin_session")),
     ]);
-    if (!member && !admin) return new Response("Not found", { status: 404 });
+    if (member?.status !== "approved" && !admin) return new Response("Not found", { status: 404 });
   }
   const headers = new Headers();
   const response = await getExternalObject(key);

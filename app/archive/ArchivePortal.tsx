@@ -7,7 +7,7 @@ import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideo } fro
 import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "./ArchiveShell";
 
 export type ArchiveSection = "all" | "sunday" | "other" | "attendance";
-type AccessState = { authenticated: boolean; level: ArchiveAccessLevel; member?: { name: string } };
+type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string } };
 const meta = {
   all: ["예배 아카이브", "모현제일교회의 예배와 공동체 기록을 한곳에서 만나보세요."],
   sunday: ["주일예배", "주일 1부와 주일 2부 예배 실황을 모았습니다."],
@@ -95,6 +95,7 @@ export default function ArchivePortal() {
   async function play(video: ArchiveVideo, target?: HTMLElement) {
     launchButton.current = target ?? null; setNotice("");
     if (!access.authenticated) { window.location.assign(`/member/login?return_to=${encodeURIComponent(pathname || "/archive")}`); return; }
+    if (access.approvalPending) { setNotice("회원가입 신청은 정상적으로 접수됐습니다. 관리자 승인 후 예배 아카이브를 볼 수 있습니다."); return; }
     if (!canPlay(access.level, video.type)) { setNotice(video.type === "attendance" ? "출석 기록은 전체 열람 등급이 필요합니다." : "예배 영상 열람 권한이 필요합니다."); return; }
     const response = await fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" });
     const data = await response.json();
@@ -111,7 +112,7 @@ export default function ArchivePortal() {
       <button className={`media-thumb${secure ? " attendance-obscured" : ""}${worshipObscured ? " worship-obscured" : ""}`} onClick={(event) => void play(video, event.currentTarget)} type="button" aria-label={`${video.title} ${allowed ? "재생" : "로그인 후 시청"}`}>
         <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard ? "eager" : "lazy"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.png"; }} />
         {worshipObscured && <span className="worship-privacy-mask" aria-hidden="true"><img src={thumbnailSrc} alt="" width="1280" height="720" /></span>}
-        {!allowed && <span className="locked-overlay"><span className="archive-lock-icon"><ArchiveIcon name="lock" size={18} /></span><strong>{access.authenticated ? "열람 권한 필요" : "로그인 후 시청"}</strong></span>}
+        {!allowed && <span className="locked-overlay"><span className="archive-lock-icon"><ArchiveIcon name="lock" size={18} /></span><strong>{access.approvalPending ? "관리자 승인 후 시청" : access.authenticated ? "열람 권한 필요" : "로그인 후 시청"}</strong></span>}
         {allowed && <span className="play-overlay"><span className="archive-play-icon"><ArchiveIcon name="play" size={22} /></span></span>}
         {video.durationSeconds != null && <span className="media-duration">{formatArchiveDuration(video.durationSeconds)}</span>}
       </button>
@@ -124,11 +125,12 @@ export default function ArchivePortal() {
   const account = access.authenticated ? <Link aria-label={`${access.member?.name ?? "회원"} 회원 메뉴`} className="header-action-link user-link" href="/member"><ArchiveIcon name="user" size={17} /><span>{access.member?.name ?? "회원"}</span></Link> : <Link aria-label="회원 로그인" className="header-action-link login-link" href={`/member/login?return_to=${encodeURIComponent(pathname || "/archive")}`}><ArchiveIcon name="user" size={17} /><span>로그인</span></Link>;
 
   return <ArchiveShell active={active} search={section === "all" ? searchBox : undefined} account={account}>
+    {access.approvalPending && <div className="archive-notice archive-approval-notice" role="status">회원가입 신청이 완료됐습니다. 예배 아카이브와 회원 전용 기록은 관리자 승인 후 볼 수 있습니다.</div>}
     {section === "all" ? <>
       <label className="archive-search mobile-home-search">{searchFields}</label>
       <div className="category-chips" role="group" aria-label="예배 분류"><button className={!service ? "active" : ""} onClick={() => setService("")} type="button">전체</button><button className={service === "주일 1부" ? "active" : ""} onClick={() => setService("주일 1부")} type="button">주일 1부</button><button className={service === "주일 2부" ? "active" : ""} onClick={() => setService("주일 2부")} type="button">주일 2부</button><button className={service === "수요예배" ? "active" : ""} onClick={() => setService("수요예배")} type="button">기타예배</button></div>
       {notice && <div className="archive-notice" role="status">{notice}</div>}
-      {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : featured ? <section className="featured-layout">{renderCard(featured, true)}<div className="featured-copy"><span>{formatDate(featured.date)} · {featured.serviceType}</span><h1>{featured.title}</h1><p>설교 · {featured.preacher || "모현제일교회"}&nbsp;&nbsp; | &nbsp;&nbsp;{formatArchiveDuration(featured.durationSeconds)}</p><p className="featured-note">하나님 앞에 드린 예배의 현장을 영상으로 기록했습니다.<br />승인된 회원은 현재 화면에서 바로 시청할 수 있습니다.</p><button className="featured-action" onClick={(event) => void play(featured, event.currentTarget)} type="button">{access.authenticated ? "영상 보기" : "로그인하고 영상 보기"}</button></div></section> : <div className="archive-empty">검색 조건에 맞는 예배 영상이 없습니다.</div>}
+      {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : featured ? <section className="featured-layout">{renderCard(featured, true)}<div className="featured-copy"><span>{formatDate(featured.date)} · {featured.serviceType}</span><h1>{featured.title}</h1><p>설교 · {featured.preacher || "모현제일교회"}&nbsp;&nbsp; | &nbsp;&nbsp;{formatArchiveDuration(featured.durationSeconds)}</p><p className="featured-note">하나님 앞에 드린 예배의 현장을 영상으로 기록했습니다.<br />승인된 회원은 현재 화면에서 바로 시청할 수 있습니다.</p><button className="featured-action" onClick={(event) => void play(featured, event.currentTarget)} type="button">{access.approvalPending ? "관리자 승인 후 영상 보기" : access.authenticated ? "영상 보기" : "로그인하고 영상 보기"}</button></div></section> : <div className="archive-empty">검색 조건에 맞는 예배 영상이 없습니다.</div>}
       <section className="recent-section"><div className="section-heading"><h2>최근 예배 영상</h2><Link href="/archive/sunday">전체 보기 ›</Link></div><div className="recent-grid">{recent.map((video) => renderCard(video))}</div></section>
       <Link className="attendance-cta" href="/archive/attendance"><span className="attendance-icon"><ArchiveIcon name="clipboard" size={25} /></span><span><strong>출석 기록</strong><small>예배 출석을 영상으로 기록하고 관리할 수 있습니다.</small></span><b>출석 기록 보기</b></Link>
     </> : <div className="list-page">
