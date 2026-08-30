@@ -31,12 +31,14 @@ export default async function MemberLoginPage({
           <header>
             <div>
               <span>WELCOME BACK</span>
-              <h2>아이디와 비밀번호를 입력해 주세요</h2>
+              <h2>이름과 비밀번호를 입력해 주세요</h2>
             </div>
           </header>
           <MemberLoginForm returnTo={returnTo} />
           <p className="member-auth-switch">
             아직 계정이 없으신가요? <Link href="/member/signup">회원가입 신청</Link>
+            <br />
+            <Link href="/member/signup?guide=1">가입 방법 먼저 보기</Link>
           </p>
         </section>
       </main>

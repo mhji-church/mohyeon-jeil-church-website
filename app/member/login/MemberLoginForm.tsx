@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 export default function MemberLoginForm({ returnTo }: { returnTo: string }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +39,7 @@ export default function MemberLoginForm({ returnTo }: { returnTo: string }) {
   return (
     <form className="member-form member-login-form" onSubmit={submit}>
       <label>
-        <span>아이디</span>
+        <span>이름 또는 기존 아이디</span>
         <input
           name="username"
           type="text"
@@ -47,15 +48,21 @@ export default function MemberLoginForm({ returnTo }: { returnTo: string }) {
           required
           autoFocus
         />
+        <small>새로 가입한 회원은 이름을 입력해 주세요.</small>
       </label>
       <label>
         <span>비밀번호</span>
-        <input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
+        <span className="member-password-input">
+          <input
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+          />
+          <button type="button" onClick={() => setShowPassword((current) => !current)}>
+            {showPassword ? "숨기기" : "보기"}
+          </button>
+        </span>
       </label>
       {error && <p className="member-form-error" role="alert">{error}</p>}
       <button type="submit" disabled={submitting}>

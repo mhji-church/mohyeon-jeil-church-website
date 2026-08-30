@@ -1,7 +1,9 @@
 "use client";
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import AccessibleDialog from "./components/AccessibleDialog";
 import KakaoChurchMap from "./components/KakaoChurchMap";
+import { useSiteAuthentication } from "./components/SiteLayoutChrome";
 
 const heroTitle = ["말씀으로 바로 서고", "사랑으로 함께하는 교회"];
 const heroEyebrow = "MOHYEON JEIL CHURCH";
@@ -563,11 +565,14 @@ function SermonPlayer({
 }
 
 function HomeFloatingActions() {
+  const authenticated = useSiteAuthentication();
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installPanelOpen, setInstallPanelOpen] = useState(false);
   const [installHelp, setInstallHelp] = useState("");
   const [openInChrome, setOpenInChrome] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [signupNoticeChecked, setSignupNoticeChecked] = useState(false);
   const [installed, setInstalled] = useState(() =>
     typeof window !== "undefined" &&
     (window.matchMedia("(display-mode: standalone)").matches ||
@@ -612,6 +617,45 @@ function HomeFloatingActions() {
     };
   }, []);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    let timer = 0;
+    const evaluate = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        setSignupNoticeChecked(true);
+        if (authenticated || !mediaQuery.matches) {
+          setSignupOpen(false);
+          return;
+        }
+        const localDate = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
+        let suppressed = false;
+        try {
+          suppressed =
+            window.localStorage.getItem("mhji-member-signup-completed") === "1" ||
+            window.localStorage.getItem("mhji-signup-notice-hide-date") === localDate ||
+            window.sessionStorage.getItem("mhji-signup-notice-session-dismissed") === "1";
+        } catch {
+          // Storage can be unavailable in strict privacy modes; the notice still remains usable.
+        }
+        if (suppressed) return;
+        setInstallPanelOpen(false);
+        setSignupOpen(true);
+      }, authenticated || !mediaQuery.matches ? 0 : 850);
+    };
+    evaluate();
+    mediaQuery.addEventListener("change", evaluate);
+    return () => {
+      window.clearTimeout(timer);
+      mediaQuery.removeEventListener("change", evaluate);
+    };
+  }, [authenticated]);
+
   const addToHome = async () => {
     setInstallHelp("");
 
@@ -648,6 +692,31 @@ function HomeFloatingActions() {
     setInstallHelp("");
   };
 
+  const closeSignupNotice = () => {
+    try {
+      window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1");
+    } catch {
+      // Closing the notice must still work when browser storage is unavailable.
+    }
+    setSignupOpen(false);
+  };
+
+  const hideSignupNoticeToday = () => {
+    const localDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    try {
+      window.localStorage.setItem("mhji-signup-notice-hide-date", localDate);
+      window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1");
+    } catch {
+      // The current notice can still be closed even when persistence is unavailable.
+    }
+    setSignupOpen(false);
+  };
+
   return (
     <div className="home-floating-actions">
       {showScrollTop && (
@@ -663,7 +732,7 @@ function HomeFloatingActions() {
           <span>TOP</span>
         </button>
       )}
-      {!installed && (
+      {!installed && signupNoticeChecked && !signupOpen && (
         <button
           className="home-install-trigger"
           type="button"
@@ -678,7 +747,7 @@ function HomeFloatingActions() {
           </svg>
         </button>
       )}
-      {!installed && installPanelOpen && (
+      {!installed && signupNoticeChecked && installPanelOpen && !signupOpen && (
         <div className="home-install-panel" id="home-install-panel" role="dialog" aria-label="홈 화면 추가">
           <button
             className="home-install-close"
@@ -706,6 +775,40 @@ function HomeFloatingActions() {
           {installHelp && <p className="home-install-help" role="status">{installHelp}</p>}
         </div>
       )}
+      <AccessibleDialog
+        open={signupOpen}
+        onClose={closeSignupNotice}
+        labelledBy="home-signup-title"
+        describedBy="home-signup-description"
+        className="home-signup-sheet"
+      >
+        <button
+          className="home-signup-close"
+          type="button"
+          onClick={closeSignupNotice}
+          aria-label="회원가입 안내 닫기"
+        >
+          ×
+        </button>
+        <h2 id="home-signup-title">교인 회원가입 안내</h2>
+        <p id="home-signup-description">
+          이름으로 간편하게 가입할 수 있습니다.
+        </p>
+        <div className="home-signup-actions">
+          <a data-dialog-autofocus className="is-primary" href="/member/signup">
+            회원가입 신청하기
+          </a>
+          <a className="is-secondary" href="/member/signup?guide=1">
+            가입 방법 보기
+          </a>
+        </div>
+        <a className="home-signup-login" href="/member/login">
+          가입하셨나요? <strong>로그인</strong>
+        </a>
+        <button className="home-signup-today" type="button" onClick={hideSignupNoticeToday}>
+          오늘 그만 보기
+        </button>
+      </AccessibleDialog>
     </div>
   );
 }

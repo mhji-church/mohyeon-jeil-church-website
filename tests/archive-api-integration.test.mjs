@@ -49,18 +49,24 @@ function memberCookie(memberId) {
 
 async function waitForServer() {
   const readinessPaths = ["/api/archive/videos", "/archive"];
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 120_000;
+  const readiness = new Map();
   while (Date.now() < deadline) {
     if (server.exitCode != null) throw new Error(serverFailure("Vite exited before startup."));
     try {
-      const responses = await Promise.all(readinessPaths.map((pathname) =>
-        fetch(`${baseUrl}${pathname}`, { signal: AbortSignal.timeout(5_000) })
-      ));
-      if (responses.every((response) => response.ok)) return;
-    } catch {}
+      for (const pathname of readinessPaths) {
+        const response = await fetch(`${baseUrl}${pathname}`, {
+          signal: AbortSignal.timeout(30_000),
+        });
+        readiness.set(pathname, response.status);
+      }
+      if (readinessPaths.every((pathname) => readiness.get(pathname) === 200)) return;
+    } catch (error) {
+      readiness.set("lastError", error instanceof Error ? error.message : String(error));
+    }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(serverFailure("Timed out waiting for Vite."));
+  throw new Error(serverFailure(`Timed out waiting for Vite. Readiness: ${JSON.stringify(Object.fromEntries(readiness))}`));
 }
 
 function serverFailure(message) {
@@ -76,6 +82,25 @@ function serverFailure(message) {
 
 async function request(pathname, options = {}) {
   return fetch(`${baseUrl}${pathname}`, options);
+}
+
+async function signupMember(member) {
+  return request("/api/members/signup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(member),
+  });
+}
+
+async function loginMember(username, password, forwardedFor) {
+  return request("/api/members/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}),
+    },
+    body: JSON.stringify({ username, password }),
+  });
 }
 
 before(async () => {
@@ -211,6 +236,114 @@ after(async () => {
       // libsql on Windows can retain a native file handle until the Node process exits.
       if (error?.code !== "EPERM") throw error;
     }
+  }
+});
+
+test("accessible member signup preserves legacy accounts and safely creates name-based logins", async () => {
+  const legacyLogin = await loginMember("worship-user", "local-test-password", "198.51.100.10");
+  assert.equal(legacyLogin.status, 200);
+  assert.match(legacyLogin.headers.get("set-cookie") ?? "", /mhji_member_session=/);
+
+  const invalidDates = ["2025-02-29", "2026-04-31", "2999-01-01"];
+  for (const [index, birthDate] of invalidDates.entries()) {
+    const response = await signupMember({
+      name: `날짜검증${index}`,
+      phone: `010-910${index}-1000`,
+      birthDate,
+      position: "",
+      password: "482915",
+    });
+    assert.equal(response.status, 400);
+  }
+
+  for (const password of ["111111", "550312", "125678"]) {
+    const response = await signupMember({
+      name: `비밀번호검증${password}`,
+      phone: "010-1111-5678",
+      birthDate: "1955-03-12",
+      position: "",
+      password,
+    });
+    assert.equal(response.status, 400);
+    assert.doesNotMatch(await response.text(), new RegExp(password));
+  }
+
+  const baseMember = {
+    name: "  홍길동  ",
+    phone: "010-1111-5678",
+    birthDate: "1956-02-29",
+    position: "집사",
+    password: "482915",
+  };
+  const baseSignup = await signupMember(baseMember);
+  assert.equal(baseSignup.status, 201);
+  const basePayload = await baseSignup.json();
+  assert.equal(basePayload.username, "홍길동");
+  assert.doesNotMatch(JSON.stringify(basePayload), /482915/);
+
+  const simultaneous = await Promise.all([
+    signupMember(baseMember),
+    signupMember(baseMember),
+  ]);
+  assert.deepEqual(simultaneous.map((response) => response.status), [201, 201]);
+  const generatedLogins = [
+    basePayload.username,
+    ...(await Promise.all(simultaneous.map((response) => response.json()))).map(
+      (payload) => payload.username,
+    ),
+  ];
+  assert.equal(new Set(generatedLogins).size, 3);
+  assert.deepEqual(new Set(generatedLogins), new Set(["홍길동", "홍길동5678", "홍길동5678-2"]));
+
+  const membersResponse = await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } });
+  assert.equal(membersResponse.status, 200);
+  const members = (await membersResponse.json()).members;
+  const created = members.find((member) => member.username === "홍길동");
+  assert.ok(created);
+  assert.equal(created.name, "홍길동");
+  assert.equal(created.birthDate, "1956-02-29");
+  assert.ok(members.some((member) => member.username === "worship-user"));
+
+  const pendingLogin = await loginMember("홍길동", "482915", "198.51.100.11");
+  assert.equal(pendingLogin.status, 401);
+  const pendingLoginPayload = await pendingLogin.json();
+  assert.doesNotMatch(JSON.stringify(pendingLoginPayload), /pending|대기|승인 전/iu);
+  const unknownLogin = await loginMember("존재하지않는회원", "482915", "198.51.100.12");
+  assert.equal(unknownLogin.status, 401);
+  assert.deepEqual(await unknownLogin.json(), pendingLoginPayload);
+
+  const approve = await request("/api/admin/members", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+    body: JSON.stringify({ id: created.id, member: { status: "approved" } }),
+  });
+  assert.equal(approve.status, 200);
+  const approvedLogin = await loginMember("홍길동", "482915", "198.51.100.11");
+  assert.equal(approvedLogin.status, 200);
+  assert.doesNotMatch(await approvedLogin.text(), /482915/);
+});
+
+test("member login throttling survives requests without exposing raw identifiers", async () => {
+  const forwardedFor = "203.0.113.77";
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await loginMember("없는회원", "000000", forwardedFor);
+    assert.equal(response.status, 401);
+  }
+  const blocked = await loginMember("없는회원", "000000", forwardedFor);
+  assert.equal(blocked.status, 429);
+  assert.ok(Number(blocked.headers.get("retry-after")) > 0);
+  assert.doesNotMatch(await blocked.text(), /없는회원|203\.0\.113\.77/);
+
+  const db = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const rows = await db.execute("SELECT rate_key FROM member_login_attempts");
+    assert.ok(rows.rows.length >= 1);
+    for (const row of rows.rows) {
+      assert.match(String(row.rate_key), /^[a-f0-9]{64}$/);
+      assert.doesNotMatch(String(row.rate_key), /없는회원|203\.0\.113\.77/);
+    }
+  } finally {
+    db.close();
   }
 });
 

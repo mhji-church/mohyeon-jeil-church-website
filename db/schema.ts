@@ -36,6 +36,13 @@ export const members = sqliteTable("members", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const memberLoginAttempts = sqliteTable("member_login_attempts", {
+  rateKey: text("rate_key").primaryKey(),
+  failedCount: integer("failed_count").notNull().default(0),
+  blockedUntil: integer("blocked_until").notNull().default(0),
+  updatedAt: integer("updated_at").notNull().default(0),
+});
+
 export const businessApplications = sqliteTable("business_applications", {
   id: text("id").primaryKey(),
   memberId: text("member_id").notNull(),

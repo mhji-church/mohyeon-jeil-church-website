@@ -1,5 +1,12 @@
 import { normalizeMobilePhone } from "./phone";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
+import {
+  memberLoginCandidate,
+  normalizeMemberLogin,
+  normalizeMemberName,
+  validateMemberBirthDate,
+  validateNewMemberPassword,
+} from "./member-signup";
 
 export type MemberStatus = "pending" | "approved" | "suspended";
 
@@ -20,7 +27,7 @@ export type Member = {
 };
 
 export type MemberSignupInput = {
-  username: string;
+  username?: string;
   password: string;
   name: string;
   phone: string;
@@ -29,6 +36,9 @@ export type MemberSignupInput = {
 };
 
 const PASSWORD_HASH_ITERATIONS = 100_000;
+const LOGIN_FAILURE_LIMIT = 5;
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;
 
 function getD1() {
   return getNetlifyDb();
@@ -61,17 +71,18 @@ function mapMember(row: Record<string, unknown>): Member {
 }
 
 function normalizeUsername(value: string) {
-  return value.trim().toLowerCase();
+  return normalizeMemberLogin(value);
 }
 
 export function validateSignupInput(input: MemberSignupInput) {
-  const username = normalizeUsername(input.username);
-  const name = input.name.trim();
+  const requestedUsername = input.username?.trim() ?? "";
+  const username = requestedUsername ? normalizeUsername(requestedUsername) : "";
+  const name = normalizeMemberName(input.name);
   const phone = normalizeMobilePhone(input.phone);
   const birthDate = input.birthDate.trim();
   const position = input.position.trim();
 
-  if (!/^[a-z0-9][a-z0-9._-]{3,29}$/.test(username)) {
+  if (requestedUsername && !/^[a-z0-9][a-z0-9._-]{3,29}$/.test(username)) {
     return { error: "아이디는 영문 소문자와 숫자를 포함해 4~30자로 입력해 주세요." };
   }
   if (name.length < 2 || name.length > 30) {
@@ -80,15 +91,27 @@ export function validateSignupInput(input: MemberSignupInput) {
   if (!phone) {
     return { error: "휴대전화 번호를 확인해 주세요." };
   }
-  if (input.password.length < 6 || input.password.length > 72) {
-    return { error: "비밀번호는 6~72자로 입력해 주세요." };
-  }
-  if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
-    return { error: "생년월일을 확인해 주세요." };
+  if (requestedUsername) {
+    if (input.password.length < 6 || input.password.length > 72) {
+      return { error: "비밀번호는 6~72자로 입력해 주세요." };
+    }
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+      return { error: "생년월일을 확인해 주세요." };
+    }
+  } else {
+    const checkedBirthDate = validateMemberBirthDate(birthDate);
+    if (!checkedBirthDate.value) return { error: checkedBirthDate.error };
+    const checkedPassword = validateNewMemberPassword(
+      input.password,
+      checkedBirthDate.value,
+      phone,
+    );
+    if (!checkedPassword.value) return { error: checkedPassword.error };
   }
   return {
     value: {
       username,
+      generatedUsername: !requestedUsername,
       password: input.password,
       name,
       phone,
@@ -102,32 +125,51 @@ export async function createMember(input: MemberSignupInput) {
   await ensureMemberStore();
   const validated = validateSignupInput(input);
   if (!validated.value) throw new Error(validated.error);
-  const exists = await getD1()
-    .prepare("SELECT id FROM members WHERE username = ?")
-    .bind(validated.value.username)
-    .first();
-  if (exists) throw new Error("이미 사용 중인 아이디입니다.");
-
   const { hash, salt } = await hashPassword(validated.value.password);
   const id = crypto.randomUUID();
-  await getD1()
-    .prepare(
-      `INSERT INTO members
-      (id, username, password_hash, password_salt, name, phone, birth_date, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      validated.value.username,
-      hash,
-      salt,
+  const insert = async (username: string) =>
+    getD1()
+      .prepare(
+        `INSERT INTO members
+        (id, username, password_hash, password_salt, name, phone, birth_date, position)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        username,
+        hash,
+        salt,
+        validated.value.name,
+        validated.value.phone,
+        validated.value.birthDate,
+        validated.value.position,
+      )
+      .run();
+
+  if (!validated.value.generatedUsername) {
+    try {
+      await insert(validated.value.username);
+      return { id, username: validated.value.username };
+    } catch (error) {
+      if (isUsernameConflict(error)) throw new Error("이미 사용 중인 아이디입니다.");
+      throw error;
+    }
+  }
+
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const username = memberLoginCandidate(
       validated.value.name,
       validated.value.phone,
-      validated.value.birthDate,
-      validated.value.position,
-    )
-    .run();
-  return id;
+      attempt,
+    );
+    try {
+      await insert(username);
+      return { id, username };
+    } catch (error) {
+      if (!isUsernameConflict(error)) throw error;
+    }
+  }
+  throw new Error("로그인 이름을 만들지 못했습니다. 교회 관리자에게 문의해 주세요.");
 }
 
 export async function authenticateMember(username: string, password: string) {
@@ -147,6 +189,74 @@ export async function authenticateMember(username: string, password: string) {
     member: mapMember(row),
     passwordHash: String(row.password_hash),
   };
+}
+
+export async function createMemberLoginRateKey(username: string, ipAddress: string) {
+  const material = `${normalizeUsername(username)}\n${ipAddress.trim() || "unknown"}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(material),
+  );
+  return toHex(new Uint8Array(digest));
+}
+
+export async function getMemberLoginRetryAfter(rateKey: string, now = Date.now()) {
+  await ensureMemberStore();
+  const row = await getD1()
+    .prepare(
+      "SELECT blocked_until FROM member_login_attempts WHERE rate_key = ?",
+    )
+    .bind(rateKey)
+    .first<{ blocked_until: number | string | null }>();
+  const blockedUntil = Number(row?.blocked_until ?? 0);
+  return blockedUntil > now ? Math.ceil((blockedUntil - now) / 1000) : 0;
+}
+
+export async function recordMemberLoginFailure(rateKey: string, now = Date.now()) {
+  await ensureMemberStore();
+  const row = await getD1()
+    .prepare(
+      `SELECT failed_count, blocked_until, updated_at
+       FROM member_login_attempts WHERE rate_key = ?`,
+    )
+    .bind(rateKey)
+    .first<{
+      failed_count: number | string;
+      blocked_until: number | string | null;
+      updated_at: number | string;
+    }>();
+  const previousUpdatedAt = Number(row?.updated_at ?? 0);
+  const withinWindow = now - previousUpdatedAt <= LOGIN_FAILURE_WINDOW_MS;
+  const failedCount = (withinWindow ? Number(row?.failed_count ?? 0) : 0) + 1;
+  const previousBlockedUntil = Number(row?.blocked_until ?? 0);
+  const blockedUntil =
+    previousBlockedUntil > now
+      ? previousBlockedUntil
+      : failedCount >= LOGIN_FAILURE_LIMIT
+        ? now + LOGIN_BLOCK_MS
+        : 0;
+
+  await getD1()
+    .prepare(
+      `INSERT INTO member_login_attempts
+       (rate_key, failed_count, blocked_until, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(rate_key) DO UPDATE SET
+       failed_count = excluded.failed_count,
+       blocked_until = excluded.blocked_until,
+       updated_at = excluded.updated_at`,
+    )
+    .bind(rateKey, failedCount, blockedUntil, now)
+    .run();
+  return blockedUntil > now ? Math.ceil((blockedUntil - now) / 1000) : 0;
+}
+
+export async function clearMemberLoginFailures(rateKey: string) {
+  await ensureMemberStore();
+  await getD1()
+    .prepare("DELETE FROM member_login_attempts WHERE rate_key = ?")
+    .bind(rateKey)
+    .run();
 }
 
 export async function recordMemberLogin(id: string) {
@@ -390,4 +500,16 @@ function fromBase64Url(value: string) {
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
   const binary = atob(padded);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function isUsernameConflict(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("UNIQUE constraint failed: members.username") ||
+    message.includes("members_username_unique")
+  );
+}
+
+function toHex(bytes: Uint8Array) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

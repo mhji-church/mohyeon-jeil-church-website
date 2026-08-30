@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import {
   authenticateMember,
+  clearMemberLoginFailures,
+  createMemberLoginRateKey,
+  getMemberLoginRetryAfter,
   recordMemberLogin,
+  recordMemberLoginFailure,
 } from "../../../../lib/members";
 import {
   clearMemberSessionCookie,
@@ -16,25 +20,38 @@ export async function POST(request: Request) {
   const username = typeof payload?.username === "string" ? payload.username : "";
   const password = typeof payload?.password === "string" ? payload.password : "";
   try {
+    const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "";
+    const ipAddress =
+      request.headers.get("x-nf-client-connection-ip") ??
+      request.headers.get("cf-connecting-ip") ??
+      forwardedFor.trim() ??
+      "unknown";
+    const rateKey = await createMemberLoginRateKey(username, ipAddress);
+    const retryAfter = await getMemberLoginRetryAfter(rateKey);
+    if (retryAfter > 0) {
+      return Response.json(
+        { error: "로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "retry-after": String(retryAfter) } },
+      );
+    }
     const result = await authenticateMember(username, password);
     if (!result) {
+      const blockedFor = await recordMemberLoginFailure(rateKey);
       return Response.json(
-        { error: "아이디 또는 비밀번호가 올바르지 않습니다." },
+        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
+        {
+          status: blockedFor > 0 ? 429 : 401,
+          headers: blockedFor > 0 ? { "retry-after": String(blockedFor) } : undefined,
+        },
+      );
+    }
+    if (result.member.status !== "approved") {
+      return Response.json(
+        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
         { status: 401 },
       );
     }
-    if (result.member.status === "pending") {
-      return Response.json(
-        { error: "관리자 승인 대기 중인 계정입니다." },
-        { status: 403 },
-      );
-    }
-    if (result.member.status === "suspended") {
-      return Response.json(
-        { error: "이용이 중지된 계정입니다. 교회 관리자에게 문의해 주세요." },
-        { status: 403 },
-      );
-    }
+    await clearMemberLoginFailures(rateKey);
     await createMemberSessionCookie(result.member.id);
     await recordMemberLogin(result.member.id);
     return Response.json({

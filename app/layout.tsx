@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SiteLayoutChrome from "./components/SiteLayoutChrome";
+import { getAdminSession } from "./credential-auth";
 import { getMemberSession } from "./member-auth";
 import "./globals.css";
 
@@ -51,6 +52,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const member = await getMemberSession();
+  const admin = await getAdminSession();
   const initialMember = member
     ? { name: member.name, position: member.position }
     : null;
@@ -58,7 +60,12 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body className="antialiased">
-        <SiteLayoutChrome initialMember={initialMember}>{children}</SiteLayoutChrome>
+        <SiteLayoutChrome
+          initialMember={initialMember}
+          initiallyAuthenticated={Boolean(member || admin)}
+        >
+          {children}
+        </SiteLayoutChrome>
       </body>
     </html>
   );
