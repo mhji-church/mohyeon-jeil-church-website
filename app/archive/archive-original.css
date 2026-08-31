@@ -159,6 +159,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .media-meta { padding-top: 13px; }
 .archive-original-root .media-date, .archive-original-root .featured-copy > span { color: var(--accent-strong); font-size: 13px; font-weight: 800; }
 .archive-original-root .media-meta h3 { margin: 7px 0 8px; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 17px; line-height: 1.45; }
+.archive-original-root .attendance-title-mobile { display: none; }
 .archive-original-root .media-meta h3, .archive-original-root .featured-copy h1, .archive-original-root .list-page-head h1, .archive-original-root .cms-page-head h1 { word-break: keep-all; overflow-wrap: break-word; }
 .archive-original-root .media-meta p, .archive-original-root .featured-copy p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.65; }
 .archive-original-root .featured-copy h1 { margin: 12px 0 10px; font-size: clamp(27px, 2.7vw, 38px); line-height: 1.25; text-wrap: balance; }
@@ -231,7 +232,6 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .song-summary-grid strong { font-size: 29px; }
 .archive-original-root .song-summary-grid .period-value { font-size: 16px; line-height: 1.4; }
 .archive-original-root .song-summary-grid .wide strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.archive-original-root .song-count-note { margin: -8px 0 0; color: var(--text-secondary); font-size: 12px; }
 .archive-original-root .song-ranking-card { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .archive-original-root .song-ranking-card h2 { margin: 0; padding: 17px 20px; border-bottom: 1px solid var(--border); font-size: 18px; }
 .archive-original-root .song-ranking-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); }
@@ -472,6 +472,8 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .recent-section .media-card, .archive-original-root .list-media-grid .media-card { display: grid; grid-template-columns: 42% minmax(0, 1fr); align-items: center; gap: 14px; }
   .archive-original-root .recent-section .media-meta, .archive-original-root .list-media-grid .media-meta { min-width: 0; padding-top: 0; }
   .archive-original-root .recent-section .media-meta h3, .archive-original-root .list-media-grid .media-meta h3 { margin: 5px 0 6px; font-size: 15px; line-height: 1.4; }
+  .archive-original-root .attendance-title-desktop { display: none; }
+  .archive-original-root .attendance-title-mobile { display: block; overflow: hidden; font-size: clamp(12px, 3.45vw, 14px); letter-spacing: -.035em; text-overflow: clip; white-space: nowrap; }
   .archive-original-root .recent-section .media-duration, .archive-original-root .list-media-grid .media-duration { display: none; }
   .archive-original-root .featured-copy h1 { margin: 8px 0 6px; font-size: 25px; }
   .archive-original-root .featured-note { display: none; }
@@ -509,6 +511,8 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .song-summary-grid { grid-template-columns: 1fr 1fr; }
   .archive-original-root .song-summary-grid article { min-height: 88px; padding: 14px; }
   .archive-original-root .song-summary-grid strong { font-size: 24px; }
+  .archive-original-root .song-summary-grid .wide { grid-column: 1 / -1; }
+  .archive-original-root .song-summary-grid .wide strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
   .archive-original-root .song-history-list article { grid-template-columns: 78px minmax(0, 1fr); gap: 7px 10px; padding: 12px 14px; }
   .archive-original-root .song-history-list article b, .archive-original-root .song-history-list article a { grid-column: 2; }
   .archive-original-root .form-grid, .archive-original-root .activity-filters { grid-template-columns: 1fr; }

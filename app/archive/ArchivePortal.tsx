@@ -17,6 +17,10 @@ const meta = {
 
 function sectionFromPath(path: string | null): ArchiveSection { if (path?.endsWith("/sunday")) return "sunday"; if (path?.endsWith("/other")) return "other"; if (path?.endsWith("/attendance")) return "attendance"; return "all"; }
 function formatDate(value: string) { return value.replaceAll("-", "."); }
+function formatAttendanceTitle(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return `${year}년 ${month}월 ${day}일 출석 교인`;
+}
 function canPlay(level: ArchiveAccessLevel, type: ArchiveVideo["type"]) { return level === "full" || (level === "worship" && type === "worship"); }
 function publicSongs(video: ArchiveVideo) { return video.analysis?.songs.filter((song) => song.category !== "offertory" && song.title.trim()) ?? []; }
 function sermonTitleStyle(title: string) {
@@ -116,7 +120,7 @@ export default function ArchivePortal() {
         {allowed && <span className="play-overlay"><span className="archive-play-icon"><ArchiveIcon name="play" size={22} /></span></span>}
         {video.durationSeconds != null && <span className="media-duration">{formatArchiveDuration(video.durationSeconds)}</span>}
       </button>
-      {!featuredCard && <div className="media-meta"><span className="media-date">{formatDate(video.date)} · {video.serviceType}</span><h3>{video.title}</h3>{video.type !== "attendance" && <p>설교 · {video.preacher || "모현제일교회"}</p>}</div>}
+      {!featuredCard && <div className="media-meta"><span className="media-date">{formatDate(video.date)} · {video.serviceType}</span><h3>{video.type === "attendance" ? <><span className="attendance-title-desktop">{video.title}</span><span className="attendance-title-mobile">{formatAttendanceTitle(video.date)}</span></> : video.title}</h3>{video.type !== "attendance" && <p>설교 · {video.preacher || "모현제일교회"}</p>}</div>}
     </article>;
   }
 

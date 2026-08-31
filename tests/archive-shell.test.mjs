@@ -49,6 +49,8 @@ test("archive records remain responsive, protected, and 16 by 9", () => {
   assert.match(portal, /videos\.slice\(0, recentCount\)/);
   assert.match(shell, /href="\/archive\/admin"/);
   assert.match(portal, /attendance-obscured/);
+  assert.match(portal, /formatAttendanceTitle/);
+  assert.match(portal, /attendance-title-mobile/);
   assert.match(styles, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(styles, /aspect-ratio: 16 \/ 9/);
   assert.match(styles, /filter: blur\(9px\)/);
@@ -61,4 +63,8 @@ test("archive records remain responsive, protected, and 16 by 9", () => {
   assert.match(songs, /className="song-search-button"/);
   assert.match(songs, /setAppliedQuery\(query\.trim\(\)\)/);
   assert.match(styles, /\.song-export-button \{ display: none; \}/);
+  assert.doesNotMatch(songs, /같은 찬양은 한 예배에서 한 번만 집계하며/);
+  assert.match(styles, /\.song-summary-grid \.wide \{ grid-column: 1 \/ -1; \}/);
+  assert.match(styles, /\.song-summary-grid \.wide strong \{ overflow: visible;/);
+  assert.match(styles, /\.attendance-title-mobile \{ display: block;[^}]*white-space: nowrap;/);
 });
