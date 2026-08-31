@@ -35,7 +35,9 @@ test("member signup uses one accessible short form without a separate username",
   assert.match(page, /별도의 아이디를 만들지 않고 이름으로 신청할 수 있습니다/);
   assert.match(styles, /\.member-form input:not\(\[type="checkbox"\]\)[\s\S]*min-height: 54px/);
   assert.match(styles, /\.member-form > button[\s\S]*min-height: 56px/);
+  assert.match(styles, /\.gallery-approval-dialog h2 \{[^}]*margin: 10px 42px 8px;[^}]*text-align: center;/);
   assert.match(styles, /\.gallery-approval-dialog > p \{[^}]*margin: 0 auto 24px/);
+  assert.match(styles, /@media \(max-width: 720px\) \{[\s\S]*?\.gallery-approval-dialog h2 \{[^}]*white-space: nowrap;[^}]*font-size: clamp\(16px, 4\.8vw, 19px\);/);
 });
 
 test("pending members can sign in while protected content still requires approval", async () => {

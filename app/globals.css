@@ -8842,7 +8842,16 @@ footer {
 .gallery-board { background: var(--paper); }
 .gallery-login-notice { display: block; margin-top: 12px; color: #756e74; font-size: 14px; font-weight: 560; letter-spacing: -.015em; line-height: 1.65; }
 .gallery-approval-dialog { text-align: center; }
+.gallery-approval-dialog h2 { margin: 10px 42px 8px; text-align: center; }
 .gallery-approval-dialog > p { max-width: 420px; margin: 0 auto 24px; }
+@media (max-width: 720px) {
+  .gallery-approval-dialog h2 {
+    margin-inline: 0;
+    white-space: nowrap;
+    font-size: clamp(16px, 4.8vw, 19px);
+    letter-spacing: -.055em;
+  }
+}
 .archive-access-required { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #f8f5f2; color: #32323f; font-family: var(--font-pretendard); }
 .archive-access-required > section { width: min(560px, 100%); padding: 26px 30px; border: 1px solid rgba(169, 113, 97, .3); border-radius: 10px; background: #fffaf6; box-shadow: 0 14px 36px rgba(68, 48, 43, .06); text-align: center; }
 .archive-access-required h1 { margin: 0; color: #965a42; font-size: clamp(19px, 1.7vw, 23px); font-weight: 750; letter-spacing: -.035em; line-height: 1.35; }
