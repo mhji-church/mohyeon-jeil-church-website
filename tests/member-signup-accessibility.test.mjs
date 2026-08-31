@@ -25,7 +25,8 @@ test("member signup uses one accessible short form without a separate username",
   assert.match(form, /data-dialog-autofocus/);
   assert.match(form, /회원가입 신청이 완료됐습니다/);
   assert.match(form, /지금 바로 로그인할 수 있습니다/);
-  assert.match(form, /갤러리와 예배 아카이브는 관리자 승인 후 볼 수 있습니다/);
+  assert.doesNotMatch(form, /예배 아카이브/);
+  assert.match(form, /갤러리 등 회원 전용 콘텐츠는 관리자 승인 후 볼 수 있습니다/);
   assert.doesNotMatch(page, /천천히 입력해 주세요/);
   assert.doesNotMatch(form, /천천히/);
   assert.match(form, /localStorage\.setItem\(SIGNUP_COMPLETE_KEY, "1"\)/);
@@ -51,6 +52,7 @@ test("pending members can sign in while protected content still requires approva
   assert.doesNotMatch(memberAuth, /member\.status !== "approved"/);
   assert.match(memberAuth, /member\.status === "suspended"/);
   assert.match(archiveAccess, /approvalPending: true/);
+  assert.match(archiveAccess, /songStatsAllowed: false/);
   assert.match(playback, /member\.status !== "approved"/);
   assert.match(galleryPage, /member\?\.status === "approved"/);
   assert.match(galleryMedia, /member\?\.status !== "approved"/);

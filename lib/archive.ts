@@ -5,6 +5,7 @@ import type { ArchiveAccessLevel, ArchiveVideoAdmin, ArchiveVideoType } from "./
 export type { ArchiveAccessLevel, ArchiveVideo, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
 
 export const ARCHIVE_APP_CODE = "worship_archive";
+export const ARCHIVE_SONG_STATS_APP_CODE = "worship_archive_song_stats";
 
 const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const YOUTUBE_THUMBNAIL_HOSTS = new Set(["i.ytimg.com", "img.youtube.com"]);
@@ -154,6 +155,17 @@ export async function getArchiveAccess(memberId: string): Promise<ArchiveAccessL
   return row?.access_level ?? "none";
 }
 
+export async function getArchiveSongStatsAccess(memberId: string, archiveLevel?: ArchiveAccessLevel) {
+  const level = archiveLevel ?? await getArchiveAccess(memberId);
+  if (level !== "worship" && level !== "full") return false;
+  await ensureNetlifySchema();
+  const row = await getNetlifyDb()
+    .prepare("SELECT access_level FROM member_app_access WHERE member_id = ? AND app_code = ?")
+    .bind(memberId, ARCHIVE_SONG_STATS_APP_CODE)
+    .first<{ access_level: string }>();
+  return row ? row.access_level === "full" : true;
+}
+
 export function canPlayArchiveVideo(level: ArchiveAccessLevel, type: ArchiveVideoType) {
   if (level === "full") return true;
   return level === "worship" && type === "worship";
@@ -166,6 +178,16 @@ export async function setArchiveAccess(memberId: string, level: ArchiveAccessLev
       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
     .bind(memberId, ARCHIVE_APP_CODE, level, adminUsername)
+    .run();
+}
+
+export async function setArchiveSongStatsAccess(memberId: string, allowed: boolean, adminUsername: string) {
+  await ensureNetlifySchema();
+  await getNetlifyDb()
+    .prepare(`INSERT INTO member_app_access (member_id, app_code, access_level, granted_by, granted_at, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
+    .bind(memberId, ARCHIVE_SONG_STATS_APP_CODE, allowed ? "full" : "none", adminUsername)
     .run();
 }
 

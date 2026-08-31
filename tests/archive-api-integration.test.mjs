@@ -48,7 +48,7 @@ function memberCookie(memberId) {
 }
 
 async function waitForServer() {
-  const readinessPaths = ["/api/archive/videos", "/archive"];
+  const readinessPaths = ["/api/archive/access", "/member/login"];
   const deadline = Date.now() + 120_000;
   const readiness = new Map();
   while (Date.now() < deadline) {
@@ -73,7 +73,7 @@ function serverFailure(message) {
   return [
     message,
     `Command: ${serverCommand}`,
-    `Readiness URLs: ${baseUrl}/api/archive/videos, ${baseUrl}/archive`,
+    `Readiness URLs: ${baseUrl}/api/archive/access, ${baseUrl}/member/login`,
     `Exit code: ${server?.exitCode ?? "running"}`,
     `stdout:\n${serverStdout.slice(-4000) || "(empty)"}`,
     `stderr:\n${serverStderr.slice(-4000) || "(empty)"}`,
@@ -348,21 +348,32 @@ test("member login throttling survives requests without exposing raw identifiers
   }
 });
 
-test("public archive responses and HTML do not reveal YouTube playback data", async () => {
-  const listResponse = await request("/api/archive/videos");
+test("archive pages and metadata require an assigned archive level", async () => {
+  assert.equal((await request("/api/archive/videos")).status, 403);
+  assert.equal((await request("/api/archive/videos", { headers: { cookie: memberCookie(memberIds["none-user"]) } })).status, 403);
+  assert.equal((await request("/api/archive/videos", { headers: { cookie: memberCookie(memberIds["pending-user"]) } })).status, 403);
+
+  const listResponse = await request("/api/archive/videos", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(listResponse.status, 200);
   const listText = await listResponse.text();
   for (const id of Object.values(TEST_YOUTUBE_IDS)) assert.doesNotMatch(listText, new RegExp(id));
   assert.doesNotMatch(listText, /youtu(?:\.be|be\.com)|youtube-nocookie|embedUrl|youtubeUrl|youtubeId/i);
 
-  const pageResponse = await request("/archive");
+  const anonymousPage = await request("/archive", { redirect: "manual" });
+  assert.equal(anonymousPage.status, 307);
+  assert.match(anonymousPage.headers.get("location") ?? "", /\/member\/login\?return_to=%2Farchive/);
+  const deniedPage = await request("/archive", { headers: { cookie: memberCookie(memberIds["none-user"]) }, redirect: "manual" });
+  assert.equal(deniedPage.status, 307);
+  assert.match(deniedPage.headers.get("location") ?? "", /\/member\?archive=denied/);
+
+  const pageResponse = await request("/archive", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(pageResponse.status, 200);
   const html = await pageResponse.text();
   for (const id of Object.values(TEST_YOUTUBE_IDS)) assert.doesNotMatch(html, new RegExp(id));
   assert.doesNotMatch(html, /youtube-nocookie|embedUrl|youtubeUrl|youtubeId/i);
 
   for (const route of ["/archive/sunday", "/archive/other", "/archive/attendance"]) {
-    const sectionResponse = await request(route);
+    const sectionResponse = await request(route, { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
     assert.equal(sectionResponse.status, 200);
     const sectionHtml = await sectionResponse.text();
     for (const id of Object.values(TEST_YOUTUBE_IDS)) assert.doesNotMatch(sectionHtml, new RegExp(id));
@@ -390,11 +401,13 @@ test("playback enforces member approval, password state, and archive level", asy
     approvalPending: true,
     member: { name: "대기회원" },
     level: "none",
+    songStatsAllowed: false,
   });
 });
 
-test("attendance thumbnails are face-safe before authorization", async () => {
-  const response = await request("/api/archive/videos/attendance-video/thumbnail");
+test("archive thumbnails require access and attendance faces respect the assigned level", async () => {
+  assert.equal((await request("/api/archive/videos/attendance-video/thumbnail")).status, 403);
+  const response = await request("/api/archive/videos/attendance-video/thumbnail", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /image\/svg\+xml/);
   const body = await response.text();
@@ -510,7 +523,7 @@ test("archive stores directly entered worship contents and expands search", asyn
   assert.equal(stored.analysis.sermon.biblePassage, "마태복음 6:33");
   assert.equal(stored.analysis.representativePrayer.name, "김믿음");
 
-  const publicSearch = await request("/api/archive/videos?q=넘지%20못할");
+  const publicSearch = await request("/api/archive/videos?q=넘지%20못할", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(publicSearch.status, 200);
   const publicVideo = (await publicSearch.json()).videos.find((video) => video.id === "analysis-fixture-video");
   assert.equal(publicVideo.analysis.songs.length, 3);
@@ -560,6 +573,29 @@ test("song statistics, history, administration, and Excel export share archive a
   assert.equal(typeof rankingSheet.getCell("E2").value, "number");
   assert.ok(rankingSheet.getCell("I2").value instanceof Date);
   assert.equal(historySheet.getCell("F2").value.toString().startsWith("https://mhji.kr/archive/"), true);
+
+  const accessList = await request("/api/admin/archive/access", { headers: { cookie: adminCookie } });
+  assert.equal(accessList.status, 200);
+  assert.equal((await accessList.json()).members.find((member) => member.id === memberIds["worship-user"]).songStatsAllowed, true);
+
+  const denySongStats = await request("/api/admin/archive/access", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({ memberId: memberIds["worship-user"], songStatsAllowed: false }),
+  });
+  assert.equal(denySongStats.status, 200);
+  assert.equal((await request("/api/archive/songs/stats", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 403);
+  const deniedSongPage = await request("/archive/songs", { headers: { cookie: memberCookie(memberIds["worship-user"]) }, redirect: "manual" });
+  assert.equal(deniedSongPage.status, 307);
+  assert.match(deniedSongPage.headers.get("location") ?? "", /\/archive\?access=songs-denied/);
+
+  const allowSongStats = await request("/api/admin/archive/access", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({ memberId: memberIds["worship-user"], songStatsAllowed: true }),
+  });
+  assert.equal(allowSongStats.status, 200);
+  assert.equal((await request("/api/archive/songs/stats", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 200);
 });
 
 test("representative titles, aliases, service filters, conflicts, ordering, and deletion remain consistent", async () => {

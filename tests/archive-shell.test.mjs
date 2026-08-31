@@ -15,6 +15,8 @@ test("archive routes use an independent application shell", () => {
 
   assert.match(chrome, /pathname\?\.startsWith\("\/archive"\)/);
   assert.match(route, /"sunday", "other", "attendance"/);
+  assert.match(route, /requireArchiveWorshipPage/);
+  assert.match(read("app/archive/page.tsx"), /requireArchiveWorshipPage/);
   assert.match(shell, /"\/archive\/sunday"/);
   assert.match(shell, /"\/archive\/other"/);
   assert.match(shell, /"\/archive\/attendance"/);
@@ -34,7 +36,8 @@ test("archive shell keeps brand, navigation, return path, and theme controls", (
   assert.match(portal, /return_to=\$\{encodeURIComponent\(pathname \|\| "\/archive"\)\}/);
   assert.match(shell, /mhji-archive-theme/);
   assert.match(shell, /prefers-color-scheme: dark/);
-  assert.match(shell, /className="mobile-bottom-nav"/);
+  assert.match(shell, /mobile-bottom-nav\$\{showSongs/);
+  assert.match(shell, /showSongs/);
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /min-height: 74px/);
   assert.match(styles, /PretendardVariable\.woff2/);

@@ -34,8 +34,7 @@ export async function clearArchiveAdminSessionCookie() {
   (await cookies()).set(COOKIE_NAME, "", { httpOnly: true, secure: process.env.NODE_ENV !== "development", sameSite: "strict", path: "/", maxAge: 0 });
 }
 
-export async function getArchiveAdminSession(): Promise<ArchiveAdminSession | null> {
-  const token = (await cookies()).get(COOKIE_NAME)?.value;
+export async function getArchiveAdminSessionFromToken(token: string | null | undefined): Promise<ArchiveAdminSession | null> {
   if (!token || !config().secret) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
@@ -47,4 +46,8 @@ export async function getArchiveAdminSession(): Promise<ArchiveAdminSession | nu
   let username = "";
   try { username = decodeURIComponent(encoded); } catch { return null; }
   return username === config().username ? { username, expiresAt } : null;
+}
+
+export async function getArchiveAdminSession(): Promise<ArchiveAdminSession | null> {
+  return getArchiveAdminSessionFromToken((await cookies()).get(COOKIE_NAME)?.value);
 }

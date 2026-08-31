@@ -4,8 +4,10 @@ import test from "node:test";
 
 const read = (file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 
-test("public archive metadata does not expose YouTube playback data", () => {
+test("archive metadata requires an assigned archive level and omits playback data", () => {
   const source = read("app/api/archive/videos/route.ts");
+  assert.match(source, /requireArchiveWorshipApi/);
+  assert.match(source, /status:\s*403/);
   assert.match(source, /id:\s*video\.id/);
   assert.doesNotMatch(source, /youtubeId:\s*video\.youtubeId/);
   assert.doesNotMatch(source, /youtubeUrl:\s*video\.youtubeUrl/);
@@ -26,11 +28,29 @@ test("playback requires an approved member session and archive level", () => {
 
 test("attendance thumbnails are replaced before authorization", () => {
   const source = read("lib/archive-thumbnail.ts");
+  const route = read("app/api/archive/videos/[id]/thumbnail/route.ts");
+  assert.match(route, /requireArchiveWorshipApi/);
+  assert.match(route, /status:\s*403/);
   assert.match(source, /video\.type === "attendance"/);
   assert.match(source, /!canPlayArchiveVideo/);
   assert.match(source, /PLACEHOLDER/);
   assert.match(source, /private, no-store/);
   assert.match(source, /getSafeArchiveThumbnailUrl/);
+});
+
+test("song statistics use a separately configurable archive permission", () => {
+  const access = read("lib/archive-access.ts");
+  const archive = read("lib/archive.ts");
+  const adminRoute = read("app/api/admin/archive/access/route.ts");
+  for (const file of [
+    "app/api/archive/songs/stats/route.ts",
+    "app/api/archive/songs/export/route.ts",
+    "app/api/archive/songs/[id]/history/route.ts",
+  ]) assert.match(read(file), /requireArchiveSongApi/);
+  assert.match(access, /getArchiveSongViewer/);
+  assert.match(archive, /ARCHIVE_SONG_STATS_APP_CODE/);
+  assert.match(archive, /row \? row\.access_level === "full" : true/);
+  assert.match(adminRoute, /songStatsAllowed/);
 });
 
 test("YouTube URLs and thumbnail fetches only accept exact trusted hosts", () => {

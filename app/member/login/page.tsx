@@ -24,7 +24,7 @@ export default async function MemberLoginPage({
           <h1>교인 로그인</h1>
           <p>
             회원가입 신청 때 입력한 이름과 비밀번호로 로그인해 주세요.
-            갤러리와 예배 아카이브는 관리자 승인 후 이용할 수 있습니다.
+            일부 회원 전용 콘텐츠는 관리자 승인 후 이용할 수 있습니다.
           </p>
         </section>
         <section className="member-auth-card member-login-card">

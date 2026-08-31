@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { archiveViewerCanViewSongStats, requireArchiveWorshipPage } from "@/lib/archive-access";
 import ArchivePortal from "../ArchivePortal";
 
 export const dynamic = "force-dynamic";
@@ -12,5 +13,7 @@ export default async function ArchiveSectionPage({
 }) {
   const { section } = await params;
   if (!archiveSections.has(section)) notFound();
-  return <ArchivePortal />;
+  const returnTo = `/archive/${section}`;
+  const viewer = await requireArchiveWorshipPage(returnTo);
+  return <ArchivePortal initialAccess={{ authenticated: true, level: viewer.level, member: { name: viewer.name }, songStatsAllowed: await archiveViewerCanViewSongStats(viewer) }} />;
 }

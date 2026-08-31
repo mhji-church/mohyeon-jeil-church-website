@@ -7,7 +7,7 @@ import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideo } fro
 import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "./ArchiveShell";
 
 export type ArchiveSection = "all" | "sunday" | "other" | "attendance";
-type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string } };
+type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string }; songStatsAllowed: boolean };
 const meta = {
   all: ["예배 아카이브", "모현제일교회의 예배와 공동체 기록을 한곳에서 만나보세요."],
   sunday: ["주일예배", "주일 1부와 주일 2부 예배 실황을 모았습니다."],
@@ -32,7 +32,7 @@ function sermonTitleStyle(title: string) {
   return { fontSize: "16px", letterSpacing: "normal" };
 }
 
-export default function ArchivePortal() {
+export default function ArchivePortal({ initialAccess }: { initialAccess: AccessState }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const section = sectionFromPath(pathname);
@@ -48,13 +48,12 @@ export default function ArchivePortal() {
   const [recentCount, setRecentCount] = useState<4 | 8 | 12>(4);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
-  const [access, setAccess] = useState<AccessState>({ authenticated: false, level: "none" });
+  const [access] = useState<AccessState>(initialAccess);
   const [playing, setPlaying] = useState<{ video: ArchiveVideo; embedUrl: string } | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const launchButton = useRef<HTMLElement | null>(null);
   const openedVideo = useRef("");
 
-  useEffect(() => { fetch("/api/archive/access", { cache: "no-store" }).then((response) => response.json()).then(setAccess).catch(() => undefined); }, []);
   useEffect(() => { fetch("/api/archive/settings", { cache: "no-store" }).then((response) => response.json()).then((data) => { if ([4, 8, 12].includes(data.settings?.recentCount)) setRecentCount(data.settings.recentCount); if (data.settings?.defaultSort === "oldest") setSort("oldest"); }).catch(() => undefined); }, []);
   const load = useCallback(async () => {
     setLoading(true); setNotice("");
@@ -128,7 +127,10 @@ export default function ArchivePortal() {
   const searchBox = <label className="archive-search">{searchFields}</label>;
   const account = access.authenticated ? <Link aria-label={`${access.member?.name ?? "회원"} 회원 메뉴`} className="header-action-link user-link" href="/member"><ArchiveIcon name="user" size={17} /><span>{access.member?.name ?? "회원"}</span></Link> : <Link aria-label="회원 로그인" className="header-action-link login-link" href={`/member/login?return_to=${encodeURIComponent(pathname || "/archive")}`}><ArchiveIcon name="user" size={17} /><span>로그인</span></Link>;
 
-  return <ArchiveShell active={active} search={section === "all" ? searchBox : undefined} account={account}>
+  const accessNotice = searchParams.get("access") === "songs-denied" ? "찬양 통계 열람 권한이 필요합니다. 관리자에게 문의해 주세요." : "";
+
+  return <ArchiveShell active={active} showSongs={access.songStatsAllowed} search={section === "all" ? searchBox : undefined} account={account}>
+    {accessNotice && <div className="archive-notice" role="status">{accessNotice}</div>}
     {access.approvalPending && <div className="archive-notice archive-approval-notice" role="status">회원가입 신청이 완료됐습니다. 예배 아카이브와 회원 전용 기록은 관리자 승인 후 볼 수 있습니다.</div>}
     {section === "all" ? <>
       <label className="archive-search mobile-home-search">{searchFields}</label>

@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { requireArchiveWorshipApi } from "@/lib/archive-access";
+import { requireArchiveSongApi } from "@/lib/archive-access";
 import { parseSongStatsOptions, songStatsPeriodLabel, songStatsServiceLabel } from "@/lib/archive-song-request";
 import { getArchiveSongExportHistory, getArchiveSongStats } from "@/lib/archive-songs";
 
@@ -8,7 +8,7 @@ function archiveSectionForService(serviceType: string) { return serviceType.star
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!(await requireArchiveWorshipApi())) return Response.json({ error: "예배 영상 열람 권한이 필요합니다." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  if (!(await requireArchiveSongApi())) return Response.json({ error: "찬양 통계 열람 권한이 필요합니다." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   try {
     const options = parseSongStatsOptions(new URL(request.url).searchParams);
     const stats = await getArchiveSongStats(options);

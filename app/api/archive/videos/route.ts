@@ -1,8 +1,10 @@
 import { listArchiveVideos, type ArchiveVideoType } from "@/lib/archive";
+import { requireArchiveWorshipApi } from "@/lib/archive-access";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  if (!(await requireArchiveWorshipApi())) return Response.json({ error: "예배 아카이브 열람 권한이 필요합니다." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   const params = new URL(request.url).searchParams;
   const type = params.get("type");
   const group = params.get("group");

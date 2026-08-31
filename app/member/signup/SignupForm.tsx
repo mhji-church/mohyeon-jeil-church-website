@@ -197,7 +197,7 @@ export default function SignupForm() {
         <h2>회원가입 신청이 완료됐습니다.</h2>
         <p>
           지금 바로 로그인할 수 있습니다.<br />
-          갤러리와 예배 아카이브는 관리자 승인 후 볼 수 있습니다.<br />
+          갤러리 등 회원 전용 콘텐츠는 관리자 승인 후 볼 수 있습니다.<br />
           로그인할 때 아래 이름을 입력해 주세요.
         </p>
         <strong className="member-complete-login-name">{completeUsername}</strong>
