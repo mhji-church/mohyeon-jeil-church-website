@@ -46,6 +46,14 @@ test("keeps one shared header and footer source", async () => {
   assert.equal((layoutChrome.match(/<SiteFooter\b/g) ?? []).length, 1);
 });
 
+test("exposes the worship archive from desktop and mobile navigation", async () => {
+  const siteChrome = await readFile("app/components/SiteChrome.tsx", "utf8");
+
+  assert.match(siteChrome, /label: "예배 아카이브",\s*href: "\/archive"/);
+  assert.doesNotMatch(siteChrome, /준비 중/);
+  assert.doesNotMatch(siteChrome, /aria-disabled="true"/);
+});
+
 test("preserves editable defaults and conditional business links", async () => {
   const [admin, business, video] = await Promise.all([
     readFile("app/admin/AdminDashboard.tsx", "utf8"),

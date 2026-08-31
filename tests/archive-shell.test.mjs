@@ -42,6 +42,7 @@ test("archive shell keeps brand, navigation, return path, and theme controls", (
 
 test("archive records remain responsive, protected, and 16 by 9", () => {
   const portal = read("app/archive/ArchivePortal.tsx");
+  const songs = read("app/archive/songs/SongStats.tsx");
   const shell = read("app/archive/ArchiveShell.tsx");
   const styles = read("app/archive/archive-original.css");
 
@@ -55,4 +56,9 @@ test("archive records remain responsive, protected, and 16 by 9", () => {
   assert.match(styles, /@media \(max-width: 380px\)/);
   assert.match(styles, /@media \(max-width: 820px\)/);
   assert.match(styles, /\.site-header \.brand-service \{ display: none; \}/);
+  assert.match(songs, /<ArchiveIcon name="user"/);
+  assert.match(songs, /<span>\{viewerName\}<\/span>/);
+  assert.match(songs, /className="song-search-button"/);
+  assert.match(songs, /setAppliedQuery\(query\.trim\(\)\)/);
+  assert.match(styles, /\.song-export-button \{ display: none; \}/);
 });
