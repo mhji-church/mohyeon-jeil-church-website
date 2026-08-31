@@ -20,6 +20,13 @@ test("archive routes use an independent application shell", () => {
   const accessRequired = read("app/archive/access-required/page.tsx");
   assert.match(accessRequired, /예배 아카이브 열람 권한이 필요합니다/);
   assert.match(accessRequired, /예배 아카이브는 별도 권한이 부여된 회원만 이용할 수 있습니다/);
+  assert.match(accessRequired, /<BackButton \/>/);
+  const accessBackButton = read("app/archive/access-required/BackButton.tsx");
+  const globalStyles = read("app/globals.css");
+  assert.match(accessBackButton, /이전으로 돌아가기/);
+  assert.match(accessBackButton, /window\.history\.back\(\)/);
+  assert.match(globalStyles, /\.archive-access-required > section \{[^}]*width: min\(560px, 100%\)[^}]*text-align: center/s);
+  assert.match(globalStyles, /\.archive-access-required p \{[^}]*white-space: nowrap/s);
   assert.match(shell, /"\/archive\/sunday"/);
   assert.match(shell, /"\/archive\/other"/);
   assert.match(shell, /"\/archive\/attendance"/);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getMemberSession } from "@/app/member-auth";
 import { getArchiveWorshipViewer } from "@/lib/archive-access";
+import BackButton from "./BackButton";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default async function ArchiveAccessRequiredPage() {
       <section role="status" aria-labelledby="archive-access-required-title">
         <h1 id="archive-access-required-title">예배 아카이브 열람 권한이 필요합니다.</h1>
         <p>예배 아카이브는 별도 권한이 부여된 회원만 이용할 수 있습니다.</p>
+        <BackButton />
       </section>
     </main>
   );
