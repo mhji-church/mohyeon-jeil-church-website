@@ -194,14 +194,12 @@ export default function SignupForm() {
     return (
       <div className="member-signup-complete" role="status">
         <span aria-hidden="true">✓</span>
-        <h2>회원가입 신청이 완료됐습니다.</h2>
+        <h2>회원가입이 완료됐습니다.</h2>
         <p>
-          지금 바로 로그인할 수 있습니다.<br />
           갤러리 등 회원 전용 콘텐츠는 관리자 승인 후 볼 수 있습니다.<br />
           로그인할 때 아래 이름을 입력해 주세요.
         </p>
         <strong className="member-complete-login-name">{completeUsername}</strong>
-        <p className="member-complete-reminder">화면을 캡처하거나 종이에 적어두세요.</p>
         <div className="member-complete-actions">
           <Link href="/">홈페이지로 돌아가기</Link>
           <Link href="/member/login">로그인 화면으로 이동</Link>

@@ -364,7 +364,13 @@ test("archive pages and metadata require an assigned archive level", async () =>
   assert.match(anonymousPage.headers.get("location") ?? "", /\/member\/login\?return_to=%2Farchive/);
   const deniedPage = await request("/archive", { headers: { cookie: memberCookie(memberIds["none-user"]) }, redirect: "manual" });
   assert.equal(deniedPage.status, 307);
-  assert.match(deniedPage.headers.get("location") ?? "", /\/member\?archive=denied/);
+  assert.match(deniedPage.headers.get("location") ?? "", /\/archive\/access-required/);
+  const accessRequiredPage = await request("/archive/access-required", { headers: { cookie: memberCookie(memberIds["none-user"]) } });
+  assert.equal(accessRequiredPage.status, 200);
+  const accessRequiredHtml = await accessRequiredPage.text();
+  assert.match(accessRequiredHtml, /예배 아카이브 열람 권한이 필요합니다/);
+  assert.match(accessRequiredHtml, /예배 아카이브는 별도 권한이 부여된 회원만 이용할 수 있습니다/);
+  assert.doesNotMatch(accessRequiredHtml, /site-header|archive-app-header|<footer/);
 
   const pageResponse = await request("/archive", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(pageResponse.status, 200);

@@ -23,10 +23,11 @@ test("member signup uses one accessible short form without a separate username",
   assert.match(form, /type=\{showPassword \? "text" : "password"\}/);
   assert.match(form, /aria-live="assertive"/);
   assert.match(form, /data-dialog-autofocus/);
-  assert.match(form, /회원가입 신청이 완료됐습니다/);
-  assert.match(form, /지금 바로 로그인할 수 있습니다/);
+  assert.match(form, /회원가입이 완료됐습니다/);
+  assert.doesNotMatch(form, /지금 바로 로그인할 수 있습니다/);
   assert.doesNotMatch(form, /예배 아카이브/);
   assert.match(form, /갤러리 등 회원 전용 콘텐츠는 관리자 승인 후 볼 수 있습니다/);
+  assert.doesNotMatch(form, /화면을 캡처하거나 종이에 적어두세요/);
   assert.doesNotMatch(page, /천천히 입력해 주세요/);
   assert.doesNotMatch(form, /천천히/);
   assert.match(form, /localStorage\.setItem\(SIGNUP_COMPLETE_KEY, "1"\)/);
@@ -34,6 +35,7 @@ test("member signup uses one accessible short form without a separate username",
   assert.match(page, /별도의 아이디를 만들지 않고 이름으로 신청할 수 있습니다/);
   assert.match(styles, /\.member-form input:not\(\[type="checkbox"\]\)[\s\S]*min-height: 54px/);
   assert.match(styles, /\.member-form > button[\s\S]*min-height: 56px/);
+  assert.match(styles, /\.gallery-approval-dialog > p \{[^}]*margin: 0 auto 24px/);
 });
 
 test("pending members can sign in while protected content still requires approval", async () => {

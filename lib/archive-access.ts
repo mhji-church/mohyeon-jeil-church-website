@@ -39,7 +39,7 @@ export async function requireArchiveWorshipPage(returnTo: string) {
   if (viewer) return viewer;
   const member = await getMemberSession();
   if (member?.forcePasswordChange) redirect("/member/password");
-  if (member) redirect("/member?archive=denied");
+  if (member) redirect("/archive/access-required");
   redirect(`/member/login?return_to=${encodeURIComponent(returnTo)}`);
 }
 
@@ -50,6 +50,6 @@ export async function requireArchiveSongPage() {
   if (archiveViewer) redirect("/archive?access=songs-denied");
   const member = await getMemberSession();
   if (member?.forcePasswordChange) redirect("/member/password");
-  if (member) redirect("/member?archive=denied");
+  if (member) redirect("/archive/access-required");
   redirect(`/member/login?return_to=${encodeURIComponent("/archive/songs")}`);
 }

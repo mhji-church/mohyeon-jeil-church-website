@@ -17,6 +17,9 @@ test("archive routes use an independent application shell", () => {
   assert.match(route, /"sunday", "other", "attendance"/);
   assert.match(route, /requireArchiveWorshipPage/);
   assert.match(read("app/archive/page.tsx"), /requireArchiveWorshipPage/);
+  const accessRequired = read("app/archive/access-required/page.tsx");
+  assert.match(accessRequired, /예배 아카이브 열람 권한이 필요합니다/);
+  assert.match(accessRequired, /예배 아카이브는 별도 권한이 부여된 회원만 이용할 수 있습니다/);
   assert.match(shell, /"\/archive\/sunday"/);
   assert.match(shell, /"\/archive\/other"/);
   assert.match(shell, /"\/archive\/attendance"/);
