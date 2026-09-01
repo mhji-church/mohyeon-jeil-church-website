@@ -72,6 +72,7 @@ test("archive records remain responsive, protected, and 16 by 9", () => {
   assert.match(styles, /@media \(max-width: 820px\)/);
   assert.match(shell, /brand-service-mobile">모현제일교회 예배 아카이브/);
   assert.match(styles, /\.brand-logo-wrap \{ width: calc\(var\(--brand-logo-height\) \* 1\.26\); overflow: hidden; \}/);
+  assert.match(styles, /\.brand-logo \{[^}]*max-width: none;/);
   assert.match(styles, /\.brand-service-mobile, \.archive-original-root \.mobile-header-action-icon \{ display: block; white-space: nowrap; \}/);
   assert.match(songs, /<ArchiveIcon name="user"/);
   assert.match(songs, /<span>\{viewerName\}<\/span>/);

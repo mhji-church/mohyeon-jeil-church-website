@@ -96,7 +96,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 
 .archive-original-root .official-brand { display: inline-grid; grid-template-columns: auto 1px auto; align-items: center; column-gap: var(--brand-title-gap); min-width: 0; min-height: 40px; white-space: nowrap; }
 .archive-original-root .brand-logo-wrap { width: auto; height: var(--brand-logo-height); display: inline-grid; align-items: center; }
-.archive-original-root .brand-logo { grid-area: 1 / 1; display: block; width: auto; height: var(--brand-logo-height); object-fit: contain; }
+.archive-original-root .brand-logo { grid-area: 1 / 1; display: block; width: auto; max-width: none; height: var(--brand-logo-height); object-fit: contain; }
 .archive-original-root .brand-logo-dark { display: none; }
 .archive-original-root[data-theme="dark"] .brand-logo-light { display: none; }
 .archive-original-root[data-theme="dark"] .brand-logo-dark { display: block; }
