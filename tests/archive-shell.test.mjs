@@ -51,6 +51,8 @@ test("archive shell keeps brand, navigation, return path, and theme controls", (
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /min-height: 74px/);
   assert.match(styles, /PretendardVariable\.woff2/);
+  assert.match(styles, /\.archive-original-root:not\(\.admin-cms\) \{ padding-top: var\(--header-height\); \}/);
+  assert.match(styles, /\.archive-original-root:not\(\.admin-cms\) > \.site-header \{ position: fixed; inset: 0 0 auto; width: 100%; \}/);
 });
 
 test("archive records remain responsive, protected, and 16 by 9", () => {

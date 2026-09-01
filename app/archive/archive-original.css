@@ -133,6 +133,8 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .mobile-home-search { display: none; }
 
 @media (min-width: 821px) {
+  .archive-original-root:not(.admin-cms) { padding-top: var(--header-height); }
+  .archive-original-root:not(.admin-cms) > .site-header { position: fixed; inset: 0 0 auto; width: 100%; }
   .archive-original-root .site-header, .archive-original-root.admin-cms > .cms-header { padding-left: 0; }
   .archive-original-root .official-brand.has-structure-line { position: relative; height: 100%; display: grid; grid-template-columns: var(--sidebar-width) max-content; grid-template-rows: 1fr; column-gap: 0; align-items: center; }
   .archive-original-root .official-brand.has-structure-line .brand-logo-wrap { grid-column: 1; grid-row: 1; margin-left: var(--brand-logo-cell-start); }
