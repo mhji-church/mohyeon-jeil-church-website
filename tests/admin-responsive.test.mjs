@@ -102,6 +102,10 @@ test("uses one responsive admin layout for every content section", () => {
   assert.match(archiveStyles, /\.archive-original-root \.archive-admin-pagination\s*\{[^}]*background: var\(--surface-soft\)/);
   assert.match(archiveStyles, /\.archive-original-root \.archive-video-table \.admin-row-actions\s*\{[^}]*grid-template-columns: repeat\(2/);
   assert.match(archiveStyles, /\.archive-original-root \.archive-content-editor\s*\{/);
+  assert.match(archiveStyles, /\.archive-original-root\.admin-cms \.cms-sidebar\s*\{[^}]*grid-template-columns: repeat\(5/);
+  assert.match(archiveStyles, /\.archive-original-root \.cms-page-head\.has-actions\s*\{[^}]*flex-direction: column/);
+  assert.match(archiveStyles, /\.archive-original-root \.archive-list-filters\s*\{[^}]*grid-template-columns: repeat\(3/);
+  assert.match(archiveStyles, /\.archive-original-root \.archive-video-list td:nth-child\(3\)\s*\{\s*order: -1/);
   assert.match(archive, /예배 내용/);
   assert.match(archive, /한 줄에 한 곡씩 입력해 주세요/);
   assert.doesNotMatch(archive, /무료 영상 분석|예배 영상 자동 분석|youtube-oauth/);

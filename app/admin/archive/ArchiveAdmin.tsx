@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideoAdmin } from "@/lib/archive-shared";
-import { ArchiveShell } from "@/app/archive/ArchiveShell";
+import { ArchiveIcon, ArchiveShell } from "@/app/archive/ArchiveShell";
 
 type Props = { userName: string; userEmail: string; signOutPath: string; mode?: "manage" | "new" };
 type AccessMember = { id: string; name: string; username: string; status: string; accessLevel: ArchiveAccessLevel; songStatsAllowed: boolean };
@@ -227,7 +227,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   );
 
   return (
-    <ArchiveShell admin active={tab === "access" ? "members" : tab === "settings" ? "settings" : "videos"} account={<a className="header-action-link" href={signOutPath}>로그아웃</a>}>
+    <ArchiveShell admin active={tab === "access" ? "members" : tab === "settings" ? "settings" : "videos"} account={<a className="header-action-link" href={signOutPath} aria-label="로그아웃"><ArchiveIcon name="logout" size={17} className="mobile-header-action-icon" /><span>로그아웃</span></a>}>
       <section className={`archive-admin-workspace${mode === "new" ? " is-new-video" : " is-list-mode"}`}>
         <header className="cms-page-head has-actions"><div className="cms-page-title"><h1>{mode === "new" ? "새 영상 등록" : tab === "access" ? "회원 관리" : tab === "settings" ? "설정" : "영상 관리"}</h1><p>{userName} · {userEmail}</p></div><div className="cms-page-actions"><a className="secondary-btn" href="/archive" target="_blank">아카이브 보기</a>{mode === "new" ? <Link className="secondary-btn" href="/archive/admin">목록으로</Link> : tab === "videos" && <Link className="primary-btn" href="/archive/admin/new">+ 새 영상 등록</Link>}</div></header>
         {mode === "manage" && <div className="archive-admin-tabs segmented-control"><button className={tab === "videos" ? "active" : ""} type="button" onClick={() => { setTab("videos"); setForm(emptyForm); }}>영상 관리</button><button className={tab === "access" ? "active" : ""} type="button" onClick={() => { setTab("access"); setForm(emptyForm); }}>열람 등급</button></div>}

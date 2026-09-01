@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { ArchiveShell } from "@/app/archive/ArchiveShell";
+import { ArchiveIcon, ArchiveShell } from "@/app/archive/ArchiveShell";
 
 type Log = { id:string; actor:string; action:string; targetType:string; targetId:string; summary:string; details:Record<string,string>; createdAt:string };
 export default function ActivityAdmin({ userEmail }: { userEmail: string }) {
@@ -8,7 +8,7 @@ export default function ActivityAdmin({ userEmail }: { userEmail: string }) {
   const load=useCallback(async()=>{const params=new URLSearchParams({page:String(page),pageSize:String(pageSize),q:query});const response=await fetch(`/api/admin/activity?${params}`,{cache:"no-store"});if(response.ok){const data=await response.json();setLogs(data.logs??[]);setTotal(data.total??0)}},[page,pageSize,query]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),180);return()=>clearTimeout(timer)},[load]);
   const pages=Math.max(1,Math.ceil(total/pageSize));
-  return <ArchiveShell admin active="activity" account={<a className="header-action-link" href="/api/archive/admin/session">로그아웃</a>}>
+  return <ArchiveShell admin active="activity" account={<a className="header-action-link" href="/api/archive/admin/session" aria-label="로그아웃"><ArchiveIcon name="logout" size={17} className="mobile-header-action-icon" /><span>로그아웃</span></a>}>
     <section className="archive-activity">
       <header className="cms-page-head"><div className="cms-page-title"><h1>활동 기록</h1><p>{userEmail} · 민감한 URL과 인증 정보는 기록하지 않습니다.</p></div></header>
       <div className="activity-summary"><article className="admin-card"><small>전체 기록</small><strong>{total}</strong></article><article className="admin-card"><small>현재 페이지</small><strong>{page}</strong></article><article className="admin-card"><small>표시 개수</small><strong>{pageSize}</strong></article></div>

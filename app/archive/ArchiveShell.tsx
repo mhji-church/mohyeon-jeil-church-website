@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export type ArchiveTheme = "system" | "light" | "dark";
 export type ArchiveNavKey = "home" | "sunday" | "other" | "songs" | "attendance" | "videos" | "members" | "activity" | "settings";
-type IconName = "home" | "video" | "calendar" | "music" | "clipboard" | "sun" | "moon" | "monitor" | "check" | "user" | "external" | "activity" | "settings" | "search" | "play" | "lock";
+type IconName = "home" | "video" | "calendar" | "music" | "clipboard" | "sun" | "moon" | "monitor" | "check" | "user" | "external" | "logout" | "activity" | "settings" | "search" | "play" | "lock";
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></>,
@@ -19,6 +19,7 @@ const iconPaths: Record<IconName, ReactNode> = {
   check: <path d="m5 12 4 4L19 6"/>,
   user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
   external: <><path d="M14 3h7v7M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></>,
+  logout: <><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></>,
   activity: <path d="M3 12h4l2-8 4 16 2-8h6"/>,
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.12.37.34.7.6 1 .3.28.68.42 1.1.4h.09v4h-.09c-.42-.02-.8.12-1.1.4-.26.3-.48.63-.6 1Z"/></>,
   search: <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
@@ -44,7 +45,7 @@ function ArchiveBrand({ admin = false }: { admin?: boolean }) {
     <span className="brand-logo-wrap">
       <img className="brand-logo brand-logo-light" src="/archive/brand/mohyeon-logo-light.png" alt="모현제일교회" width="461" height="91" />
       <img className="brand-logo brand-logo-dark" src="/archive/brand/mohyeon-logo-dark.png" alt="" aria-hidden="true" width="461" height="91" />
-    </span><span className="brand-divider" aria-hidden="true" /><span className="brand-service">예배 아카이브{admin && <small>ADMIN</small>}</span>
+    </span><span className="brand-divider" aria-hidden="true" /><span className="brand-service"><span className="brand-service-desktop">예배 아카이브</span><span className="brand-service-mobile">모현제일교회 예배 아카이브</span>{admin && <small>ADMIN</small>}</span>
   </Link>;
 }
 
