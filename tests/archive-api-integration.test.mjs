@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
+import { applyNetlifyMigrations } from "../scripts/netlify-migrations.mjs";
 
 const TEST_MEMBER_SECRET = "local-archive-integration-member-secret";
 const TEST_ADMIN_USERNAME = "local-archive-admin";
@@ -109,6 +110,12 @@ before(async () => {
   const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mhji-archive-api-"));
   databasePath = path.join(tempDirectory, "preview.sqlite");
   const databaseUrl = `file:${databasePath.replaceAll("\\", "/")}`;
+  const migrationClient = createClient({ url: databaseUrl });
+  try {
+    await applyNetlifyMigrations(migrationClient);
+  } finally {
+    await migrationClient.close();
+  }
   const vitePath = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
   const serverArgs = [vitePath, "--host", "127.0.0.1", "--port", String(port), "--strictPort", "--configLoader", "runner"];
   serverCommand = [process.execPath, ...serverArgs].map((part) => JSON.stringify(part)).join(" ");
