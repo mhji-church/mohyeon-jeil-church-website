@@ -5,6 +5,7 @@ import NewsAccordionController from "./MobileNewsCollapse";
 import PublicPagination from "../components/PublicPagination";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/news" },
   title: "교회소식 | 모현제일교회",
   description: "모현제일교회의 예배, 모임과 섬김 소식을 전합니다.",
 };

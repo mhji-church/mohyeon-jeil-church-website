@@ -113,7 +113,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const thumbnailSrc = `/api/archive/videos/${encodeURIComponent(video.id)}/thumbnail`;
     return <article key={video.id} className={`media-card${featuredCard ? " featured" : ""}`}>
       <button className={`media-thumb${secure ? " attendance-obscured" : ""}${worshipObscured ? " worship-obscured" : ""}`} onClick={(event) => void play(video, event.currentTarget)} type="button" aria-label={`${video.title} ${allowed ? "재생" : "로그인 후 시청"}`}>
-        <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard ? "eager" : "lazy"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.png"; }} />
+        <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard ? "eager" : "lazy"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.webp"; }} />
         {worshipObscured && <span className="worship-privacy-mask" aria-hidden="true"><img src={thumbnailSrc} alt="" width="1280" height="720" /></span>}
         {!allowed && <span className="locked-overlay"><span className="archive-lock-icon"><ArchiveIcon name="lock" size={18} /></span><strong>{access.approvalPending ? "관리자 승인 후 시청" : access.authenticated ? "열람 권한 필요" : "로그인 후 시청"}</strong></span>}
         {allowed && <span className="play-overlay"><span className="archive-play-icon"><ArchiveIcon name="play" size={22} /></span></span>}

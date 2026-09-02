@@ -1,5 +1,6 @@
 "use client";
 
+import "./archive-original.css";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 

@@ -11,30 +11,35 @@ const heroEyebrow = "MOHYEON JEIL CHURCH";
 const heroSlides = [
   {
     image: "/assets/hero-drone-4k.webp",
+    mobileImage: "/assets/hero-spring-mobile.webp",
     mobilePosition: "46% 50%",
     alt: "봄의 모현제일교회 드론 전경",
     position: "center 50%",
   },
   {
     image: "/assets/hero-sign-4k.webp",
+    mobileImage: "/assets/hero-sign-mobile.webp",
     mobilePosition: "left 48%",
     alt: "모현제일교회 외벽 표지",
     position: "left 48%",
   },
   {
     image: "/assets/hero-worship-4k.webp",
+    mobileImage: "/assets/hero-worship-mobile.webp",
     mobilePosition: "center 52%",
     alt: "모현제일교회 예배 모습",
     position: "center 54%",
   },
   {
     image: "/assets/hero-flowers-4k.webp",
+    mobileImage: "/assets/hero-flowers-mobile.webp",
     mobilePosition: "center 42%",
     alt: "꽃밭 너머로 보이는 모현제일교회",
     position: "center 57%",
   },
   {
     image: "/assets/hero-winter-4k.webp",
+    mobileImage: "/assets/hero-winter-mobile.webp",
     mobilePosition: "center 52%",
     alt: "겨울 들녘과 모현제일교회 드론 전경",
     position: "center 52%",
@@ -573,6 +578,7 @@ function HomeFloatingActions() {
   const [openInChrome, setOpenInChrome] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
   const [signupNoticeChecked, setSignupNoticeChecked] = useState(false);
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [installed, setInstalled] = useState(() =>
     typeof window !== "undefined" &&
     (window.matchMedia("(display-mode: standalone)").matches ||
@@ -606,7 +612,19 @@ function HomeFloatingActions() {
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      navigator.serviceWorker.register("/sw.js").then((registration) => {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          setWaitingWorker(registration.waiting);
+        }
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          worker?.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) {
+              setWaitingWorker(worker);
+            }
+          });
+        });
+      }).catch(() => undefined);
     }
 
     return () => {
@@ -622,6 +640,10 @@ function HomeFloatingActions() {
     let timer = 0;
     const evaluate = () => {
       window.clearTimeout(timer);
+      if (authenticated === null) {
+        setSignupOpen(false);
+        return;
+      }
       timer = window.setTimeout(() => {
         setSignupNoticeChecked(true);
         if (authenticated || !mediaQuery.matches) {
@@ -692,6 +714,17 @@ function HomeFloatingActions() {
     setInstallHelp("");
   };
 
+  const activateUpdate = () => {
+    if (!waitingWorker) return;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
+    waitingWorker.postMessage({ type: "SKIP_WAITING" });
+  };
+
   const closeSignupNotice = () => {
     try {
       window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1");
@@ -719,6 +752,12 @@ function HomeFloatingActions() {
 
   return (
     <div className="home-floating-actions">
+      {waitingWorker && !signupOpen && !installPanelOpen && (
+        <div className="home-update-notice" role="status">
+          <span>새 버전이 있습니다</span>
+          <button type="button" onClick={activateUpdate}>새로고침</button>
+        </div>
+      )}
       {showScrollTop && (
         <button
           className="home-scroll-top"
@@ -920,12 +959,14 @@ export default function Home() {
               aria-hidden={index !== activeSlide}
             >
               <picture>
+                <source media="(max-width: 720px)" srcSet={slide.mobileImage} />
                 <img
                   src={slide.image}
                   alt={index === activeSlide ? slide.alt : ""}
-                  loading={index <= 1 ? "eager" : "lazy"}
+                  loading={index === 0 ? "eager" : "lazy"}
                   fetchPriority={index === 0 ? "high" : "auto"}
                   decoding="async"
+                  sizes="100vw"
                   style={{
                     objectPosition: slide.position,
                     "--hero-mobile-position": slide.mobilePosition,

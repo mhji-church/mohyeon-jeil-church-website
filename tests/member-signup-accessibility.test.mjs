@@ -102,10 +102,11 @@ test("signup and login dialogs support keyboard and screen reader users", async 
 });
 
 test("mobile homepage prioritizes the unauthenticated signup notice over the PWA prompt", async () => {
-  const [home, layout, chrome, styles] = await Promise.all([
+  const [home, layout, chrome, header, styles] = await Promise.all([
     readFile("app/page.tsx", "utf8"),
     readFile("app/layout.tsx", "utf8"),
     readFile("app/components/SiteLayoutChrome.tsx", "utf8"),
+    readFile("app/components/SiteChrome.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
   ]);
 
@@ -123,8 +124,8 @@ test("mobile homepage prioritizes the unauthenticated signup notice over the PWA
   assert.match(home, /mhji-signup-notice-hide-date/);
   assert.match(home, /mhji-member-signup-completed/);
   assert.doesNotMatch(home, /localStorage\.setItem\([^\n]*(password|phone|birth|name)/i);
-  assert.match(layout, /getAdminSession/);
-  assert.match(layout, /initiallyAuthenticated=\{Boolean\(member \|\| admin\)\}/);
+  assert.doesNotMatch(layout, /get(Admin|Member)Session/);
+  assert.match(header, /fetch\("\/api\/session", \{ cache: "no-store" \}\)/);
   assert.match(chrome, /useSiteAuthentication/);
   assert.match(styles, /\.home-signup-sheet[\s\S]*font-size: 16px/);
   assert.match(styles, /\.home-signup-actions a[\s\S]*min-height: 52px/);

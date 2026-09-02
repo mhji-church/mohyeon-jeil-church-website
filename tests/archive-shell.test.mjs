@@ -38,6 +38,7 @@ test("archive shell keeps brand, navigation, return path, and theme controls", (
   const portal = read("app/archive/ArchivePortal.tsx");
   const shell = read("app/archive/ArchiveShell.tsx");
   const styles = read("app/archive/archive-original.css");
+  const globalStyles = read("app/globals.css");
 
   assert.match(shell, /src="\/archive\/brand\/mohyeon-logo-light\.png"/);
   assert.match(shell, /src="\/archive\/brand\/mohyeon-logo-dark\.png"/);
@@ -50,7 +51,9 @@ test("archive shell keeps brand, navigation, return path, and theme controls", (
   assert.match(shell, /showSongs/);
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /min-height: 74px/);
-  assert.match(styles, /PretendardVariable\.woff2/);
+  assert.match(shell, /import "\.\/archive-original\.css"/);
+  assert.doesNotMatch(styles, /PretendardVariable\.woff2|@font-face/);
+  assert.doesNotMatch(globalStyles, /archive-v2/);
   assert.match(styles, /\.archive-original-root:not\(\.admin-cms\) \{ padding-top: var\(--header-height\); \}/);
   assert.match(styles, /\.archive-original-root:not\(\.admin-cms\) > \.site-header \{ position: fixed; inset: 0 0 auto; width: 100%; \}/);
 });

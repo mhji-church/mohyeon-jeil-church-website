@@ -1,11 +1,3 @@
-@font-face {
-  font-family: "Pretendard Archive";
-  src: url("/archive/fonts/PretendardVariable.woff2") format("woff2-variations");
-  font-style: normal;
-  font-weight: 45 920;
-  font-display: swap;
-}
-
 .archive-original-root {
   color-scheme: light;
   --sidebar-width: 208px;

@@ -4,6 +4,7 @@ import BulletinBoard from "./BulletinBoard";
 import { listPublicContentPostPage } from "../../lib/content";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/bulletin" },
   title: "주보 | 모현제일교회",
   description: "모현제일교회 주보를 날짜별로 확인합니다.",
 };

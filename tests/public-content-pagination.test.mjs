@@ -52,7 +52,8 @@ test("Pretendard is global and member filters expose interactive cursor states",
 
   assert.doesNotMatch(layout, /next\/font\/google|Geist|Geist_Mono/);
   assert.match(members, /router\.push\([^;]+, \{ scroll: false \}\)/);
-  assert.match(styles, /@font-face[\s\S]*font-family: "Pretendard Archive"[\s\S]*PretendardVariable\.woff2/);
+  assert.match(layout, /pretendardvariable-dynamic-subset\.css/);
+  assert.doesNotMatch(styles, /PretendardVariable\.woff2|@font-face/);
   assert.match(styles, /--font-pretendard:[\s\S]*"Malgun Gothic", sans-serif/);
   assert.match(styles, /body[\s\S]*font-family: var\(--font-pretendard\)/);
   assert.match(styles, /\.admin-member-filters button[\s\S]*cursor: pointer/);

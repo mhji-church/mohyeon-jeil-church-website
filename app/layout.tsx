@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import SiteLayoutChrome from "./components/SiteLayoutChrome";
-import { getAdminSession } from "./credential-auth";
-import { getMemberSession } from "./member-auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mhji.kr"),
   title: "모현제일교회",
   description: "말씀 중심의 예배와 사랑의 섬김이 있는 모현제일교회입니다.",
+  alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -46,24 +45,37 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const member = await getMemberSession();
-  const admin = await getAdminSession();
-  const initialMember = member
-    ? { name: member.name, position: member.position }
-    : null;
-
   return (
     <html lang="ko">
+      <head>
+        <link rel="stylesheet" href="/assets/fonts/pretendard/pretendardvariable-dynamic-subset.css" />
+      </head>
       <body className="antialiased">
-        <SiteLayoutChrome
-          initialMember={initialMember}
-          initiallyAuthenticated={Boolean(member || admin)}
-        >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Church",
+              name: "모현제일교회",
+              url: "https://mhji.kr",
+              telephone: "031-333-5420",
+              address: {
+                "@type": "PostalAddress",
+                streetAddress: "백옥대로 2318-22",
+                addressLocality: "처인구 모현읍",
+                addressRegion: "경기도 용인시",
+                addressCountry: "KR",
+              },
+            }).replace(/</g, "\\u003c"),
+          }}
+        />
+        <SiteLayoutChrome>
           {children}
         </SiteLayoutChrome>
       </body>

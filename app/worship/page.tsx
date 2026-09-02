@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import VideoArchivePage, { type ArchiveVideo } from "../components/VideoArchivePage";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/worship" },
   title: "주일예배 | 모현제일교회",
   description: "모현제일교회 주일예배 전체 영상을 확인할 수 있습니다.",
 };

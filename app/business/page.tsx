@@ -3,6 +3,7 @@ import ContentPage from "../components/ContentPage";
 import { listContentPosts } from "../../lib/content";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/business" },
   title: "성도사업장 | 모현제일교회",
   description: "모현제일교회 성도사업장 소개 페이지입니다.",
 };

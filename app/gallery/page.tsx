@@ -6,6 +6,7 @@ import { listContentPosts, listPublicGalleryPosts } from "../../lib/content";
 import { getMemberSession } from "../member-auth";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/gallery" },
   title: "갤러리 | 모현제일교회",
   description: "모현제일교회의 예배와 섬김, 교제의 순간을 사진으로 나눕니다.",
 };

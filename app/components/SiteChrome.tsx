@@ -41,25 +41,28 @@ function ArrowIcon({ diagonal = false }: { diagonal?: boolean }) {
   );
 }
 
-export function SiteHeader({ initialMember }: { initialMember: HeaderMember | null }) {
+export function SiteHeader({ onAuthenticationChange }: { onAuthenticationChange: (value: boolean) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [worshipOpen, setWorshipOpen] = useState(false);
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
-  const [member, setMember] = useState<HeaderMember | null>(initialMember);
+  const [member, setMember] = useState<HeaderMember | null>(null);
 
   useEffect(() => {
     let active = true;
     const loadMember = () => {
-      fetch("/api/members/profile", { cache: "no-store" })
+      fetch("/api/session", { cache: "no-store" })
         .then(async (response) => {
           if (response.ok) {
-            return response.json() as Promise<{ member?: HeaderMember }>;
+            return response.json() as Promise<{ authenticated: boolean; member?: HeaderMember | null }>;
           }
-          if (response.status === 401) return { member: null };
+          if (response.status === 401) return { authenticated: false, member: null };
           throw new Error(`회원 정보 확인 실패: ${response.status}`);
         })
-        .then((data: { member?: HeaderMember | null }) => {
-          if (active) setMember(data.member ?? null);
+        .then((data: { authenticated: boolean; member?: HeaderMember | null }) => {
+          if (active) {
+            setMember(data.member ?? null);
+            onAuthenticationChange(data.authenticated);
+          }
         })
         // 네트워크 전환이나 페이지 이동 중 요청 실패는 이미 확인한 로그인
         // 상태를 비로그인으로 덮어쓰지 않는다. 401 응답일 때만 해제한다.
@@ -80,7 +83,7 @@ export function SiteHeader({ initialMember }: { initialMember: HeaderMember | nu
       }
       window.removeEventListener("member-profile-updated", loadMember);
     };
-  }, []);
+  }, [onAuthenticationChange]);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";

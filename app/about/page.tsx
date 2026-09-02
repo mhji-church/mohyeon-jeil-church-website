@@ -4,6 +4,7 @@ import ContentPage from "../components/ContentPage";
 export const metadata: Metadata = {
   title: "교회 소개 | 모현제일교회",
   description: "말씀으로 바로 서고 사랑으로 지역을 섬기는 모현제일교회를 소개합니다.",
+  alternates: { canonical: "/about" },
 };
 
 const values = [
