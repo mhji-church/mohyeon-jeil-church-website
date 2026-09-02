@@ -12,6 +12,7 @@ import { requireAdminApi } from "../../../admin-auth";
 import { hasExternalR2, putExternalObject } from "../../../../lib/external-r2";
 import { externalMediaUrl } from "../../../../lib/media-path";
 import { getKoreaDate } from "../../../../lib/korea-date";
+import { apiError } from "../../../../lib/api-response";
 
 const allowedTypes = new Set<ContentType>(["bulletin", "news", "gallery", "business"]);
 const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -126,11 +127,7 @@ export async function GET() {
   try {
     return Response.json({ posts: await listContentPosts({ includeDrafts: true, limit: 200 }) });
   } catch (error) {
-    console.error("[admin posts GET] content list read failed", error);
-    return Response.json(
-      { error: "게시물을 불러오지 못했습니다. 잠시 후 새로고침해 주세요." },
-      { status: 503 },
-    );
+    return apiError("admin.posts.list", error, "게시물을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.", 503);
   }
 }
 
@@ -160,14 +157,14 @@ export async function POST(request: Request) {
       user.email,
     );
     uploaded = prepared.uploaded;
-    const id = await createContentPost(prepared.input);
+    const id = await createContentPost(prepared.input, {
+      actorId: user.email, action: "content.create", targetType: prepared.input.type,
+      metadata: { status: prepared.input.status, date: prepared.input.date },
+    });
     return Response.json({ id }, { status: 201 });
   } catch (error) {
     if (uploaded.length) await deleteUploadedImages(uploaded);
-    return Response.json(
-      { error: error instanceof Error ? error.message : "저장하지 못했습니다." },
-      { status: 400 },
-    );
+    return apiError("admin.posts.create", error, "게시물을 저장하지 못했습니다.", 400);
   }
 }
 
@@ -198,7 +195,10 @@ export async function PUT(request: Request) {
       user.email,
     );
     uploaded = prepared.uploaded;
-    await updateContentPost(payload.id, prepared.input);
+    await updateContentPost(payload.id, prepared.input, {
+      actorId: user.email, action: "content.update", targetType: prepared.input.type,
+      metadata: { status: prepared.input.status, date: prepared.input.date },
+    });
     if (previous) {
       await deleteUploadedImages(
         previous.images.filter((image) => !prepared.input.images.includes(image)),
@@ -207,20 +207,23 @@ export async function PUT(request: Request) {
     return Response.json({ ok: true });
   } catch (error) {
     if (uploaded.length) await deleteUploadedImages(uploaded);
-    return Response.json(
-      { error: error instanceof Error ? error.message : "저장하지 못했습니다." },
-      { status: 400 },
-    );
+    return apiError("admin.posts.update", error, "게시물을 저장하지 못했습니다.", 400);
   }
 }
 
 export async function DELETE(request: Request) {
-  const denied = await authorize();
-  if (denied) return denied;
+  const user = await requireAdminApi();
+  if (!user) return Response.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return Response.json({ error: "게시물 ID가 없습니다." }, { status: 400 });
-  const post = await getContentPost(id);
-  await deleteContentPost(id);
-  if (post) await deleteUploadedImages(post.images);
-  return Response.json({ ok: true });
+  try {
+    const post = await getContentPost(id);
+    await deleteContentPost(id, {
+      actorId: user.email, action: "content.delete", targetType: post?.type ?? "content",
+    });
+    if (post) await deleteUploadedImages(post.images);
+    return Response.json({ ok: true });
+  } catch (error) {
+    return apiError("admin.posts.delete", error, "게시물을 삭제하지 못했습니다.");
+  }
 }

@@ -1,9 +1,17 @@
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
+import { recordAdminAudit } from "./admin-audit";
 
 export async function recordArchiveAudit(input: { actor: string; action: string; targetType: string; targetId?: string; summary: string; details?: Record<string, string> }) {
   await ensureNetlifySchema();
   await getNetlifyDb().prepare(`INSERT INTO archive_audit_logs (id, actor, action, target_type, target_id, summary, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), input.actor, input.action, input.targetType, input.targetId ?? "", input.summary, JSON.stringify(input.details ?? {})).run();
+  await recordAdminAudit({
+    actorId: input.actor,
+    action: `archive.${input.action}`,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    metadata: { summary: input.summary, ...(input.details ?? {}) },
+  });
 }
 
 export async function listArchiveAudit(options: { page: number; pageSize: number; query?: string }) {

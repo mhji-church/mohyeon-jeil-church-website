@@ -7,6 +7,7 @@ import {
   type MemberStatus,
 } from "../../../../lib/members";
 import { requireAdminApi } from "../../../admin-auth";
+import { apiError } from "../../../../lib/api-response";
 
 async function authorize() {
   const user = await requireAdminApi();
@@ -27,11 +28,8 @@ export async function GET(request: Request) {
       return Response.json({ pendingCount: await countPendingMembers() });
     }
     return Response.json({ members: await listMembers() });
-  } catch {
-    return Response.json(
-      { error: "회원 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요." },
-      { status: 503 },
-    );
+  } catch (error) {
+    return apiError("admin.members.list", error, "회원 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", 503);
   }
 }
 
@@ -55,7 +53,7 @@ export async function PATCH(request: Request) {
   }
   try {
     if (payload?.action === "reset-password") {
-      const temporaryPassword = await resetMemberPassword(id);
+      const temporaryPassword = await resetMemberPassword(id, user.email);
       return Response.json({ ok: true, temporaryPassword });
     }
     const allowedStatuses = new Set<MemberStatus>(["pending", "approved", "suspended"]);
@@ -89,20 +87,17 @@ export async function PATCH(request: Request) {
     );
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "회원 정보를 수정하지 못했습니다." },
-      { status: 400 },
-    );
+    return apiError("admin.members.update", error, "회원 정보를 수정하지 못했습니다.", 400);
   }
 }
 
 export async function DELETE(request: Request) {
-  const { denied } = await authorize();
-  if (denied) return denied;
+  const { denied, user } = await authorize();
+  if (denied || !user) return denied;
   const id = new URL(request.url).searchParams.get("id");
   if (!id) {
     return Response.json({ error: "회원 정보를 확인해 주세요." }, { status: 400 });
   }
-  await deleteMember(id);
+  await deleteMember(id, user.email);
   return Response.json({ ok: true });
 }

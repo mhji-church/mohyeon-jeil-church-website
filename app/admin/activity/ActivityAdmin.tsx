@@ -5,7 +5,7 @@ import { ArchiveIcon, ArchiveShell } from "@/app/archive/ArchiveShell";
 type Log = { id:string; actor:string; action:string; targetType:string; targetId:string; summary:string; details:Record<string,string>; createdAt:string };
 export default function ActivityAdmin({ userEmail }: { userEmail: string }) {
   const [logs,setLogs]=useState<Log[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(20),[query,setQuery]=useState(""),[selected,setSelected]=useState<Log|null>(null);
-  const load=useCallback(async()=>{const params=new URLSearchParams({page:String(page),pageSize:String(pageSize),q:query});const response=await fetch(`/api/admin/activity?${params}`,{cache:"no-store"});if(response.ok){const data=await response.json();setLogs(data.logs??[]);setTotal(data.total??0)}},[page,pageSize,query]);
+  const load=useCallback(async()=>{const params=new URLSearchParams({page:String(page),pageSize:String(pageSize),q:query});const response=await fetch(`/api/archive/admin/activity?${params}`,{cache:"no-store"});if(response.ok){const data=await response.json();setLogs(data.logs??[]);setTotal(data.total??0)}},[page,pageSize,query]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),180);return()=>clearTimeout(timer)},[load]);
   const pages=Math.max(1,Math.ceil(total/pageSize));
   return <ArchiveShell admin active="activity" account={<a className="header-action-link" href="/api/archive/admin/session" aria-label="로그아웃"><ArchiveIcon name="logout" size={17} className="mobile-header-action-icon" /><span>로그아웃</span></a>}>

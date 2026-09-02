@@ -2,6 +2,7 @@ import { requireArchiveAdminApi } from "@/app/archive-admin-auth";
 import { saveArchiveVideoAnalysis } from "@/lib/archive-analysis";
 import { listArchiveVideos, upsertArchiveVideo, type ArchiveVideoType } from "@/lib/archive";
 import { recordArchiveAudit } from "@/lib/archive-audit";
+import { apiError } from "@/lib/api-response";
 import type { ArchiveVideoAnalysis } from "@/lib/archive-shared";
 import { syncArchiveVideoSongs } from "@/lib/archive-songs";
 
@@ -12,15 +13,19 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const type = params.get("type");
   const serviceGroup = params.get("serviceGroup");
-  return Response.json(await listArchiveVideos({
-    type: type === "worship" || type === "attendance" ? (type as ArchiveVideoType) : undefined,
-    serviceGroup: serviceGroup === "sunday" || serviceGroup === "other" ? serviceGroup : undefined,
-    search: params.get("search") ?? undefined,
-    sort: params.get("sort") === "oldest" ? "oldest" : "newest",
-    page: Number(params.get("page") || 1),
-    pageSize: 10,
-    analysis: "admin",
-  }));
+  try {
+    return Response.json(await listArchiveVideos({
+      type: type === "worship" || type === "attendance" ? (type as ArchiveVideoType) : undefined,
+      serviceGroup: serviceGroup === "sunday" || serviceGroup === "other" ? serviceGroup : undefined,
+      search: params.get("search") ?? undefined,
+      sort: params.get("sort") === "oldest" ? "oldest" : "newest",
+      page: Number(params.get("page") || 1),
+      pageSize: 10,
+      analysis: "admin",
+    }));
+  } catch (error) {
+    return apiError("archive.videos.admin.list", error, "아카이브 영상을 불러오지 못했습니다.", 503);
+  }
 }
 
 export async function POST(request: Request) {
@@ -66,6 +71,9 @@ export async function POST(request: Request) {
     await recordArchiveAudit({ actor: admin.email, action: body.id ? "video.update" : "video.create", targetType: "archive_video", targetId: id, summary: `${String(body.title ?? "영상")} ${body.id ? "수정" : "등록"}`, details: { type: String(body.type), serviceType: String(body.serviceType ?? "") } });
     return Response.json({ ok: true, id }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "영상을 저장하지 못했습니다." }, { status: 400 });
+    if (error instanceof Error && error.message === "이미 등록된 유튜브 영상입니다.") {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+    return apiError("archive.videos.save", error, "영상을 저장하지 못했습니다.", 400);
   }
 }

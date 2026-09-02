@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members";
+export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity";
 
 type Props = {
   active: AdminSection;
@@ -20,6 +20,7 @@ const menuItems: Array<{ key: AdminSection; label: string; href: string }> = [
   { key: "gallery", label: "갤러리 관리", href: "/admin/content?section=gallery" },
   { key: "business", label: "성도사업장 관리", href: "/admin/content?section=business" },
   { key: "members", label: "회원 관리", href: "/admin/members" },
+  { key: "activity", label: "활동 기록", href: "/admin/activity" },
 ];
 
 export default function AdminSidebar({

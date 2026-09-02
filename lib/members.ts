@@ -1,5 +1,6 @@
 import { normalizeMobilePhone } from "./phone";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
+import { adminAuditStatement } from "./admin-audit";
 import {
   memberLoginCandidate,
   normalizeMemberLogin,
@@ -343,14 +344,14 @@ export async function updateMember(
       ? adminUsername
       : current.approvedBy;
 
-  await getD1()
-    .prepare(
+  const db = getD1();
+  await db.batch([
+    db.prepare(
       `UPDATE members SET
        name = ?, phone = ?, birth_date = ?, position = ?, status = ?,
        approved_at = ?, approved_by = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-    )
-    .bind(
+    ).bind(
       (input.name ?? current.name).trim(),
       phone,
       (input.birthDate ?? current.birthDate).trim(),
@@ -359,8 +360,15 @@ export async function updateMember(
       approvedAt,
       approvedBy,
       id,
-    )
-    .run();
+    ),
+    adminAuditStatement({
+      actorId: adminUsername,
+      action: "member.update",
+      targetType: "member",
+      targetId: id,
+      metadata: { previousStatus: current.status, status },
+    }),
+  ]);
 }
 
 export async function updateMemberProfile(
@@ -399,19 +407,27 @@ export async function updateMemberProfile(
     .run();
 }
 
-export async function resetMemberPassword(id: string) {
+export async function resetMemberPassword(id: string, adminUsername?: string) {
   await ensureMemberStore();
   const member = await getMember(id);
   if (!member) throw new Error("회원을 찾을 수 없습니다.");
   const temporaryPassword = createTemporaryPassword();
   const { hash, salt } = await hashPassword(temporaryPassword);
-  await getD1()
-    .prepare(
+  const db = getD1();
+  const statement = db.prepare(
       `UPDATE members SET password_hash = ?, password_salt = ?,
        force_password_change = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    )
-    .bind(hash, salt, id)
-    .run();
+    ).bind(hash, salt, id);
+  if (adminUsername) {
+    await db.batch([statement, adminAuditStatement({
+      actorId: adminUsername,
+      action: "member.password_reset",
+      targetType: "member",
+      targetId: id,
+    })]);
+  } else {
+    await statement.run();
+  }
   return temporaryPassword;
 }
 
@@ -430,13 +446,20 @@ export async function changeMemberPassword(id: string, password: string) {
     .run();
 }
 
-export async function deleteMember(id: string) {
+export async function deleteMember(id: string, adminUsername?: string) {
   await ensureMemberStore();
   const db = getD1();
-  await db.batch([
+  const statements = [
     db.prepare("DELETE FROM member_app_access WHERE member_id = ?").bind(id),
     db.prepare("DELETE FROM members WHERE id = ?").bind(id),
-  ]);
+  ];
+  if (adminUsername) statements.push(adminAuditStatement({
+    actorId: adminUsername,
+    action: "member.delete",
+    targetType: "member",
+    targetId: id,
+  }));
+  await db.batch(statements);
 }
 
 async function hashPassword(password: string, suppliedSalt?: Uint8Array) {
