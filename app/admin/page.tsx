@@ -4,6 +4,7 @@ import { getAdminContentSummary, type ContentPost, type ContentType } from "../.
 import { getAdminMemberSummary } from "../../lib/members";
 import { getKoreaDate } from "../../lib/korea-date";
 import AdminSidebar from "./AdminSidebar";
+import { logServerError } from "../../lib/api-response";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +46,12 @@ export default async function AdminHomePage() {
   try {
     memberSummary = await getAdminMemberSummary();
   } catch (error) {
-    console.error("[admin home] member summary read failed", error);
+    logServerError("admin.home.member_summary", error);
   }
   try {
     contentSummary = await getAdminContentSummary(month);
   } catch (error) {
-    console.error("[admin home] content summary read failed", error);
+    logServerError("admin.home.content_summary", error);
   }
   const pendingCount = memberSummary?.pendingCount ?? null;
   const approvedCount = memberSummary?.approvedCount ?? null;

@@ -2,8 +2,9 @@ import { getAdminSession } from "../../../credential-auth";
 import { getMemberSession } from "../../../member-auth";
 import { getContentPost, uploadedObjectKey } from "../../../../lib/content";
 import { getExternalObject } from "../../../../lib/external-r2";
+import { apiError } from "../../../../lib/api-response";
 
-export async function GET(request: Request) {
+async function getGalleryMedia(request: Request) {
   const [member, admin] = await Promise.all([
     getMemberSession(),
     getAdminSession(),
@@ -44,4 +45,12 @@ export async function GET(request: Request) {
     return new Response("Not found", { status: 404 });
   }
   return Response.redirect(new URL(source, request.url), 307);
+}
+
+export async function GET(request: Request) {
+  try {
+    return await getGalleryMedia(request);
+  } catch (error) {
+    return apiError("gallery.media.read", error, "갤러리 이미지를 불러오지 못했습니다.", 503);
+  }
 }

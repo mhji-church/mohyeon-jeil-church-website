@@ -4,6 +4,7 @@ import {
   updateMemberProfile,
 } from "../../../../lib/members";
 import { getMemberSession } from "../../../member-auth";
+import { apiError } from "../../../../lib/api-response";
 
 export async function GET() {
   const member = await getMemberSession();
@@ -72,9 +73,6 @@ export async function PATCH(request: Request) {
 
     return Response.json({ error: "요청 내용을 확인해 주세요." }, { status: 400 });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "회원 정보를 변경하지 못했습니다." },
-      { status: 400 },
-    );
+    return apiError("members.profile.update", error, "회원 정보를 변경하지 못했습니다. 입력값을 확인해 주세요.", 400);
   }
 }

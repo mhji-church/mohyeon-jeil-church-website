@@ -4,6 +4,7 @@ import {
   syncYouTubePlaylist,
   type YouTubePlaylistType,
 } from "../../../lib/youtube";
+import { apiError } from "../../../lib/api-response";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +28,6 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (error) {
-    console.error("Failed to update the YouTube playlist", error);
-    return NextResponse.json(
-      { error: "유튜브 영상 목록을 불러오지 못했습니다." },
-      { status: 502 },
-    );
+    return apiError("youtube.playlist.sync", error, "유튜브 영상 목록을 불러오지 못했습니다.", 502);
   }
 }

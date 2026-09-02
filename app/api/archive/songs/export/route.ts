@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { requireArchiveSongApi } from "@/lib/archive-access";
 import { parseSongStatsOptions, songStatsPeriodLabel, songStatsServiceLabel } from "@/lib/archive-song-request";
 import { getArchiveSongExportHistory, getArchiveSongStats } from "@/lib/archive-songs";
+import { apiError } from "@/lib/api-response";
 
 function archiveSectionForService(serviceType: string) { return serviceType.startsWith("주일 ") ? "sunday" : "other"; }
 
@@ -42,6 +43,6 @@ export async function GET(request: Request) {
     const filename = `찬양통계_${songStatsServiceLabel(options.service)}_${songStatsPeriodLabel(options)}.xlsx`;
     return new Response(bytes, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`, "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Excel 파일을 만들지 못했습니다." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    return apiError("archive.songs.export", error, "Excel 파일을 만들지 못했습니다.", 400);
   }
 }

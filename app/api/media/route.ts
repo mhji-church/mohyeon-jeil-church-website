@@ -2,6 +2,7 @@ import { getAdminSessionFromToken } from "../../credential-auth";
 import { getMemberSessionFromToken } from "../../member-auth";
 import { getUploadedMediaAccess } from "../../../lib/content";
 import { getExternalObject } from "../../../lib/external-r2";
+import { apiError } from "../../../lib/api-response";
 
 function cookieValue(cookieHeader: string | null, name: string) {
   if (!cookieHeader) return null;
@@ -13,7 +14,7 @@ function cookieValue(cookieHeader: string | null, name: string) {
   return null;
 }
 
-export async function serveExternalMedia(
+async function serveExternalMediaUnsafe(
   key: string | null,
   cookieHeader: string | null,
 ) {
@@ -49,6 +50,17 @@ export async function serveExternalMedia(
     );
   }
   return new Response(body, { headers });
+}
+
+export async function serveExternalMedia(
+  key: string | null,
+  cookieHeader: string | null,
+) {
+  try {
+    return await serveExternalMediaUnsafe(key, cookieHeader);
+  } catch (error) {
+    return apiError("media.read", error, "이미지를 불러오지 못했습니다.", 503);
+  }
 }
 
 export async function GET(request: Request) {

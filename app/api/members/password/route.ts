@@ -1,5 +1,6 @@
 import { changeMemberPassword } from "../../../../lib/members";
 import { getMemberSession } from "../../../member-auth";
+import { apiError } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
   const member = await getMemberSession();
@@ -14,9 +15,6 @@ export async function POST(request: Request) {
     await changeMemberPassword(member.id, password);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "비밀번호를 변경하지 못했습니다." },
-      { status: 400 },
-    );
+    return apiError("members.password.change", error, "비밀번호를 변경하지 못했습니다. 입력값을 확인해 주세요.", 400);
   }
 }

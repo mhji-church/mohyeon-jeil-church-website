@@ -70,14 +70,14 @@ test("uses one responsive admin layout for every content section", () => {
   assert.match(membersSource, /getAdminMemberSummary/);
   assert.match(membersSource, /SUM\(CASE WHEN status = 'pending'/);
   assert.doesNotMatch(home, /Promise\.allSettled/);
-  assert.match(home, /member summary read failed/);
-  assert.match(home, /content summary read failed/);
+  assert.match(home, /admin\.home\.member_summary/);
+  assert.match(home, /admin\.home\.content_summary/);
   assert.match(database, /transientReadErrorCodes/);
   assert.match(database, /isReadStatement\(statement\.sql\)/);
   assert.match(database, /readRetryDelayMs = 150/);
   assert.match(database, /async run\(\)[\s\S]*this\.client\.execute/);
-  assert.match(postsRoute, /content list read failed/);
-  assert.match(postsRoute, /status: 503/);
+  assert.match(postsRoute, /admin\.posts\.list/);
+  assert.match(postsRoute, /admin\.posts\.list[\s\S]*503\)/);
   assert.match(dashboard, /response\.json\(\)\.catch\(\(\) => \(\{\}\)\)/);
   assert.match(dashboard, /finally \{\s*setLoading\(false\)/);
   assert.match(archive, /<ArchiveShell admin/);

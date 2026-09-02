@@ -1,5 +1,6 @@
 import { listArchiveVideos, type ArchiveVideoType } from "@/lib/archive";
 import { requireArchiveWorshipApi } from "@/lib/archive-access";
+import { apiError } from "@/lib/api-response";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       analysis: video.analysis ?? null,
     }));
     return Response.json({ ...result, videos }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
-    return Response.json({ error: "예배 기록을 불러오지 못했습니다." }, { status: 503 });
+  } catch (error) {
+    return apiError("archive.videos.list", error, "예배 기록을 불러오지 못했습니다.", 503);
   }
 }
