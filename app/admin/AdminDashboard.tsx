@@ -63,7 +63,7 @@ const supportedImageExtensions = new Set([
 ]);
 const maxSourceImageBytes = 80 * 1024 * 1024;
 const maxGifBytes = 4 * 1024 * 1024;
-// The Sites request gateway rejects multipart bodies well below the API route's
+// The production request gateway rejects multipart bodies well below the API route's
 // own 5 MB limit. Keep the optimized file comfortably below 1 MB so FormData
 // headers and fields cannot push an otherwise valid image over that boundary.
 const uploadTargetBytes = 760 * 1024;
@@ -110,6 +110,21 @@ const emptyPost = (type: ContentType): ContentPostInput => ({
   status: "published",
   sortOrder: 0,
 });
+
+function draftStorageKey(type: ContentType, editingId: string | null) {
+  return `mhji-admin-draft:${type}:${editingId ?? "new"}`;
+}
+
+function draftPayload(form: ContentPostInput, newsText: string) {
+  return {
+    form: {
+      ...form,
+      images: [],
+      content: form.type === "business" ? "" : form.content,
+    },
+    newsText: form.type === "news" ? newsText : "",
+  };
+}
 
 function parseNewsItems(content: string) {
   try {
@@ -366,8 +381,72 @@ export default function AdminDashboard({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<ContentPost | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const listStartRef = useRef<HTMLElement>(null);
   const handledInitialEdit = useRef(false);
+  const [cleanDraft, setCleanDraft] = useState(
+    JSON.stringify(draftPayload(emptyPost(initialType), initialCreate && initialType === "news" ? "| " : "")),
+  );
+  const handledInitialCreate = useRef(false);
+
+  const serializedDraft = useMemo(
+    () => JSON.stringify(draftPayload(form, newsText)),
+    [form, newsText],
+  );
+  const hasUnsavedChanges = editorOpen && serializedDraft !== cleanDraft;
+
+  useEffect(() => {
+    if (!editorOpen || !hasUnsavedChanges) return;
+    const key = draftStorageKey(form.type, editingId);
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(key, serializedDraft);
+      } catch {
+        // The editor remains usable when storage is unavailable.
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [editingId, editorOpen, form.type, hasUnsavedChanges, serializedDraft]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnForInternalNavigation = (event: MouseEvent) => {
+      const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === "_blank" || anchor.href === window.location.href) return;
+      if (!window.confirm("저장하지 않은 변경이 있습니다. 페이지를 이동할까요?")) {
+        event.preventDefault();
+        event.stopPropagation();
+      } else {
+        setCleanDraft(serializedDraft);
+      }
+    };
+    document.addEventListener("click", warnForInternalNavigation, true);
+    return () => document.removeEventListener("click", warnForInternalNavigation, true);
+  }, [hasUnsavedChanges, serializedDraft]);
+
+  useEffect(() => {
+    if (!initialCreate || handledInitialCreate.current) return;
+    handledInitialCreate.current = true;
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey(initialType, null));
+      if (!saved) return;
+      const draft = JSON.parse(saved) as { form?: ContentPostInput; newsText?: string };
+      const timer = window.setTimeout(() => {
+        if (draft.form?.type === initialType) setForm({ ...emptyPost(initialType), ...draft.form, images: [] });
+        if (initialType === "news" && typeof draft.newsText === "string") setNewsText(draft.newsText);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    } catch {
+      // Ignore malformed or unavailable local drafts.
+    }
+  }, [initialCreate, initialType]);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -384,9 +463,11 @@ export default function AdminDashboard({
         handledInitialEdit.current = true;
         const post = nextPosts.find((item) => item.id === initialEditId && item.type === initialType);
         if (post) {
+          const originalNewsText = post.type === "news" ? toNewsText(post.content) : "";
           setEditingId(post.id);
           setForm({ type: post.type, title: post.title, date: post.date, excerpt: post.excerpt, category: post.category, content: post.content, images: [...post.images], status: post.status, sortOrder: post.sortOrder });
-          setNewsText(post.type === "news" ? toNewsText(post.content) : "");
+          setNewsText(originalNewsText);
+          setCleanDraft(JSON.stringify(draftPayload({ type: post.type, title: post.title, date: post.date, excerpt: post.excerpt, category: post.category, content: post.content, images: [], status: post.status, sortOrder: post.sortOrder }, originalNewsText)));
           setEditorOpen(true);
         } else {
           setNotice("수정할 콘텐츠를 찾지 못했습니다.");
@@ -429,10 +510,24 @@ export default function AdminDashboard({
   }, [changePage, currentPage, loading, requestedPage]);
 
   const startCreate = () => {
-    const next = emptyPost(activeType);
+    let next = emptyPost(activeType);
+    let restoredNewsText = activeType === "news" ? "| " : "";
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey(activeType, null));
+      if (saved) {
+        const draft = JSON.parse(saved) as { form?: ContentPostInput; newsText?: string };
+        if (draft.form?.type === activeType) {
+          next = { ...next, ...draft.form, images: [] };
+          restoredNewsText = typeof draft.newsText === "string" ? draft.newsText : restoredNewsText;
+        }
+      }
+    } catch {
+      // Ignore malformed or unavailable local drafts.
+    }
     setEditingId(null);
     setForm(next);
-    setNewsText(activeType === "news" ? "| " : "");
+    setNewsText(restoredNewsText);
+    setCleanDraft(JSON.stringify(draftPayload(emptyPost(activeType), activeType === "news" ? "| " : "")));
     setEditorOpen(true);
     setNotice("");
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
@@ -445,7 +540,7 @@ export default function AdminDashboard({
 
   const startEdit = (post: ContentPost) => {
     setEditingId(post.id);
-    setForm({
+    const nextForm = {
       type: post.type,
       title: post.title,
       date: post.date,
@@ -455,8 +550,21 @@ export default function AdminDashboard({
       images: [...post.images],
       status: post.status,
       sortOrder: post.sortOrder,
-    });
-    setNewsText(post.type === "news" ? toNewsText(post.content) : "");
+    };
+    let nextNewsText = post.type === "news" ? toNewsText(post.content) : "";
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey(post.type, post.id));
+      if (saved) {
+        const draft = JSON.parse(saved) as { form?: ContentPostInput; newsText?: string };
+        if (draft.form?.type === post.type) Object.assign(nextForm, draft.form, { images: nextForm.images });
+        if (typeof draft.newsText === "string") nextNewsText = draft.newsText;
+      }
+    } catch {
+      // Ignore malformed or unavailable local drafts.
+    }
+    setForm(nextForm);
+    setNewsText(nextNewsText);
+    setCleanDraft(JSON.stringify(draftPayload({ type: post.type, title: post.title, date: post.date, excerpt: post.excerpt, category: post.category, content: post.content, images: [], status: post.status, sortOrder: post.sortOrder }, post.type === "news" ? toNewsText(post.content) : "")));
     setEditorOpen(true);
     setNotice("");
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
@@ -529,7 +637,8 @@ export default function AdminDashboard({
     );
   };
 
-  const closeEditor = () => {
+  const closeEditor = (force = false) => {
+    if (!force && hasUnsavedChanges && !window.confirm("저장하지 않은 변경이 있습니다. 작성을 닫을까요?")) return;
     pendingImages.forEach((image) => URL.revokeObjectURL(image.preview));
     setPendingImages([]);
     setEditorOpen(false);
@@ -537,6 +646,27 @@ export default function AdminDashboard({
     params.delete("edit");
     params.delete("new");
     router.replace(`${pathname}${params.size ? `?${params}` : ""}`);
+  };
+
+  const clonePreviousPost = () => {
+    const previous = visiblePosts[0];
+    if (!previous || (activeType !== "bulletin" && activeType !== "news")) return;
+    const next = {
+      ...emptyPost(activeType),
+      title: previous.title,
+      excerpt: previous.excerpt,
+      category: previous.category,
+      content: previous.content,
+      images: [],
+      status: "draft" as const,
+      sortOrder: previous.sortOrder,
+    };
+    setEditingId(null);
+    setForm(next);
+    setNewsText(activeType === "news" ? toNewsText(previous.content) : "");
+    setCleanDraft(JSON.stringify(draftPayload(emptyPost(activeType), activeType === "news" ? "| " : "")));
+    setEditorOpen(true);
+    setNotice("지난 게시물 내용을 새 글 폼에 복제했습니다. 날짜·제목과 이미지를 확인해 주세요.");
   };
 
   const moveImage = (index: number, amount: number) => {
@@ -639,7 +769,9 @@ export default function AdminDashboard({
       if (!response.ok) {
         throw new Error(data.error ?? `저장하지 못했습니다. (오류 ${response.status})`);
       }
-      closeEditor();
+      try { window.localStorage.removeItem(draftStorageKey(form.type, editingId)); } catch { /* Storage may be unavailable. */ }
+      setCleanDraft(JSON.stringify(draftPayload(savedPost, form.type === "news" ? newsText : "")));
+      closeEditor(true);
       setNotice(editingId ? "게시물을 수정했습니다." : "새 게시물을 등록했습니다.");
       await loadPosts();
       if (!editingId) changePage(1, true);
@@ -689,7 +821,12 @@ export default function AdminDashboard({
             <h1>{typeMeta[activeType].label} 관리</h1>
             <p>{typeMeta[activeType].description}</p>
           </div>
-          <div><button type="button" onClick={startCreate}>+ 새 {typeMeta[activeType].label} 등록</button></div>
+          <div>
+            {(activeType === "bulletin" || activeType === "news") && visiblePosts.length > 0 && (
+              <button type="button" onClick={clonePreviousPost}>지난 게시물 복제</button>
+            )}
+            <button type="button" onClick={startCreate}>+ 새 {typeMeta[activeType].label} 등록</button>
+          </div>
         </header>
 
         {notice && <div className="admin-notice" role="status">{notice}</div>}
@@ -770,7 +907,7 @@ export default function AdminDashboard({
                 <span>{editingId ? "EDIT CONTENT" : "NEW CONTENT"}</span>
                 <h2>{editingId ? `${typeMeta[form.type].label} 수정` : `새 ${typeMeta[form.type].label} 등록`}</h2>
               </div>
-              <button type="button" onClick={closeEditor} aria-label="닫기">×</button>
+              <button type="button" onClick={() => closeEditor()} aria-label="닫기">×</button>
             </header>
             {notice && (
               <div className="admin-editor-notice" role="alert">
@@ -1074,10 +1211,13 @@ export default function AdminDashboard({
               </div>
             </div>
             <footer>
+              <button className="admin-editor-cancel" type="button" onClick={() => setPreviewOpen(true)}>
+                미리보기
+              </button>
               <button
                 className="admin-editor-cancel"
                 type="button"
-                onClick={closeEditor}
+                onClick={() => closeEditor()}
               >
                 취소
               </button>
@@ -1086,6 +1226,19 @@ export default function AdminDashboard({
               </button>
             </footer>
           </form>
+        </div>
+      )}
+
+      {previewOpen && editorOpen && (
+        <div className="admin-confirm-backdrop" role="dialog" aria-modal="true" aria-label="게시물 미리보기">
+          <section className="admin-content-preview">
+            <span>PUBLIC PREVIEW</span>
+            <h2>{form.title || "제목을 입력해 주세요"}</h2>
+            <p>{form.date} · {form.status === "published" ? "공개 예정" : "임시저장"}</p>
+            {form.images[0] && <img src={form.images[0].startsWith("pending:") ? pendingImages.find((item) => `pending:${item.id}` === form.images[0])?.preview : form.images[0]} alt="대표 이미지 미리보기" />}
+            <p>{form.type === "news" ? newsText : form.excerpt || form.content || "표시할 내용이 없습니다."}</p>
+            <div><button type="button" onClick={() => setPreviewOpen(false)}>작성 화면으로 돌아가기</button></div>
+          </section>
         </div>
       )}
 
