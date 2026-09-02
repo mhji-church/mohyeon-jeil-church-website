@@ -9,12 +9,15 @@
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "node scripts/run-vite.mjs",
     "build": "vite build",
+    "build:netlify": "node scripts/migrate-netlify.mjs && vite build",
     "start": "node dist/server/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.mjs",
+    "test:browser": "node scripts/start-browser-regression.mjs",
     "validate:artifact": "test -f dist/server/index.mjs",
-    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .output",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "db:migrate:validate": "node scripts/validate-netlify-migrations.mjs",
     "db:backfill:songs": "node scripts/backfill-archive-songs.mjs"
   },
   "dependencies": {
@@ -30,6 +33,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "22.19.19",
@@ -45,7 +49,7 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.128.0"
   },
   "type": "module",
   "displayName": "모현제일교회 153 디자인"

@@ -70,7 +70,7 @@ Copy-Item -LiteralPath '.env.example' -Destination '.env.local'
 | `YOUTUBE_API_KEY` | YouTube Data API 호출 | 재생목록 동기화에 필요 |
 | `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` | 카카오맵 JavaScript SDK 공개 키 | 대화형 교회 위치 지도에 필요 |
 
-Netlify에는 기존 `docs/NETLIFY-ENV.example`을 기준으로 같은 이름을 등록한다. `.openai/hosting.json`의 `DB`·`BUCKET` 선언은 Sites 호환 설정이며 현재 Netlify 운영의 Turso·외부 R2 설정을 대체하지 않는다.
+Netlify에는 기존 `docs/NETLIFY-ENV.example`을 기준으로 같은 이름을 등록한다. 실제 운영 데이터는 Turso와 외부 Cloudflare R2를 사용한다.
 
 ## 4. 로컬 개발 서버
 

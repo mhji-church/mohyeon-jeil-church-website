@@ -10,7 +10,7 @@
 4. `docs/NETLIFY-DEPLOYMENT.md`
 5. `docs/NETLIFY-ENV.example`와 루트 `.env.example`의 변수 이름
 6. 루트 또는 작업 대상 하위 경로의 `AGENTS.md`가 새로 생겼는지 검색
-7. `package.json`, `package-lock.json`, `netlify.toml`, `.openai/hosting.json`
+7. `package.json`, `package-lock.json`, `netlify.toml`
 8. 요청과 직접 관련된 `app/`, `lib/`, `db/`, `netlify/`, `tests/` 파일
 
 ## 작업 기준
@@ -19,7 +19,7 @@
 - 실제 운영 브랜치는 `agent/netlify-deployment`이다.
 - 운영 사이트는 Netlify의 `https://mhji.kr`이다.
 - 2026-08-11 확인 운영 HEAD `07863a73570cde2b76b814913a7becc82aa9fdff`는 최소 기준이다. 원격 운영 브랜치가 더 최신이면 최신 커밋을 사용하며 과거 커밋으로 되돌리지 않는다.
-- `.openai/hosting.json`은 Sites 호환 설정일 뿐 실제 운영 호스팅을 바꾸라는 뜻이 아니다.
+- 실제 운영 호스팅은 Netlify이며 다른 호스팅 설정을 추가하지 않는다.
 
 ## 사용자 변경 보존
 

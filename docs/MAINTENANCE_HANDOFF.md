@@ -10,7 +10,7 @@
 - 빌드: `NITRO_PRESET=netlify npm run build`
 - 게시 디렉터리: `dist`
 
-`.openai/hosting.json`은 저장소에 남아 있는 Sites 호환 설정이다. 현재 실제 운영은 Netlify와 `mhji.kr`이며, 별도 승인 없이 호스팅 서비스를 바꾸지 않는다.
+실제 운영은 Netlify와 `mhji.kr`이다. 다른 호스팅 설정은 사용하지 않으며, 별도 승인 없이 호스팅 서비스를 바꾸지 않는다.
 
 ## 기술 스택과 애플리케이션 진입점
 
@@ -67,7 +67,7 @@
 
 ### Turso/libSQL
 
-`lib/netlify-db.ts`가 `TURSO_DATABASE_URL`과 `TURSO_AUTH_TOKEN`으로 접속한다. 최초 요청 시 다음 테이블을 `CREATE TABLE IF NOT EXISTS`로 보장한다.
+`lib/netlify-db.ts`가 `TURSO_DATABASE_URL`과 `TURSO_AUTH_TOKEN`으로 접속한다. 테이블은 요청 중 만들지 않고 Netlify 프로덕션 배포 전 `migrations/netlify/`의 순차 마이그레이션으로 관리한다.
 
 - `content_posts`: 주보·교회소식·갤러리·성도사업장
 - `members`: 교인 계정과 승인 상태
@@ -115,7 +115,7 @@
 ## 수정 금지·주의 영역
 
 - 사용자 승인 없이 운영 브랜치에 커밋·푸시하거나 Netlify 배포를 유발하지 않는다.
-- `.openai/hosting.json`이 있어도 운영 호스팅을 Sites나 다른 서비스로 전환하지 않는다.
+- 운영 호스팅을 Netlify가 아닌 다른 서비스로 전환하지 않는다.
 - 운영 `.env`, Turso 토큰, R2 키, YouTube 키, 관리자 비밀번호, 회원 개인정보를 출력·문서화·커밋하지 않는다.
 - 운영 Turso 레코드나 R2 객체를 준비·테스트 목적으로 수정·삭제하지 않는다.
 - 인증 쿠키 이름, 서명, 상태 판정, 갤러리 권한, 미디어 캐시 정책을 단순 UI 변경과 함께 건드리지 않는다.
@@ -139,6 +139,13 @@
 | PWA | manifest 이름·아이콘, 설치 UI, 서비스워커 등록 |
 
 ## 배포 전후 점검표
+
+### 2026-09-03 Next.js 보안 업데이트 재검증
+
+- React `19.2.6`, React DOM `19.2.6`, Vite `8.0.13`, Vinext `0.0.50`을 유지하고 Next.js만 `16.3.4`로 올려 시험했다.
+- `npm ls react react-dom next`에서는 React 중복이나 peer dependency 오류가 없었고 타입 검사와 전체 테스트는 통과했다.
+- 로컬 Netlify 빌드는 애플리케이션 검증 이전에 Windows 샌드박스의 사용자 프로필 `readlink` 권한 오류로 중단됐다. 업데이트 호환성을 끝까지 입증하지 못했으므로 패키지 파일을 시험 전 체크섬과 동일하게 복원하고 `npm ci`로 설치 트리도 재구성했다.
+- 현재 Next.js는 다시 `16.2.6`이다. `npm audit`이 보고하는 Next.js 취약점은 잔존 위험으로 관리하며, 다음 업데이트 시험은 사용자 프로필 경로 추적이 제한되지 않는 환경에서 Next.js만 변경해 Netlify 빌드와 Playwright까지 모두 통과한 뒤 유지한다.
 
 배포 전:
 

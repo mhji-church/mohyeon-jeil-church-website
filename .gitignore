@@ -50,6 +50,12 @@ next-env.d.ts
 /data/archive-videos.seed.json
 /data/archive-videos.*.json
 /artifacts/
+/backups/
+*.backup.json
+*.sha256
+/.browser-test/
+/playwright-report/
+/test-results/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
