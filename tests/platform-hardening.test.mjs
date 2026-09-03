@@ -21,19 +21,26 @@ test("safe API errors never serialize internal exception messages", () => {
   assert.match(response, /"Cache-Control": "private, no-store/);
 });
 
-test("Netlify cache and report-only security headers separate public and private routes", () => {
+test("static and runtime headers separate public CDN caching from private responses", () => {
   const netlify = read("netlify.toml");
+  const runtimePolicy = read("proxy.ts");
+  const youtubeRoute = read("app/api/youtube/route.ts");
   assert.match(netlify, /Content-Security-Policy-Report-Only/);
   assert.match(netlify, /frame-ancestors 'none'/);
   assert.match(netlify, /https:\/\/www\.youtube-nocookie\.com/);
   assert.match(netlify, /https:\/\/dapi\.kakao\.com/);
   assert.doesNotMatch(netlify, /unsafe-eval/);
-  for (const route of ["/api/*", "/admin/*", "/member/*", "/archive/*"]) {
-    const blockStart = netlify.indexOf(`for = "${route}"`);
-    assert.notEqual(blockStart, -1);
-    assert.match(netlify.slice(blockStart, blockStart + 160), /private, no-store/);
+  assert.match(netlify, /Strict-Transport-Security/);
+  assert.match(runtimePolicy, /Content-Security-Policy-Report-Only/);
+  assert.match(runtimePolicy, /Netlify-CDN-Cache-Control/);
+  assert.match(runtimePolicy, /setPublicCdnCache\(response\.headers, 60, 300\)/);
+  assert.match(runtimePolicy, /setPublicCdnCache\(response\.headers, 3600\)/);
+  for (const route of ["/api", "/admin", "/member", "/archive", "/gallery"]) {
+    assert.match(runtimePolicy, new RegExp(`"${route}"`));
   }
-  assert.match(netlify, /for = "\/"[\s\S]{0,120}s-maxage=60/);
+  assert.match(runtimePolicy, /private, no-store, max-age=0/);
+  assert.match(youtubeRoute, /private, no-store, max-age=0/);
+  assert.doesNotMatch(runtimePolicy, /unsafe-eval/);
 });
 
 test("only transient reads retry and mutation helpers never retry", () => {

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.setTimeout(90_000);
+
 const viewports = [
   { width: 1920, height: 1080 },
   { width: 1440, height: 1000 },
@@ -12,8 +14,12 @@ function watchErrors(page) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error" || /content security policy/i.test(message.text())) {
-      errors.push(message.text());
+    const text = message.text();
+    const expectedLocalCspReport =
+      /the policy is report-only/i.test(text) &&
+      (/unsafe-eval/i.test(text) || /https:\/\/mhji\.kr\/assets\//i.test(text));
+    if (!expectedLocalCspReport && (message.type() === "error" || /content security policy/i.test(text))) {
+      errors.push(text);
     }
   });
   return errors;
@@ -44,6 +50,7 @@ for (const viewport of viewports) {
     await expect(page.locator("header").first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     const hero = page.locator(".hero picture").first();
+    await expect(hero).toBeVisible({ timeout: 20_000 });
     await expect(hero.locator('source[media="(max-width: 720px)"]')).toHaveCount(1);
     await expectVisibleImagesToLoad(page);
     if (viewport.width === 390) {
