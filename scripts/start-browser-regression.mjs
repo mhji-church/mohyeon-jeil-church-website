@@ -30,7 +30,10 @@ for (let index = 1; index <= 12; index += 1) {
   const date = `2026.08.${String(index).padStart(2, "0")}`;
   await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'published')", args: [`browser-bulletin-${index}`, "bulletin", `브라우저 주보 ${index}`, date, "로컬 회귀검사", "", "[]"] });
 }
-await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'news', ?, ?, ?, ?, '[]', 'published')", args: ["browser-news", "브라우저 교회소식", "2026.08.20", "로컬 회귀검사", JSON.stringify([["안내", "브라우저 회귀검사 데이터"]])] });
+for (let index = 1; index <= 12; index += 1) {
+  const date = `2026.09.${String(index).padStart(2, "0")}`;
+  await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'news', ?, ?, ?, ?, '[]', 'published')", args: [`browser-news-${index}`, `브라우저 교회소식 ${index}`, date, "로컬 회귀검사", JSON.stringify([["안내", "브라우저 회귀검사 데이터"]])] });
+}
 await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'gallery', ?, ?, ?, '', ?, 'published')", args: ["browser-gallery", "브라우저 갤러리", "2026.08.20", "로컬 회귀검사", JSON.stringify(["/assets/mhji/gallery-pink-04.jpg"])] });
 await client.close();
 

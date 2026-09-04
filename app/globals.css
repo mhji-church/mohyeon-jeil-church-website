@@ -10067,12 +10067,83 @@ body.modal-open { overflow: hidden; }
   font-weight: 650;
   cursor: pointer;
 }
-.public-pagination button:hover:not(:disabled),
-.public-pagination button:focus-visible { border-color: var(--brown); background: #faf1eb; }
+.public-pagination button:hover:not(:disabled):not(.is-active),
+.public-pagination button:focus-visible:not(:disabled):not(.is-active) { border-color: var(--brown); background: #faf1eb; }
 .public-pagination button:focus-visible { outline: 3px solid rgba(169, 113, 97, .28); outline-offset: 2px; }
-.public-pagination button.is-active { border-color: var(--ink); background: var(--ink); color: white; box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--ink); }
-.public-pagination button:disabled { cursor: not-allowed; opacity: .38; }
+.public-pagination button.is-active,
+.public-pagination button.is-active:hover,
+.public-pagination button.is-active:focus-visible,
+.public-pagination button.is-active:active { border-color: var(--ink); background: var(--ink); color: white; box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--ink); }
+.public-pagination button:disabled { border-color: rgba(48, 47, 60, .1); background: #f5f2ef; color: #aaa3a5; cursor: not-allowed; opacity: 1; }
 .public-pagination-mobile { display: none; color: #756f74; font-size: 14px; font-weight: 650; }
+
+.admin-activity-panel { margin-top: 28px; }
+.admin-activity-panel > header { gap: 24px; }
+.admin-activity-panel > header > div:first-child { flex: 0 0 auto; }
+.admin-activity-toolbar {
+  display: grid !important;
+  width: min(620px, 60%);
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, .45fr);
+  align-items: center !important;
+  gap: 10px !important;
+}
+.admin-activity-toolbar label { display: block; min-width: 0; }
+.admin-activity-toolbar input,
+.admin-activity-toolbar select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(48, 47, 60, .15);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--admin-ink);
+  font-size: 14px;
+}
+.admin-activity-toolbar input:focus-visible,
+.admin-activity-toolbar select:focus-visible {
+  border-color: var(--admin-accent);
+  outline: 3px solid rgba(169, 113, 97, .18);
+  outline-offset: 1px;
+}
+.admin-activity-table td:nth-child(1) { min-width: 170px; }
+.admin-activity-table td:nth-child(2),
+.admin-activity-table td:nth-child(3) { min-width: 150px; }
+.admin-activity-table td:nth-child(4) { min-width: 180px; }
+.admin-activity-table td:last-child { min-width: 260px; overflow-wrap: anywhere; }
+
+@media (max-width: 1100px) {
+  .admin-activity-panel > header { align-items: stretch; flex-direction: column; padding-block: 18px; }
+  .admin-activity-toolbar { width: 100%; }
+}
+
+@media (max-width: 680px) {
+  .admin-activity-topbar > div:last-child,
+  .admin-activity-topbar > div:last-child button { width: 100%; }
+  .admin-activity-panel { margin-top: 18px; overflow: visible; border: 0; background: transparent; }
+  .admin-activity-panel > header { margin-bottom: 10px; padding: 14px !important; border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
+  .admin-activity-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .admin-activity-toolbar input,
+  .admin-activity-toolbar select { min-height: 48px; font-size: 16px; }
+  .admin-activity-panel .admin-table-wrap { overflow: visible; }
+  .admin-activity-table,
+  .admin-activity-table tbody,
+  .admin-activity-table tr,
+  .admin-activity-table td { display: block; width: 100%; min-width: 0 !important; }
+  .admin-activity-table thead { display: none; }
+  .admin-activity-table tbody { display: grid; gap: 10px; }
+  .admin-activity-table tr { padding: 8px 14px; border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
+  .admin-activity-table td { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; min-height: 44px; padding: 10px 0; border-top: 0; border-bottom: 1px solid rgba(48, 47, 60, .08); overflow-wrap: anywhere; }
+  .admin-activity-table td:last-child { border-bottom: 0; }
+  .admin-activity-table td::before { color: var(--admin-muted); font-size: 12px; font-weight: 700; }
+  .admin-activity-table td:nth-child(1)::before { content: "시각"; }
+  .admin-activity-table td:nth-child(2)::before { content: "관리자"; }
+  .admin-activity-table td:nth-child(3)::before { content: "작업"; }
+  .admin-activity-table td:nth-child(4)::before { content: "대상"; }
+  .admin-activity-table td:nth-child(5)::before { content: "메타데이터"; }
+  .admin-activity-panel .admin-empty { border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
+  .admin-activity-panel .admin-pagination { margin-top: 10px; border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
+}
 
 body,
 button,

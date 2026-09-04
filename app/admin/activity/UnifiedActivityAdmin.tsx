@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AdminPagination from "../AdminPagination";
 import AdminSidebar from "../AdminSidebar";
 
 type Log = {
@@ -60,23 +61,26 @@ export default function UnifiedActivityAdmin(props: {
     <main className="admin-shell admin-members-shell">
       <AdminSidebar active="activity" {...props} />
       <section className="admin-workspace admin-members-workspace">
-        <header className="admin-members-header">
+        <header className="admin-topbar admin-activity-topbar">
           <div><span>ADMIN ACTIVITY</span><h1>활동 기록</h1><p>관리자 변경 이력을 민감정보 없이 확인합니다.</p></div>
-          <button type="button" onClick={() => void load()}>목록 새로고침</button>
+          <div><button type="button" onClick={() => void load()}>목록 새로고침</button></div>
         </header>
-        <section className="admin-members-panel">
-          <div className="admin-member-toolbar">
-            <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="관리자·작업·대상 검색" aria-label="활동 기록 검색" />
-            <select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }} aria-label="작업 유형 필터">
-              {actionGroups.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-            </select>
-          </div>
+        <section className="admin-list-panel admin-activity-panel">
+          <header>
+            <div><h2>활동 기록 목록</h2><span>총 {total}개</span></div>
+            <div className="admin-activity-toolbar">
+              <label><span className="sr-only">활동 기록 검색</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="관리자·작업·대상 검색" /></label>
+              <label><span className="sr-only">작업 유형 필터</span><select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }}>
+                {actionGroups.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+              </select></label>
+            </div>
+          </header>
           {failed ? <div className="admin-empty"><strong>활동 기록을 불러오지 못했습니다.</strong></div> : (
-            <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>시각</th><th>관리자</th><th>작업</th><th>대상</th><th>메타데이터</th></tr></thead><tbody>
+            <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>관리자</th><th>작업</th><th>대상</th><th>메타데이터</th></tr></thead><tbody>
               {logs.map((log) => <tr key={log.id}><td>{log.createdAt.replace("T", " ")}</td><td>{log.actorId}</td><td>{log.action}</td><td>{log.targetType}{log.targetId ? ` · ${log.targetId}` : ""}</td><td>{Object.entries(log.metadata).map(([key, value]) => `${key}: ${value}`).join(" · ") || "—"}</td></tr>)}
             </tbody></table>{!logs.length && <div className="admin-empty"><strong>조건에 맞는 활동 기록이 없습니다.</strong></div>}</div>
           )}
-          <div className="admin-pagination"><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>이전</button><span>{page} / {pages} · 총 {total}개</span><button type="button" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>다음</button></div>
+          <AdminPagination currentPage={page} totalPages={pages} onPageChange={setPage} />
         </section>
       </section>
     </main>
