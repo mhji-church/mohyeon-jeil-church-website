@@ -42,8 +42,8 @@ const adminNav = [
   ["songs", "찬양곡 관리", "/archive/admin/songs", "music"], ["activity", "활동 기록", "/archive/admin/activity", "activity"], ["settings", "설정", "/archive/admin?tab=settings", "settings"],
 ] as const;
 
-function ArchiveBrand({ admin = false }: { admin?: boolean }) {
-  return <Link href={admin ? "/archive/admin" : "/archive"} className="official-brand has-structure-line" aria-label="모현제일교회 예배 아카이브 홈">
+function ArchiveBrand({ admin = false, onClick }: { admin?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  return <Link href={admin ? "/archive/admin" : "/archive"} className="official-brand has-structure-line" aria-label="모현제일교회 예배 아카이브 홈" onClick={onClick}>
     <span className="brand-logo-wrap">
       <img className="brand-logo brand-logo-light" src="/archive/brand/mohyeon-logo-light.png" alt="모현제일교회" width="461" height="91" />
       <img className="brand-logo brand-logo-dark" src="/archive/brand/mohyeon-logo-dark.png" alt="" aria-hidden="true" width="461" height="91" />
@@ -143,7 +143,7 @@ export function ArchiveShell({ children, active, admin = false, showSongs = true
 
   return <div className={`archive-original-root${admin ? " admin-cms" : ""}`} data-theme="light">
     <span className="brand-structure-line" aria-hidden="true" />
-    <header className={admin ? "cms-header" : `site-header${search ? " has-home-search" : ""}`}><ArchiveBrand admin={admin} />{search && <div className="header-home-search-wrap">{search}</div>}<div className={admin ? "cms-header-actions" : "header-actions"}><Link aria-label="교회 홈페이지로" className="header-action-link church-home-link" href="/"><span>교회 홈페이지로</span><ArchiveIcon name="external" size={16} /></Link>{!admin && <Link aria-label="아카이브 관리자" className="header-action-link archive-admin-entry" href="/archive/admin"><ArchiveIcon name="lock" size={16} /><span>관리자</span></Link>}{account}<ThemePicker /></div></header>
+    <header className={admin ? "cms-header" : `site-header${search ? " has-home-search" : ""}`}><ArchiveBrand admin={admin} onClick={admin ? (event) => handleAdminNavigation(event, "videos", "/archive/admin") : undefined} />{search && <div className="header-home-search-wrap">{search}</div>}<div className={admin ? "cms-header-actions" : "header-actions"}><Link aria-label="교회 홈페이지로" className="header-action-link church-home-link" href="/"><span>교회 홈페이지로</span><ArchiveIcon name="external" size={16} /></Link>{!admin && <Link aria-label="아카이브 관리자" className="header-action-link archive-admin-entry" href="/archive/admin"><ArchiveIcon name="lock" size={16} /><span>관리자</span></Link>}{account}<ThemePicker /></div></header>
     <aside className={admin ? "cms-sidebar" : "archive-sidebar"} aria-label={admin ? "예배 아카이브 관리 메뉴" : "예배 아카이브 메뉴"}>{nav.map(([key, label, href, icon]) => <Link className={`${active === key ? "active" : ""}${pendingHref === href ? " is-pending" : ""}`} aria-current={active === key ? "page" : undefined} aria-busy={pendingHref === href || undefined} href={href} key={key} onClick={admin ? (event) => handleAdminNavigation(event, key, href) : undefined}><ArchiveIcon name={icon} size={20} /><span>{label}</span>{pendingHref === href && <span className="cms-nav-spinner" aria-label="이동 중" />}</Link>)}</aside>
     {admin && (pendingHref || failedHref) && <div className={`cms-navigation-feedback${failedHref ? " is-error" : ""}`} role={failedHref ? "alert" : "status"} aria-live="polite">{failedHref ? <><span>화면을 불러오지 못했습니다.</span><button type="button" onClick={() => beginNavigation(failedHref)}>다시 시도</button></> : <span>화면을 불러오는 중…</span>}</div>}
     {admin ? <main className="cms-content">{children}</main> : <main className="archive-main">{children}</main>}

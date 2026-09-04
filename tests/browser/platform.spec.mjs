@@ -230,6 +230,8 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   expect(memberAttempts).toBe(2);
 
   const videosLink = page.getByRole("link", { name: "영상 관리" });
+  const settingsLink = page.getByRole("link", { name: "설정", exact: true });
+  const adminLogo = page.getByRole("link", { name: "모현제일교회 예배 아카이브 홈" });
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -246,6 +248,19 @@ test("archive admin navigation stays responsive above the edit drawer and recove
     await membersLink.dblclick();
     await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
     await expect(page.getByText("브라우저테스트")).toBeVisible();
+
+    await adminLogo.click();
+    await expect(page).toHaveURL(/\/archive\/admin$/);
+    await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
+    await settingsLink.click();
+    await expect(page).toHaveURL(/\/archive\/admin\?tab=settings$/);
+    await expect(page.getByRole("heading", { name: "설정", exact: true })).toBeVisible();
+    await adminLogo.click();
+    await expect(page).toHaveURL(/\/archive\/admin$/);
+    await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
+
+    await membersLink.click();
+    await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
     await page.goBack();
     await expect(page).toHaveURL(/\/archive\/admin$/);
     await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
