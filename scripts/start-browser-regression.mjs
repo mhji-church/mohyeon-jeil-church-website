@@ -26,6 +26,10 @@ await client.execute({
   sql: "INSERT INTO member_app_access (member_id, app_code, access_level, granted_by) VALUES (?, 'worship_archive', 'full', 'browser-fixture')",
   args: ["browser-member"],
 });
+await client.execute({
+  sql: "INSERT INTO archive_videos (id, type, date, service_type, title, preacher, youtube_id, youtube_url, thumbnail_url, duration_seconds, note) VALUES (?, 'worship', ?, ?, ?, ?, ?, ?, '', ?, '')",
+  args: ["browser-archive-video", "2026.09.01", "주일 2부 예배", "브라우저 아카이브 영상", "담임목사", "browserVideo01", "https://www.youtube.com/watch?v=browserVideo01", 3600],
+});
 for (let index = 1; index <= 12; index += 1) {
   const date = `2026.08.${String(index).padStart(2, "0")}`;
   await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'published')", args: [`browser-bulletin-${index}`, "bulletin", `브라우저 주보 ${index}`, date, "로컬 회귀검사", "", "[]"] });

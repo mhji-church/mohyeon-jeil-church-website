@@ -263,8 +263,15 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root.admin-cms { position: relative; min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); grid-template-rows: var(--header-height) 1fr; }
 .archive-original-root .cms-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .archive-original-root .cms-sidebar { display: flex; flex-direction: column; gap: 8px; padding: 24px 16px; }
+.archive-original-root.admin-cms .cms-sidebar { position: relative; z-index: 140; background: var(--bg); }
 .archive-original-root .cms-sidebar a { min-height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 13px; border-radius: 6px; }
 .archive-original-root .cms-sidebar a.active { background: var(--accent); color: var(--on-accent); }
+.archive-original-root .cms-sidebar a.is-pending { cursor: wait; }
+.archive-original-root .cms-nav-spinner { width: 15px; height: 15px; flex: 0 0 auto; margin-left: auto; border: 2px solid color-mix(in srgb, currentColor 28%, transparent); border-top-color: currentColor; border-radius: 50%; animation: archive-nav-spin .7s linear infinite; }
+.archive-original-root .cms-navigation-feedback { position: fixed; left: 50%; bottom: 28px; z-index: 170; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-elevated); box-shadow: var(--shadow); transform: translateX(-50%); }
+.archive-original-root .cms-navigation-feedback.is-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); color: var(--danger); }
+.archive-original-root .cms-navigation-feedback button { min-height: 34px; padding: 5px 10px; border: 1px solid currentColor; border-radius: 5px; background: transparent; font-weight: 750; cursor: pointer; }
+@keyframes archive-nav-spin { to { transform: rotate(360deg); } }
 .archive-original-root .cms-content { min-width: 0; padding: 28px 36px 48px; }
 .archive-original-root .cms-page-head { margin-bottom: var(--cms-page-gap); }
 .archive-original-root .cms-page-head.has-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
@@ -276,6 +283,10 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .secondary-btn, .archive-original-root .small-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .archive-original-root .danger-btn { border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
 .archive-original-root .admin-card { min-width: 0; padding: 24px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.archive-original-root .archive-access-feedback { min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--text-secondary); text-align: center; }
+.archive-original-root .archive-access-feedback .cms-nav-spinner { margin-left: 0; }
+.archive-original-root .archive-access-feedback.is-error { flex-direction: column; color: var(--danger); }
+.archive-original-root .archive-access-feedback.is-error span { color: var(--text-secondary); }
 .archive-original-root .archive-settings-fields input:not([type="checkbox"]),
 .archive-original-root .archive-settings-fields select {
   width: 100%;

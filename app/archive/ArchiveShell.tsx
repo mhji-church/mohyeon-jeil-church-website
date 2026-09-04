@@ -2,7 +2,8 @@
 
 import "./archive-original.css";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 export type ArchiveTheme = "system" | "light" | "dark";
 export type ArchiveNavKey = "home" | "sunday" | "other" | "songs" | "attendance" | "videos" | "members" | "activity" | "settings";
@@ -78,12 +79,73 @@ function ThemePicker() {
   return <div className="theme-control" ref={root}><button type="button" className="theme-trigger icon-button" aria-label={`테마 선택: ${current.label}`} aria-haspopup="menu" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen((value) => !value)}><ArchiveIcon name={resolved === "dark" ? "moon" : "sun"} size={18} /><span className="theme-trigger-label">{current.label}</span></button>{open && <div className="theme-menu" id={menuId} role="menu" aria-label="화면 테마">{choices.map((choice) => <button key={choice.value} type="button" role="menuitemradio" aria-checked={preference === choice.value} className={`theme-menu-item${preference === choice.value ? " is-selected" : ""}`} onClick={() => { setPreference(choice.value); setOpen(false); }}><ArchiveIcon name={choice.icon} size={18} /><span><strong>{choice.label}</strong><small>{choice.description}</small></span>{preference === choice.value && <ArchiveIcon name="check" size={17} className="theme-menu-check" />}</button>)}</div>}</div>;
 }
 
-export function ArchiveShell({ children, active, admin = false, showSongs = true, search, account }: { children: ReactNode; active: ArchiveNavKey; admin?: boolean; showSongs?: boolean; search?: ReactNode; account?: ReactNode }) {
+type ArchiveShellProps = {
+  children: ReactNode;
+  active: ArchiveNavKey;
+  admin?: boolean;
+  showSongs?: boolean;
+  search?: ReactNode;
+  account?: ReactNode;
+  beforeAdminNavigate?: () => boolean;
+  onAdminNavigate?: (key: ArchiveNavKey, href: string) => boolean;
+};
+
+export function ArchiveShell({ children, active, admin = false, showSongs = true, search, account, beforeAdminNavigate, onAdminNavigate }: ArchiveShellProps) {
   const nav = (admin ? adminNav : publicNav).filter(([key]) => admin || showSongs || key !== "songs");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentUrl = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  const [pendingHref, setPendingHref] = useState("");
+  const [failedHref, setFailedHref] = useState("");
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearNavigationTimer() {
+    if (navigationTimer.current) clearTimeout(navigationTimer.current);
+    navigationTimer.current = null;
+  }
+
+  function beginNavigation(href: string) {
+    clearNavigationTimer();
+    setFailedHref("");
+    setPendingHref(href);
+    router.push(href);
+    navigationTimer.current = setTimeout(() => {
+      setPendingHref("");
+      setFailedHref(href);
+    }, 8_000);
+  }
+
+  function handleAdminNavigation(event: MouseEvent<HTMLAnchorElement>, key: ArchiveNavKey, href: string) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (href === `${window.location.pathname}${window.location.search}`) return;
+    if (beforeAdminNavigate && !beforeAdminNavigate()) return;
+    if (onAdminNavigate?.(key, href)) {
+      clearNavigationTimer();
+      setPendingHref("");
+      setFailedHref("");
+      return;
+    }
+    beginNavigation(href);
+  }
+
+  useEffect(() => {
+    if (!pendingHref || currentUrl !== pendingHref) return;
+    const timer = setTimeout(() => {
+      clearNavigationTimer();
+      setPendingHref("");
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [currentUrl, pendingHref]);
+
+  useEffect(() => () => clearNavigationTimer(), []);
+
   return <div className={`archive-original-root${admin ? " admin-cms" : ""}`} data-theme="light">
     <span className="brand-structure-line" aria-hidden="true" />
     <header className={admin ? "cms-header" : `site-header${search ? " has-home-search" : ""}`}><ArchiveBrand admin={admin} />{search && <div className="header-home-search-wrap">{search}</div>}<div className={admin ? "cms-header-actions" : "header-actions"}><Link aria-label="교회 홈페이지로" className="header-action-link church-home-link" href="/"><span>교회 홈페이지로</span><ArchiveIcon name="external" size={16} /></Link>{!admin && <Link aria-label="아카이브 관리자" className="header-action-link archive-admin-entry" href="/archive/admin"><ArchiveIcon name="lock" size={16} /><span>관리자</span></Link>}{account}<ThemePicker /></div></header>
-    <aside className={admin ? "cms-sidebar" : "archive-sidebar"} aria-label={admin ? "예배 아카이브 관리 메뉴" : "예배 아카이브 메뉴"}>{nav.map(([key, label, href, icon]) => <Link className={active === key ? "active" : ""} aria-current={active === key ? "page" : undefined} href={href} key={key}><ArchiveIcon name={icon} size={20} /><span>{label}</span></Link>)}</aside>
+    <aside className={admin ? "cms-sidebar" : "archive-sidebar"} aria-label={admin ? "예배 아카이브 관리 메뉴" : "예배 아카이브 메뉴"}>{nav.map(([key, label, href, icon]) => <Link className={`${active === key ? "active" : ""}${pendingHref === href ? " is-pending" : ""}`} aria-current={active === key ? "page" : undefined} aria-busy={pendingHref === href || undefined} href={href} key={key} onClick={admin ? (event) => handleAdminNavigation(event, key, href) : undefined}><ArchiveIcon name={icon} size={20} /><span>{label}</span>{pendingHref === href && <span className="cms-nav-spinner" aria-label="이동 중" />}</Link>)}</aside>
+    {admin && (pendingHref || failedHref) && <div className={`cms-navigation-feedback${failedHref ? " is-error" : ""}`} role={failedHref ? "alert" : "status"} aria-live="polite">{failedHref ? <><span>화면을 불러오지 못했습니다.</span><button type="button" onClick={() => beginNavigation(failedHref)}>다시 시도</button></> : <span>화면을 불러오는 중…</span>}</div>}
     {admin ? <main className="cms-content">{children}</main> : <main className="archive-main">{children}</main>}
     {!admin && <nav className={`mobile-bottom-nav${showSongs ? "" : " without-songs"}`} aria-label="모바일 예배 아카이브 메뉴">{nav.map(([key, label, href, icon]) => <Link className={active === key ? "active" : ""} href={href} key={key}><ArchiveIcon name={icon} size={22} /><span>{label}</span></Link>)}</nav>}
   </div>;

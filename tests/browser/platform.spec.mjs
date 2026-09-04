@@ -183,6 +183,76 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await expect.poll(() => activityRequests.some((search) => search.includes("q=%ED%85%8C%EC%8A%A4%ED%8A%B8") && search.includes("action=content.create"))).toBe(true);
 });
 
+test("archive admin navigation stays responsive above the edit drawer and recovers member loading", async ({ page }) => {
+  const errors = watchErrors(page);
+  let memberAttempts = 0;
+  await page.route("**/api/admin/archive/access", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    memberAttempts += 1;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (memberAttempts === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "임시 회원 조회 오류" }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members: [{ id: "browser-member", name: "브라우저테스트", username: "test-member", status: "approved", accessLevel: "full", songStatsAllowed: true }] }) });
+  });
+
+  await page.goto("/archive/admin");
+  await expect(page).toHaveURL(/\/archive\/admin\/login/);
+  await expect.poll(() => page.locator(".archive-admin-login-form").evaluate((form) => Object.keys(form).some((key) => key.startsWith("__reactProps")))).toBe(true);
+  await page.getByLabel("관리자 아이디").fill("browser-archive-admin");
+  await page.getByLabel("비밀번호").fill("browser-archive-password");
+  await page.getByRole("button", { name: "아카이브 관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/archive\/admin$/);
+  await expect(page.getByText("브라우저 아카이브 영상")).toBeVisible();
+
+  await page.getByRole("button", { name: "수정" }).click();
+  const editor = page.getByRole("dialog", { name: "영상 수정" });
+  await editor.getByLabel("영상 제목").fill("저장하지 않은 영상 제목");
+  const membersLink = page.getByRole("link", { name: "회원 관리" });
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("저장하지 않은 변경");
+    await dialog.dismiss();
+  });
+  await membersLink.click();
+  await expect(editor).toBeVisible();
+  await expect(page).toHaveURL(/\/archive\/admin$/);
+
+  page.once("dialog", async (dialog) => dialog.accept());
+  await membersLink.click();
+  await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
+  await expect(page.getByRole("status")).toContainText("회원 목록을 불러오는 중");
+  await expect(page.getByRole("alert")).toContainText("임시 회원 조회 오류");
+  await page.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByRole("status")).toContainText("회원 목록을 불러오는 중");
+  await expect(page.getByText("브라우저테스트")).toBeVisible();
+  expect(memberAttempts).toBe(2);
+
+  const videosLink = page.getByRole("link", { name: "영상 관리" });
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await expect(membersLink).toBeVisible();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await videosLink.click();
+      await expect(page).toHaveURL(/\/archive\/admin$/);
+      await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
+      await membersLink.click();
+      await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
+      await expect(page.getByRole("heading", { name: "회원 관리", exact: true })).toBeVisible();
+    }
+    await videosLink.click();
+    await membersLink.dblclick();
+    await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
+    await expect(page.getByText("브라우저테스트")).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/archive\/admin$/);
+    await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
+  }
+  expect(errors.filter((error) => !/503 \(Service Unavailable\)/.test(error))).toEqual([]);
+});
+
 test("approved local member can enter the worship archive", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = watchErrors(page);
