@@ -9,13 +9,13 @@ test("mobile gallery uses full-width cards and keeps the detail body scrollable"
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.gallery-album-card \{ display: block;/);
   assert.match(styles, /\.gallery-album-cover \{[^}]*aspect-ratio: 16 \/ 10;/);
   assert.match(styles, /\.gallery-album-cover img \{[^}]*object-fit: contain;/);
-  assert.match(styles, /\.focus-modal\.gallery-viewer \{[^}]*overflow-y: auto;/);
-  assert.match(styles, /\.gallery-viewer-panel \{[^}]*height: auto;[^}]*overflow: visible;/);
+  assert.match(styles, /\.gallery-viewer-content \{[^}]*overflow-y: auto;/);
+  assert.match(styles, /\.gallery-viewer-panel \{[^}]*height: 100dvh;[^}]*overflow: hidden;/);
   assert.match(styles, /\.gallery-detail-copy > p \{[^}]*display: block;/);
   assert.doesNotMatch(styles, /\.gallery-modal-bottom > p \{ display: none;/);
   assert.match(styles, /\.gallery-download-actions \{ display: none; \}/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.gallery-download-actions \{ display: block;/);
-  assert.match(styles, /\.gallery-download-button \{[^}]*width: 100%;[^}]*min-height: 48px;/);
+  assert.match(styles, /\.gallery-download-button \{[^}]*width: 100%;[^}]*min-height: 56px;/);
 });
 
 test("gallery download resolves only a validated post image and never accepts a client URL", () => {

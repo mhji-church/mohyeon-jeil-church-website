@@ -36,11 +36,13 @@ export default function ZoomableImage({
   alt,
   className = "",
   onSwipe,
+  mobileScroll = false,
 }: {
   src: string;
   alt: string;
   className?: string;
   onSwipe?: (direction: "next" | "prev") => void;
+  mobileScroll?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
@@ -85,6 +87,10 @@ export default function ZoomableImage({
     if (!viewport) return;
 
     const handleWheel = (event: WheelEvent) => {
+      if (mobileScroll && window.matchMedia("(max-width: 760px)").matches) {
+        // Leave browser zoom shortcuts and normal reading scroll to the browser.
+        if (event.ctrlKey || event.metaKey || transformRef.current.scale === 1) return;
+      }
       event.preventDefault();
       event.stopPropagation();
       const rect = viewport.getBoundingClientRect();
@@ -95,17 +101,62 @@ export default function ZoomableImage({
       const factor = event.deltaY < 0 ? 1.16 : 1 / 1.16;
       setScale(transformRef.current.scale * factor, anchor);
     };
-    const blockTouchScroll = (event: TouchEvent) => {
-      if (event.touches.length > 0) event.preventDefault();
+    let touchPinch: { distance: number; scale: number } | null = null;
+    let touchSwipe: Point | null = null;
+    const usesMobileScroll = () => mobileScroll && window.matchMedia("(max-width: 760px)").matches;
+    const beginTouch = (event: TouchEvent) => {
+      if (usesMobileScroll() && event.touches.length === 1 && transformRef.current.scale === 1) {
+        touchSwipe = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+      }
+      if (usesMobileScroll() && event.touches.length === 2) {
+        touchSwipe = null;
+        touchPinch = {
+          distance: Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY),
+          scale: transformRef.current.scale,
+        };
+        swipeStart.current = null;
+      }
     };
+    const blockTouchScroll = (event: TouchEvent) => {
+      if (!usesMobileScroll()) {
+        if (event.touches.length > 0) event.preventDefault();
+        return;
+      }
+      if (event.touches.length >= 2 && touchPinch) {
+        event.preventDefault();
+        const nextDistance = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+        if (touchPinch.distance > 0) setScale(touchPinch.scale * nextDistance / touchPinch.distance);
+      } else if (transformRef.current.scale > 1) {
+        event.preventDefault();
+      }
+    };
+    const endTouch = (event: TouchEvent) => {
+      const lastTouch = event.changedTouches[0];
+      if (usesMobileScroll() && !event.touches.length && touchSwipe && lastTouch && transformRef.current.scale === 1) {
+        const dx = lastTouch.clientX - touchSwipe.x;
+        const dy = lastTouch.clientY - touchSwipe.y;
+        if (Math.abs(dx) >= 55 && Math.abs(dx) > Math.abs(dy) * 1.2) onSwipe?.(dx < 0 ? "next" : "prev");
+      }
+      touchPinch = null;
+      touchSwipe = null;
+    };
+    const cancelTouch = () => { touchPinch = null; touchSwipe = null; };
 
     viewport.addEventListener("wheel", handleWheel, { passive: false });
     viewport.addEventListener("touchmove", blockTouchScroll, { passive: false });
+    viewport.addEventListener("touchstart", beginTouch, { passive: true });
+    viewport.addEventListener("touchend", endTouch);
+    viewport.addEventListener("touchcancel", cancelTouch);
     return () => {
       viewport.removeEventListener("wheel", handleWheel);
       viewport.removeEventListener("touchmove", blockTouchScroll);
+      viewport.removeEventListener("touchstart", beginTouch);
+      viewport.removeEventListener("touchend", endTouch);
+      viewport.removeEventListener("touchcancel", cancelTouch);
     };
-  });
+  // Event listeners read transformRef; keeping them attached preserves a live pinch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileScroll]);
 
   return (
     <div className={`zoomable-image ${className}`.trim()}>
@@ -131,6 +182,7 @@ export default function ZoomableImage({
           pointers.current.set(event.pointerId, point);
 
           if (pointers.current.size >= 2) {
+            if (mobileScroll && window.matchMedia("(max-width: 760px)").matches) return;
             const [first, second] = [...pointers.current.values()];
             const nextDistance = distance(first, second);
             const nextCenter = center(first, second);
@@ -162,6 +214,7 @@ export default function ZoomableImage({
         onPointerUp={(event) => {
           const endPoint = pointers.current.get(event.pointerId);
           if (
+            !(mobileScroll && event.pointerType === "touch" && window.matchMedia("(max-width: 760px)").matches) &&
             transformRef.current.scale === 1 &&
             swipeStart.current &&
             endPoint &&

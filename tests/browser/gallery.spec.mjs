@@ -70,7 +70,7 @@ test("gallery cards stay responsive and approved members can read and save the s
   await expect(dialog.getByRole("heading", { name: "브라우저 갤러리" })).toBeVisible();
   await expect(dialog.getByText("1 / 2", { exact: true })).toBeVisible();
   await expect(dialog.getByText(/모현제일교회 갤러리 본문 14/)).toBeVisible();
-  expect(await dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  expect(await dialog.locator(".gallery-viewer-content").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
 
   await dialog.getByRole("button", { name: "다음 사진" }).click();
   await expect(dialog.getByText("2 / 2", { exact: true })).toBeVisible();

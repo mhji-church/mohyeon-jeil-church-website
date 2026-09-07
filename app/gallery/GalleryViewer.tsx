@@ -72,11 +72,16 @@ export default function GalleryViewer({
     const activeThumbnail = thumbnailsRef.current?.querySelector<HTMLElement>(
       `[data-thumbnail-index="${activeImage}"]`,
     );
-    activeThumbnail?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
+    const strip = thumbnailsRef.current;
+    if (activeThumbnail && strip) {
+      const itemRect = activeThumbnail.getBoundingClientRect();
+      const stripRect = strip.getBoundingClientRect();
+      // Scroll only the thumbnail strip, never the modal's reading position.
+      strip.scrollBy({
+        left: itemRect.left - stripRect.left - (strip.clientWidth - itemRect.width) / 2,
+        behavior: "smooth",
+      });
+    }
   }, [activeImage]);
 
   const scrollThumbnails = (direction: number) => {
@@ -142,16 +147,6 @@ export default function GalleryViewer({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <button
-        className="focus-modal-close"
-        ref={closeButtonRef}
-        type="button"
-        onClick={onClose}
-        aria-label="갤러리 닫기"
-      >
-        ×
-      </button>
-
       <article className="gallery-viewer-panel">
         <header>
           <div>
@@ -159,8 +154,17 @@ export default function GalleryViewer({
             <h2>{album.title}</h2>
           </div>
           <span>{album.images.length ? activeImage + 1 : 0} / {album.images.length}</span>
+          <button
+            className="focus-modal-close"
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="갤러리 닫기"
+          >
+            ×
+          </button>
         </header>
-
+        <div className="gallery-viewer-content">
         {album.images.length ? (
           <>
             <div className="gallery-stage">
@@ -174,6 +178,7 @@ export default function GalleryViewer({
                 src={album.images[activeImage]}
                 alt={`${album.title} 사진 ${activeImage + 1}`}
                 className="gallery-zoomable"
+                mobileScroll
                 onSwipe={(direction) => moveImage(direction === "next" ? 1 : -1)}
               />
               {album.images.length > 1 ? (
@@ -185,6 +190,7 @@ export default function GalleryViewer({
 
             <footer className="gallery-modal-bottom">
               <div className="gallery-detail-copy">
+                <h3 className="gallery-body-heading">앨범 소개</h3>
                 <p>{album.content || "작성된 본문이 없습니다."}</p>
                 <div className="gallery-download-actions">
                   <button
@@ -195,20 +201,18 @@ export default function GalleryViewer({
                   >
                     {downloading ? "저장 준비 중…" : "사진 저장"}
                   </button>
-                  {downloadNotice ? (
                     <p
-                      className={`gallery-download-notice is-${downloadNotice.kind}`}
+                      className={`gallery-download-notice${downloadNotice ? ` is-${downloadNotice.kind}` : ""}`}
                       role="status"
                       aria-live="polite"
                     >
-                      {downloadNotice.message}
-                      {downloadNotice.kind === "error" ? (
+                      {downloadNotice?.message}
+                      {downloadNotice?.kind === "error" ? (
                         <a href={`${downloadUrl}&view=1`} target="_blank" rel="noopener noreferrer">
                           원본 사진 열기
                         </a>
                       ) : null}
                     </p>
-                  ) : null}
                 </div>
               </div>
               <div className="gallery-thumbnail-picker">
@@ -253,6 +257,7 @@ export default function GalleryViewer({
         ) : (
           <div className="gallery-viewer-empty">등록된 사진이 없습니다.</div>
         )}
+        </div>
       </article>
     </div>
   );

@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
 import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
 import AccessibleDialog from "../components/AccessibleDialog";
 
 const GALLERY_PAGE_SIZE = 6;
+
+function subscribeGalleryLocation(notify: () => void) {
+  window.addEventListener("popstate", notify);
+  window.addEventListener("gallery-location-change", notify);
+  return () => {
+    window.removeEventListener("popstate", notify);
+    window.removeEventListener("gallery-location-change", notify);
+  };
+}
+
+function currentAlbumId() {
+  return new URL(window.location.href).searchParams.get("album") ?? "";
+}
 
 function getPageNumbers(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
@@ -34,9 +47,8 @@ export default function GalleryBoard({
   const viewerTriggerRef = useRef<HTMLElement | null>(null);
   const previousPageRef = useRef(1);
   const [page, setPage] = useState(1);
-  const [viewer, setViewer] = useState<GalleryModalAlbum | null>(
-    modalAlbums.find((item) => item.id === initialAlbumId) ?? null,
-  );
+  const selectedAlbumId = useSyncExternalStore(subscribeGalleryLocation, currentAlbumId, () => initialAlbumId);
+  const viewer = modalAlbums.find((item) => item.id === selectedAlbumId) ?? null;
   const [approvalOpen, setApprovalOpen] = useState(
     memberAccess === "pending" && (initialApprovalRequired || Boolean(initialAlbumId)),
   );
@@ -52,6 +64,15 @@ export default function GalleryBoard({
   );
 
   useEffect(() => {
+    const onHistoryChange = () => {
+      const id = new URL(window.location.href).searchParams.get("album");
+      if (!id) window.requestAnimationFrame(() => viewerTriggerRef.current?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("popstate", onHistoryChange);
+    return () => window.removeEventListener("popstate", onHistoryChange);
+  }, []);
+
+  useEffect(() => {
     if (previousPageRef.current === page) return;
     previousPageRef.current = page;
     const board = boardRef.current;
@@ -64,18 +85,26 @@ export default function GalleryBoard({
 
   const openViewer = (album: GalleryModalAlbum, trigger: HTMLElement) => {
     viewerTriggerRef.current = trigger;
-    setViewer(album);
     const url = new URL(window.location.href);
     url.searchParams.set("album", album.id);
-    window.history.replaceState(null, "", url);
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      window.history.pushState({ ...window.history.state, mhjiGallery: true }, "", url);
+    } else {
+      window.history.replaceState(window.history.state, "", url);
+    }
+    window.dispatchEvent(new Event("gallery-location-change"));
   };
 
   const closeViewer = () => {
-    setViewer(null);
+    if (window.history.state?.mhjiGallery) {
+      window.history.back();
+      return;
+    }
     const url = new URL(window.location.href);
     url.searchParams.delete("album");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    window.requestAnimationFrame(() => viewerTriggerRef.current?.focus());
+    window.dispatchEvent(new Event("gallery-location-change"));
+    window.requestAnimationFrame(() => viewerTriggerRef.current?.focus({ preventScroll: true }));
   };
 
   return (
@@ -103,9 +132,16 @@ export default function GalleryBoard({
               <>
               <div className="gallery-album-cover">
                 {album.coverImage ? (
+                  <div className="gallery-cover-backdrop" aria-hidden="true"
+                    style={{ backgroundImage: `url(${JSON.stringify(album.coverImage)})` }} />
+                ) : null}
+                {album.coverImage ? (
                   <img src={album.coverImage} alt="" loading="lazy" decoding="async" />
                 ) : null}
-                <span>{album.imageCount} PHOTOS</span>
+                <span>
+                  <span className="gallery-count-desktop">{album.imageCount} PHOTOS</span>
+                  <span className="gallery-count-mobile">사진 {album.imageCount}장</span>
+                </span>
               </div>
               <div className="gallery-album-copy">
                 <div className="gallery-album-meta">

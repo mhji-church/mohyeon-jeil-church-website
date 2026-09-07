@@ -56,6 +56,15 @@ await client.execute({
     ]),
   ],
 });
+for (const [id, title, image] of [
+  ["browser-square", "정사각형 한 장 앨범", "/assets/icon-512.png"],
+  ["browser-portrait", "세로형 사진과 함께 확인하는 아주 긴 앨범 제목입니다 글자가 확대되어도 닫기 버튼은 항상 눌릴 수 있어야 합니다", "/assets/hero-flowers-mobile.webp"],
+]) {
+  await client.execute({
+    sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'gallery', ?, '2026.08.19', '로컬 화면 검증', ?, ?, 'published')",
+    args: [id, title, galleryBody, JSON.stringify([image])],
+  });
+}
 await client.close();
 
 Object.assign(process.env, {
