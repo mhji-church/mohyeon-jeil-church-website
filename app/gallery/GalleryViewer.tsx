@@ -179,6 +179,7 @@ export default function GalleryViewer({
                 alt={`${album.title} 사진 ${activeImage + 1}`}
                 className="gallery-zoomable"
                 mobileScroll
+                mobileIntrinsicSize
                 onSwipe={(direction) => moveImage(direction === "next" ? 1 : -1)}
               />
               {album.images.length > 1 ? (
@@ -190,7 +191,6 @@ export default function GalleryViewer({
 
             <footer className="gallery-modal-bottom">
               <div className="gallery-detail-copy">
-                <h3 className="gallery-body-heading">앨범 소개</h3>
                 <p>{album.content || "작성된 본문이 없습니다."}</p>
                 <div className="gallery-download-actions">
                   <button
@@ -215,6 +215,7 @@ export default function GalleryViewer({
                     </p>
                 </div>
               </div>
+              {album.images.length > 1 ? (
               <div className="gallery-thumbnail-picker">
                 {album.images.length > 4 && (
                   <button
@@ -252,6 +253,7 @@ export default function GalleryViewer({
                   </button>
                 )}
               </div>
+              ) : null}
             </footer>
           </>
         ) : (

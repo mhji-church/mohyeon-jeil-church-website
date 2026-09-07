@@ -132,10 +132,6 @@ export default function GalleryBoard({
               <>
               <div className="gallery-album-cover">
                 {album.coverImage ? (
-                  <div className="gallery-cover-backdrop" aria-hidden="true"
-                    style={{ backgroundImage: `url(${JSON.stringify(album.coverImage)})` }} />
-                ) : null}
-                {album.coverImage ? (
                   <img src={album.coverImage} alt="" loading="lazy" decoding="async" />
                 ) : null}
                 <span>

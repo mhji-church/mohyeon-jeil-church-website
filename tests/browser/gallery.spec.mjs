@@ -52,7 +52,7 @@ test("gallery cards stay responsive and approved members can read and save the s
       expect(cardBox?.width ?? 0).toBeGreaterThan(viewport.width * 0.84);
       expect(Math.abs((coverBox?.width ?? 0) - (cardBox?.width ?? 0))).toBeLessThanOrEqual(2);
       expect((coverBox?.y ?? 0) + (coverBox?.height ?? 0)).toBeLessThanOrEqual(titleBox?.y ?? 0);
-      expect(await cover.locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+      expect(await cover.locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("cover");
     }
   }
 

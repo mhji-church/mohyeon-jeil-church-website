@@ -41,7 +41,7 @@ test("mobile gallery header stays reachable and selecting photos does not move t
   expect(bounds.height).toBeGreaterThanOrEqual(44);
   expect(bounds.y + bounds.height).toBeLessThan(844);
   expect(opening.scroll).toBe(0);
-  expect(opening.bodyFont).toBe("18px");
+  expect(opening.bodyFont).toBe("16px");
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await reader.evaluate(el => { el.scrollTop = el.scrollHeight; });
@@ -53,7 +53,8 @@ test("mobile gallery header stays reachable and selecting photos does not move t
     await dialog.getByRole("button", { name: "사진 저장", exact: true }).click();
     expect((await saving).suggestedFilename()).toContain("사진-02.jpg");
     const saveBox = await dialog.getByRole("button", { name: "사진 저장", exact: true }).boundingBox();
-    expect(saveBox.height).toBeGreaterThanOrEqual(56);
+    expect(saveBox.height).toBeGreaterThanOrEqual(44);
+    expect(saveBox.height).toBeLessThanOrEqual(48);
     expect(saveBox.y).toBeGreaterThan((await dialog.locator("header").boundingBox()).height);
     expect(saveBox.y + saveBox.height).toBeLessThan(844);
     expect((await close.boundingBox()).y).toBeGreaterThanOrEqual(0);
@@ -132,17 +133,29 @@ test("mobile gallery header stays reachable and selecting photos does not move t
   for (const title of ["정사각형 한 장 앨범", "세로형 사진과 함께 확인하는 아주 긴 앨범 제목입니다 글자가 확대되어도 닫기 버튼은 항상 눌릴 수 있어야 합니다"]) {
     const singleCard = page.getByRole("button", { name: `${title} 앨범 열기` });
     await expect(singleCard.locator(".gallery-count-mobile")).toHaveText("사진 1장");
-    await expect(singleCard.locator(".gallery-cover-backdrop")).toHaveAttribute("aria-hidden", "true");
-    const foreground = await singleCard.locator(".gallery-album-cover > img").getAttribute("src");
-    expect(await singleCard.locator(".gallery-cover-backdrop").getAttribute("style")).toContain(foreground);
+    await expect(singleCard.locator(".gallery-cover-backdrop")).toHaveCount(0);
+    await expect(singleCard.locator(".gallery-album-cover > img")).toHaveCSS("object-fit", "cover");
     await singleCard.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`after-${title.startsWith("세로") ? "portrait" : "square"}-card.png`) });
     await singleCard.click();
     const singleDialog = page.getByRole("dialog");
     await expect(singleDialog.getByText("1 / 1", { exact: true })).toBeVisible();
     await expect(singleDialog.getByRole("button", { name: "다음 사진", exact: true })).toHaveCount(0);
+    await expect(singleDialog.locator(".gallery-thumbnail-picker")).toHaveCount(0);
     await expect(singleDialog.locator(".gallery-zoomable img")).toHaveCSS("object-fit", "contain");
     await expect.poll(() => singleDialog.locator(".gallery-zoomable img").evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+    const imageViewport = await singleDialog.locator(".zoomable-image-viewport").boundingBox();
+    expect(imageViewport.width).toBeGreaterThanOrEqual(320 - 1);
+    if (title.startsWith("세로")) expect(imageViewport.height).toBeGreaterThan(imageViewport.width);
+    else expect(Math.abs(imageViewport.height - imageViewport.width)).toBeLessThan(2);
+    console.log(JSON.stringify({
+      phase: "intrinsic-photo",
+      kind: title.startsWith("세로") ? "portrait" : "square",
+      viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })),
+      image: imageViewport,
+      bodyFont: await singleDialog.locator(".gallery-detail-copy > p").evaluate(el => getComputedStyle(el).fontSize),
+      saveHeight: (await singleDialog.getByRole("button", { name: "사진 저장", exact: true }).boundingBox()).height,
+    }));
     await page.screenshot({ path: testInfo.outputPath(`after-${title.startsWith("세로") ? "portrait" : "square"}-photo.png`) });
     for (const size of [{ width: 320, height: 720 }, { width: 740, height: 390 }]) {
       await page.setViewportSize(size);
@@ -163,7 +176,6 @@ test("mobile gallery header stays reachable and selecting photos does not move t
   }
   for (const width of [820, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
-    await expect(card.locator(".gallery-cover-backdrop")).not.toBeVisible();
     await expect(card.locator(".gallery-count-desktop")).toHaveText("2 PHOTOS");
     await card.click();
     await expect(dialog.locator(".gallery-download-actions")).not.toBeVisible();

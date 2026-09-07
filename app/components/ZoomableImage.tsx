@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 type Transform = {
   scale: number;
@@ -37,12 +37,14 @@ export default function ZoomableImage({
   className = "",
   onSwipe,
   mobileScroll = false,
+  mobileIntrinsicSize = false,
 }: {
   src: string;
   alt: string;
   className?: string;
   onSwipe?: (direction: "next" | "prev") => void;
   mobileScroll?: boolean;
+  mobileIntrinsicSize?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
@@ -52,6 +54,7 @@ export default function ZoomableImage({
   const swipeStart = useRef<Point | null>(null);
   const transformRef = useRef<Transform>({ scale: 1, x: 0, y: 0 });
   const [transform, setTransform] = useState<Transform>({ scale: 1, x: 0, y: 0 });
+  const [imageRatio, setImageRatio] = useState<number | null>(null);
 
   const commit = (next: Transform) => {
     const scale = clamp(next.scale, MIN_SCALE, MAX_SCALE);
@@ -159,7 +162,10 @@ export default function ZoomableImage({
   }, [mobileScroll]);
 
   return (
-    <div className={`zoomable-image ${className}`.trim()}>
+    <div
+      className={`zoomable-image${mobileIntrinsicSize ? " has-mobile-intrinsic-size" : ""} ${className}`.trim()}
+      style={imageRatio ? { "--zoom-image-ratio": imageRatio } as CSSProperties : undefined}
+    >
       <div
         className={`zoomable-image-viewport${transform.scale > 1 ? " is-zoomed" : ""}`}
         ref={viewportRef}
@@ -253,6 +259,11 @@ export default function ZoomableImage({
           alt={alt}
           decoding="async"
           draggable={false}
+          onLoad={(event) => {
+            if (mobileIntrinsicSize && event.currentTarget.naturalHeight > 0) {
+              setImageRatio(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight);
+            }
+          }}
           style={{
             transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
           }}
