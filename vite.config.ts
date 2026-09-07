@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { Readable } from "node:stream";
 import { externalMediaKey } from "./lib/media-path";
 import { serveExternalMedia } from "./app/api/media/route";
+import { serveGalleryMedia } from "./app/api/gallery/media/route";
 import { serveArchiveThumbnail } from "./lib/archive-thumbnail";
 
 function rscDevFallbackGuard() {
@@ -22,6 +23,23 @@ function rscDevFallbackGuard() {
           try {
             const encodedId = url.pathname.slice(archivePrefix.length, -archiveSuffix.length);
             const result = await serveArchiveThumbnail(decodeURIComponent(encodedId), request.headers.cookie ?? null);
+            response.statusCode = result.status;
+            result.headers.forEach((value, name) => response.setHeader(name, value));
+            if (!result.body) return response.end();
+            Readable.fromWeb(result.body as never).pipe(response);
+            return;
+          } catch (error) {
+            next(error as Error);
+            return;
+          }
+        }
+        if (url.pathname === "/api/gallery/media") {
+          try {
+            const origin = `http://${request.headers.host ?? "localhost"}`;
+            const result = await serveGalleryMedia(
+              new URL(request.url ?? url.pathname, origin).href,
+              request.headers.cookie ?? null,
+            );
             response.statusCode = result.status;
             result.headers.forEach((value, name) => response.setHeader(name, value));
             if (!result.body) return response.end();

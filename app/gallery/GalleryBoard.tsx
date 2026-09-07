@@ -31,6 +31,7 @@ export default function GalleryBoard({
   initialApprovalRequired: boolean;
 }) {
   const boardRef = useRef<HTMLElement>(null);
+  const viewerTriggerRef = useRef<HTMLElement | null>(null);
   const previousPageRef = useRef(1);
   const [page, setPage] = useState(1);
   const [viewer, setViewer] = useState<GalleryModalAlbum | null>(
@@ -61,7 +62,8 @@ export default function GalleryBoard({
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
   }, [page]);
 
-  const openViewer = (album: GalleryModalAlbum) => {
+  const openViewer = (album: GalleryModalAlbum, trigger: HTMLElement) => {
+    viewerTriggerRef.current = trigger;
     setViewer(album);
     const url = new URL(window.location.href);
     url.searchParams.set("album", album.id);
@@ -73,6 +75,7 @@ export default function GalleryBoard({
     const url = new URL(window.location.href);
     url.searchParams.delete("album");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    window.requestAnimationFrame(() => viewerTriggerRef.current?.focus());
   };
 
   return (
@@ -122,7 +125,7 @@ export default function GalleryBoard({
               <button
                 className="gallery-album-card"
                 type="button"
-                onClick={() => openViewer(modalAlbum)}
+                onClick={(event) => openViewer(modalAlbum, event.currentTarget)}
                 key={album.id}
                 aria-label={`${album.title} 앨범 열기`}
               >

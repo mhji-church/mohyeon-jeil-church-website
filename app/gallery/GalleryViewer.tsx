@@ -3,6 +3,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ZoomableImage from "../components/ZoomableImage";
 
+type DownloadNotice = {
+  kind: "success" | "error";
+  message: string;
+};
+
+function filenameFromDisposition(header: string | null) {
+  const encoded = header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Fall through to the ASCII filename.
+    }
+  }
+  return header?.match(/filename="([^"]+)"/i)?.[1] ?? "gallery-photo";
+}
+
 export type GalleryModalAlbum = {
   id: string;
   title: string;
@@ -20,10 +37,14 @@ export default function GalleryViewer({
   onClose: () => void;
 }) {
   const [activeImage, setActiveImage] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const moveImage = useCallback((amount: number) => {
     if (!album.images.length) return;
+    setDownloadNotice(null);
     setActiveImage((current) =>
       (current + amount + album.images.length) % album.images.length,
     );
@@ -42,6 +63,10 @@ export default function GalleryViewer({
       window.removeEventListener("keydown", handleKey);
     };
   }, [moveImage, onClose]);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const activeThumbnail = thumbnailsRef.current?.querySelector<HTMLElement>(
@@ -63,6 +88,50 @@ export default function GalleryViewer({
     });
   };
 
+  const downloadUrl = `/api/gallery/download?post_id=${encodeURIComponent(album.id)}&image=${activeImage}`;
+
+  const downloadCurrentImage = async () => {
+    if (downloading) return;
+    const requestedIndex = activeImage;
+    const anchor = document.createElement("a");
+    if (!("download" in anchor)) {
+      setDownloadNotice({
+        kind: "error",
+        message: "이 브라우저에서는 직접 저장할 수 없습니다. 원본 사진을 열어 길게 눌러 저장해 주세요.",
+      });
+      return;
+    }
+
+    setDownloading(true);
+    setDownloadNotice(null);
+    try {
+      const response = await fetch(downloadUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("download unavailable");
+      const blobUrl = URL.createObjectURL(await response.blob());
+      anchor.href = blobUrl;
+      anchor.download = filenameFromDisposition(response.headers.get("content-disposition"));
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1_000);
+      setDownloadNotice({
+        kind: "success",
+        message: `${requestedIndex + 1}번 사진 저장을 시작했습니다.`,
+      });
+    } catch {
+      setDownloadNotice({
+        kind: "error",
+        message: "사진을 바로 저장하지 못했습니다. 원본 사진을 열어 저장해 주세요.",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div
       className="focus-modal gallery-viewer"
@@ -75,6 +144,7 @@ export default function GalleryViewer({
     >
       <button
         className="focus-modal-close"
+        ref={closeButtonRef}
         type="button"
         onClick={onClose}
         aria-label="갤러리 닫기"
@@ -94,9 +164,11 @@ export default function GalleryViewer({
         {album.images.length ? (
           <>
             <div className="gallery-stage">
-              <button type="button" onClick={() => moveImage(-1)} aria-label="이전 사진">
-                ←
-              </button>
+              {album.images.length > 1 ? (
+                <button type="button" onClick={() => moveImage(-1)} aria-label="이전 사진">
+                  ←
+                </button>
+              ) : null}
               <ZoomableImage
                 key={album.images[activeImage]}
                 src={album.images[activeImage]}
@@ -104,13 +176,41 @@ export default function GalleryViewer({
                 className="gallery-zoomable"
                 onSwipe={(direction) => moveImage(direction === "next" ? 1 : -1)}
               />
-              <button type="button" onClick={() => moveImage(1)} aria-label="다음 사진">
-                →
-              </button>
+              {album.images.length > 1 ? (
+                <button type="button" onClick={() => moveImage(1)} aria-label="다음 사진">
+                  →
+                </button>
+              ) : null}
             </div>
 
             <footer className="gallery-modal-bottom">
-              <p>{album.content}</p>
+              <div className="gallery-detail-copy">
+                <p>{album.content || "작성된 본문이 없습니다."}</p>
+                <div className="gallery-download-actions">
+                  <button
+                    className="gallery-download-button"
+                    type="button"
+                    onClick={downloadCurrentImage}
+                    disabled={downloading}
+                  >
+                    {downloading ? "저장 준비 중…" : "사진 저장"}
+                  </button>
+                  {downloadNotice ? (
+                    <p
+                      className={`gallery-download-notice is-${downloadNotice.kind}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {downloadNotice.message}
+                      {downloadNotice.kind === "error" ? (
+                        <a href={`${downloadUrl}&view=1`} target="_blank" rel="noopener noreferrer">
+                          원본 사진 열기
+                        </a>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
               <div className="gallery-thumbnail-picker">
                 {album.images.length > 4 && (
                   <button
@@ -126,7 +226,10 @@ export default function GalleryViewer({
                     <button
                       type="button"
                       className={index === activeImage ? "is-active" : ""}
-                      onClick={() => setActiveImage(index)}
+                      onClick={() => {
+                        setDownloadNotice(null);
+                        setActiveImage(index);
+                      }}
                       key={image}
                       data-thumbnail-index={index}
                       aria-label={`${index + 1}번 사진 보기`}

@@ -38,7 +38,24 @@ for (let index = 1; index <= 12; index += 1) {
   const date = `2026.09.${String(index).padStart(2, "0")}`;
   await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'news', ?, ?, ?, ?, '[]', 'published')", args: [`browser-news-${index}`, `브라우저 교회소식 ${index}`, date, "로컬 회귀검사", JSON.stringify([["안내", "브라우저 회귀검사 데이터"]])] });
 }
-await client.execute({ sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'gallery', ?, ?, ?, '', ?, 'published')", args: ["browser-gallery", "브라우저 갤러리", "2026.08.20", "로컬 회귀검사", JSON.stringify(["/assets/mhji/gallery-pink-04.jpg"])] });
+const galleryBody = Array.from(
+  { length: 14 },
+  (_, index) => `모현제일교회 갤러리 본문 ${index + 1}. 함께한 예배와 교제의 순간을 기록합니다.`,
+).join("\n");
+await client.execute({
+  sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'gallery', ?, ?, ?, ?, ?, 'published')",
+  args: [
+    "browser-gallery",
+    "브라우저 갤러리",
+    "2026.08.20",
+    "로컬 회귀검사",
+    galleryBody,
+    JSON.stringify([
+      "/assets/mhji/gallery-pink-04.jpg",
+      "/assets/mhji/gallery-pink-03.jpg",
+    ]),
+  ],
+});
 await client.close();
 
 Object.assign(process.env, {
