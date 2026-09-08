@@ -60,7 +60,7 @@ test("YouTube URLs and thumbnail fetches only accept exact trusted hosts", () =>
   assert.doesNotMatch(source, /hostname\.endsWith\("youtube\.com"\)/);
 });
 
-test("archive mutations and member access changes require separate archive admin auth", () => {
+test("archive mutations use the scoped website admin session", () => {
   for (const file of [
     "app/api/admin/archive/videos/route.ts",
     "app/api/admin/archive/videos/[id]/route.ts",
@@ -68,10 +68,13 @@ test("archive mutations and member access changes require separate archive admin
   ]) {
     assert.match(read(file), /requireArchiveAdminApi/);
   }
-  assert.match(read("app/archive-credential-auth.ts"), /mhji_archive_admin_session/);
-  assert.match(read("app/archive-credential-auth.ts"), /ARCHIVE_ADMIN_SESSION_SECRET/);
-  assert.doesNotMatch(read("app/admin/AdminDashboard.tsx"), /href="\/admin\/archive"/);
-  assert.doesNotMatch(read("app/admin/members/AdminMembers.tsx"), /href="\/admin\/archive"/);
+  assert.match(read("app/archive-admin-auth.ts"), /getAdminSession/);
+  assert.match(read("app/archive-admin-auth.ts"), /canManageArchive/);
+  assert.match(read("app/archive-credential-auth.ts"), /admin-0691/);
+  assert.match(read("app/admin/AdminSidebar.tsx"), /canManageArchive/);
+  assert.match(read("app/admin/AdminSidebar.tsx"), /href="\/archive\/admin"/);
+  assert.match(read("app/api/archive/admin/session/route.ts"), /status:\s*403/);
+  assert.doesNotMatch(read("app/api/archive/admin/session/route.ts"), /createArchiveAdminSessionCookie/);
 });
 
 test("unlisted-video migration files remain excluded from Git", () => {

@@ -1,4 +1,4 @@
 import ArchiveAdmin from "@/app/admin/archive/ArchiveAdmin";
 import { requireArchiveAdminPage } from "@/app/archive-admin-auth";
 export const dynamic = "force-dynamic";
-export default async function Page() { const { user } = await requireArchiveAdminPage("/archive/admin/new"); return <ArchiveAdmin userName={user.displayName} userEmail={user.email} signOutPath="/api/archive/admin/session" mode="new" />; }
+export default async function Page() { const { user } = await requireArchiveAdminPage("/archive/admin/new"); return <ArchiveAdmin userName={user.displayName} userEmail={user.email} signOutPath="/api/admin/session?return_to=/archive" mode="new" />; }

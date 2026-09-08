@@ -11,6 +11,7 @@ type Props = {
   userEmail: string;
   signOutPath: string;
   initialPendingMemberCount: number | null;
+  canManageArchive: boolean;
 };
 
 const statusLabel: Record<MemberStatus, string> = {
@@ -24,7 +25,7 @@ function formatDate(value: string | null) {
   return value.slice(0, 10).replaceAll("-", ".");
 }
 
-export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount }: Props) {
+export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount, canManageArchive }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -210,7 +211,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
 
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} />
+      <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} canManageWebsite canManageArchive={canManageArchive} />
 
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">

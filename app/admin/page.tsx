@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdminPage } from "../admin-auth";
+import { requireAdminPortalPage } from "../admin-auth";
 import { getAdminContentSummary, type ContentPost, type ContentType } from "../../lib/content";
 import { getAdminMemberSummary } from "../../lib/members";
 import { getKoreaDate } from "../../lib/korea-date";
@@ -39,7 +39,32 @@ function getPublishDate(post: ContentPost) {
 }
 
 export default async function AdminHomePage() {
-  const { user } = await requireAdminPage();
+  const { user, canManageWebsite, canManageArchive } = await requireAdminPortalPage();
+  if (!canManageWebsite) {
+    return (
+      <main className="admin-shell admin-members-shell">
+        <AdminSidebar
+          active="archive"
+          userName={user.fullName}
+          userEmail={user.email}
+          signOutPath="/api/admin/session?return_to=/"
+          initialPendingMemberCount={null}
+          canManageWebsite={false}
+          canManageArchive={canManageArchive}
+        />
+        <section className="admin-workspace admin-members-workspace admin-home-workspace">
+          <section className="admin-home-section" aria-labelledby="archive-entry-title">
+            <header className="admin-section-heading">
+              <div><span>ARCHIVE ADMIN</span><h2 id="archive-entry-title">예배 아카이브 관리</h2></div>
+            </header>
+            <div className="admin-empty">
+              <strong>예배 영상과 찬양·출석 기록을 관리할 수 있습니다.</strong>
+            </div>
+          </section>
+        </section>
+      </main>
+    );
+  }
   const month = getKoreaDate().slice(0, 7).replaceAll(".", "-");
   let memberSummary: Awaited<ReturnType<typeof getAdminMemberSummary>> | null = null;
   let contentSummary: Awaited<ReturnType<typeof getAdminContentSummary>> | null = null;
@@ -59,7 +84,7 @@ export default async function AdminHomePage() {
 
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active="home" userName={user.fullName ?? "홈페이지 관리자"} userEmail={user.email} signOutPath="/api/admin/session?return_to=/" initialPendingMemberCount={pendingCount} />
+      <AdminSidebar active="home" userName={user.fullName ?? "홈페이지 관리자"} userEmail={user.email} signOutPath="/api/admin/session?return_to=/" initialPendingMemberCount={pendingCount} canManageWebsite canManageArchive={canManageArchive} />
       <section className="admin-workspace admin-members-workspace admin-home-workspace">
         <section className="admin-home-section" aria-labelledby="admin-status-title">
           <header className="admin-section-heading"><div><span>STATUS</span><h2 id="admin-status-title">운영 현황</h2></div></header>

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
-export default function AdminLoginForm() {
+export default function AdminLoginForm({ returnTo = "/admin" }: { returnTo?: string }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,15 +17,16 @@ export default function AdminLoginForm() {
       body: JSON.stringify({
         username: String(form.get("username") ?? ""),
         password: String(form.get("password") ?? ""),
+        returnTo,
       }),
     });
-    const data = (await response.json()) as { error?: string };
+    const data = (await response.json()) as { error?: string; returnTo?: string };
     if (!response.ok) {
       setError(data.error ?? "로그인하지 못했습니다.");
       setSubmitting(false);
       return;
     }
-    window.location.assign("/admin");
+    window.location.assign(data.returnTo ?? "/admin");
   }
 
   return (

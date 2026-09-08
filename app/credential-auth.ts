@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { isArchiveManagementUsername } from "./archive-credential-auth";
 
 const COOKIE_NAME = "mhji_admin_session";
 const SESSION_SECONDS = 8 * 60 * 60;
@@ -12,7 +13,11 @@ type AdminEnvironment = {
 type AdminSession = {
   username: string;
   expiresAt: number;
+  canManageWebsite: boolean;
+  canManageArchive: boolean;
 };
+
+export type AdminSessionScope = "website" | "archive";
 
 function config() {
   const runtime = process.env as AdminEnvironment;
@@ -48,9 +53,12 @@ export async function verifyAdminCredentials(
   );
 }
 
-export async function createAdminSessionCookie(username: string) {
+export async function createAdminSessionCookie(
+  username: string,
+  scope: AdminSessionScope = "website",
+) {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
-  const payload = `${encodeURIComponent(username)}.${expiresAt}`;
+  const payload = `${encodeURIComponent(username)}.${scope}.${expiresAt}`;
   const signature = await sign(payload);
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, `${payload}.${signature}`, {
@@ -82,12 +90,19 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 export async function getAdminSessionFromToken(
   token: string | null | undefined,
 ): Promise<AdminSession | null> {
-  if (!token) return null;
+  if (!token || !config().sessionSecret) return null;
 
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [encodedUsername, expiresAtValue, suppliedSignature] = parts;
-  const payload = `${encodedUsername}.${expiresAtValue}`;
+  if (parts.length !== 3 && parts.length !== 4) return null;
+  const isLegacyWebsiteSession = parts.length === 3;
+  const [encodedUsername, scopeValue, expiresAtValue, suppliedSignature] =
+    isLegacyWebsiteSession
+      ? [parts[0], "website", parts[1], parts[2]]
+      : parts;
+  if (scopeValue !== "website" && scopeValue !== "archive") return null;
+  const payload = isLegacyWebsiteSession
+    ? `${encodedUsername}.${expiresAtValue}`
+    : `${encodedUsername}.${scopeValue}.${expiresAtValue}`;
   const expectedSignature = await sign(payload);
   if (!constantTimeEqual(suppliedSignature, expectedSignature)) return null;
 
@@ -102,9 +117,14 @@ export async function getAdminSessionFromToken(
   } catch {
     return null;
   }
-  if (username !== config().username) return null;
+  const canManageWebsite =
+    scopeValue === "website" && username === config().username;
+  const canManageArchive =
+    isArchiveManagementUsername(username) &&
+    (scopeValue === "archive" || canManageWebsite);
+  if (!canManageWebsite && !canManageArchive) return null;
 
-  return { username, expiresAt };
+  return { username, expiresAt, canManageWebsite, canManageArchive };
 }
 
 async function sign(value: string) {

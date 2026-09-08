@@ -146,6 +146,7 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await page.getByLabel("비밀번호").fill("browser-admin-password");
   await page.getByRole("button", { name: "관리자 로그인" }).click();
   await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("link", { name: "아카이브 관리" })).toHaveCount(0);
   await page.goto("/admin/content?section=news&new=1");
   await expect(page.getByRole("heading", { name: /새 교회소식 등록/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "미리보기" })).toBeVisible();
@@ -197,12 +198,21 @@ test("archive admin navigation stays responsive above the edit drawer and recove
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members: [{ id: "browser-member", name: "브라우저테스트", username: "test-member", status: "approved", accessLevel: "full", songStatsAllowed: true }] }) });
   });
 
-  await page.goto("/archive/admin");
-  await expect(page).toHaveURL(/\/archive\/admin\/login/);
-  await expect.poll(() => page.locator(".archive-admin-login-form").evaluate((form) => Object.keys(form).some((key) => key.startsWith("__reactProps")))).toBe(true);
-  await page.getByLabel("관리자 아이디").fill("browser-archive-admin");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await page.goto("/admin");
+    if ((response?.status() ?? 500) < 500) break;
+  }
+  await expect(page).toHaveURL(/\/admin\/login/);
+  await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  )).toBe(true);
+  await page.getByLabel("아이디").fill("admin-0691");
   await page.getByLabel("비밀번호").fill("browser-archive-password");
-  await page.getByRole("button", { name: "아카이브 관리자 로그인" }).click();
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  const archiveLink = page.locator('.admin-sidebar nav a[href="/archive/admin"]');
+  await expect(archiveLink).toBeVisible();
+  await archiveLink.click();
   await expect(page).toHaveURL(/\/archive\/admin$/);
   await expect(page.getByText("브라우저 아카이브 영상")).toBeVisible();
 
@@ -265,7 +275,11 @@ test("archive admin navigation stays responsive above the edit drawer and recove
     await expect(page).toHaveURL(/\/archive\/admin$/);
     await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
   }
-  expect(errors.filter((error) => !/503 \(Service Unavailable\)/.test(error))).toEqual([]);
+  await page.getByRole("link", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/member\/login\?return_to=%2Farchive$/);
+  await page.goto("/archive/admin");
+  await expect(page).toHaveURL(/\/admin\/login\?return_to=/);
+  expect(errors.filter((error) => !/status of 503|503 \(Service Unavailable\)/.test(error))).toEqual([]);
 });
 
 test("approved local member can enter the worship archive", async ({ page }) => {

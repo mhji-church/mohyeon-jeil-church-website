@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity";
+export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity" | "archive";
 
 type Props = {
   active: AdminSection;
@@ -11,6 +11,8 @@ type Props = {
   userEmail: string;
   signOutPath: string;
   initialPendingMemberCount: number | null;
+  canManageWebsite: boolean;
+  canManageArchive: boolean;
 };
 
 const menuItems: Array<{ key: AdminSection; label: string; href: string }> = [
@@ -29,9 +31,12 @@ export default function AdminSidebar({
   userEmail,
   signOutPath,
   initialPendingMemberCount,
+  canManageWebsite,
+  canManageArchive,
 }: Props) {
   const [pendingMemberCount, setPendingMemberCount] = useState(initialPendingMemberCount);
   const refreshPendingCount = useCallback(async () => {
+    if (!canManageWebsite) return;
     try {
       const response = await fetch("/api/admin/members?summary=pending", { cache: "no-store" });
       const data = (await response.json().catch(() => ({}))) as { pendingCount?: number };
@@ -39,9 +44,10 @@ export default function AdminSidebar({
     } catch {
       // Retain the last confirmed count when a background refresh fails.
     }
-  }, []);
+  }, [canManageWebsite]);
 
   useEffect(() => {
+    if (!canManageWebsite) return;
     const initialRefresh = window.setTimeout(() => void refreshPendingCount(), 0);
     const interval = window.setInterval(() => void refreshPendingCount(), 60_000);
     const refreshWhenVisible = () => {
@@ -57,7 +63,7 @@ export default function AdminSidebar({
       window.removeEventListener("admin-members-updated", refreshPendingCount);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [refreshPendingCount]);
+  }, [canManageWebsite, refreshPendingCount]);
 
   return (
     <aside className="admin-sidebar">
@@ -66,7 +72,7 @@ export default function AdminSidebar({
         <span>WEBSITE ADMIN</span>
       </Link>
       <nav aria-label="관리 메뉴">
-        {menuItems.map((item, index) => (
+        {canManageWebsite && menuItems.map((item, index) => (
           <Link className={active === item.key ? "is-active" : ""} href={item.href} key={item.key}>
             <i>{String(index + 1).padStart(2, "0")}</i>
             <span>{item.label}</span>
@@ -75,6 +81,17 @@ export default function AdminSidebar({
             )}
           </Link>
         ))}
+        {canManageArchive && (
+          // A full document navigation is required between the website and archive app shells.
+          // eslint-disable-next-line @next/next/no-html-link-for-pages
+          <a
+            className={active === "archive" ? "is-active" : ""}
+            href="/archive/admin"
+          >
+            <i>{String(canManageWebsite ? menuItems.length + 1 : 1).padStart(2, "0")}</i>
+            <span>아카이브 관리</span>
+          </a>
+        )}
       </nav>
       <div className="admin-account">
         <span>{userName}</span>

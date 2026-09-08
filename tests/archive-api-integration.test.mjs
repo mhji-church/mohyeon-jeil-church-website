@@ -12,8 +12,11 @@ import { fileURLToPath } from "node:url";
 import { applyNetlifyMigrations } from "../scripts/netlify-migrations.mjs";
 
 const TEST_MEMBER_SECRET = "local-archive-integration-member-secret";
-const TEST_ADMIN_USERNAME = "local-archive-admin";
+const TEST_WEBSITE_ADMIN_USERNAME = "mhji";
+const TEST_WEBSITE_ADMIN_PASSWORD = "local-website-admin-password";
+const TEST_ADMIN_USERNAME = "admin-0691";
 const TEST_ADMIN_PASSWORD = "local-archive-admin-password";
+const TEST_ARCHIVE_LEGACY_SECRET = "local-archive-integration-separate-secret";
 const TEST_YOUTUBE_IDS = {
   worship: "TESTWORSHIP",
   attendance: "TESTATTEND1",
@@ -46,6 +49,15 @@ function memberCookie(memberId) {
   const payload = `${memberId}.${expiresAt}`;
   const signature = createHmac("sha256", TEST_MEMBER_SECRET).update(payload).digest("base64url");
   return `mhji_member_session=${payload}.${signature}`;
+}
+
+function legacyArchiveAdminCookie() {
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+  const payload = `${encodeURIComponent(TEST_ADMIN_USERNAME)}.${expiresAt}`;
+  const signature = createHmac("sha256", TEST_ARCHIVE_LEGACY_SECRET)
+    .update(payload)
+    .digest("base64url");
+  return `mhji_archive_admin_session=${payload}.${signature}`;
 }
 
 async function waitForServer() {
@@ -127,12 +139,12 @@ before(async () => {
       TURSO_DATABASE_URL: databaseUrl,
       TURSO_AUTH_TOKEN: "local-test-token",
       MEMBER_SESSION_SECRET: TEST_MEMBER_SECRET,
-      ADMIN_USERNAME: TEST_ADMIN_USERNAME,
-      ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
+      ADMIN_USERNAME: TEST_WEBSITE_ADMIN_USERNAME,
+      ADMIN_PASSWORD: TEST_WEBSITE_ADMIN_PASSWORD,
       ADMIN_SESSION_SECRET: "local-archive-integration-admin-secret",
       ARCHIVE_ADMIN_USERNAME: TEST_ADMIN_USERNAME,
       ARCHIVE_ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
-      ARCHIVE_ADMIN_SESSION_SECRET: "local-archive-integration-separate-secret",
+      ARCHIVE_ADMIN_SESSION_SECRET: TEST_ARCHIVE_LEGACY_SECRET,
       YOUTUBE_API_KEY: "local-test-key-not-used",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -144,11 +156,11 @@ before(async () => {
   const login = await request("/api/admin/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: TEST_WEBSITE_ADMIN_USERNAME, password: TEST_WEBSITE_ADMIN_PASSWORD }),
   });
   assert.equal(login.status, 200);
-  adminCookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  websiteAdminCookie = adminCookie;
+  websiteAdminCookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  adminCookie = websiteAdminCookie;
 
   const memberRows = [
     ["none-user", "승인없음", "approved"],
@@ -192,7 +204,15 @@ before(async () => {
   });
   assert.equal(reset.status, 200);
 
-  const archiveLogin = await request("/api/archive/admin/session", {
+  const legacyArchiveLogin = await request("/api/archive/admin/session", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
+  });
+  assert.equal(legacyArchiveLogin.status, 403);
+  assert.equal(legacyArchiveLogin.headers.get("set-cookie"), null);
+
+  const archiveLogin = await request("/api/admin/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
@@ -428,16 +448,51 @@ test("archive thumbnails require access and attendance faces respect the assigne
   assert.doesNotMatch(body, new RegExp(TEST_YOUTUBE_IDS.attendance));
 });
 
+test("archive administration menu and server access are scoped to admin-0691", async () => {
+  const signedOutPage = await request("/archive/admin", { redirect: "manual" });
+  assert.match(signedOutPage.headers.get("location") ?? "", /\/admin\/login\?return_to=/);
+
+  const websitePage = await request("/archive/admin", {
+    headers: { cookie: websiteAdminCookie },
+    redirect: "manual",
+  });
+  assert.match(websitePage.headers.get("location") ?? "", /\/admin$/);
+
+  const websiteHome = await request("/admin", { headers: { cookie: websiteAdminCookie } });
+  assert.equal(websiteHome.status, 200);
+  assert.doesNotMatch(await websiteHome.text(), /아카이브 관리/);
+
+  const archivePortal = await request("/admin", { headers: { cookie: adminCookie } });
+  assert.equal(archivePortal.status, 200);
+  assert.match(await archivePortal.text(), /아카이브 관리/);
+
+  const archivePage = await request("/archive/admin", { headers: { cookie: adminCookie } });
+  assert.equal(archivePage.status, 200);
+
+  assert.equal((await request("/api/admin/members", { headers: { cookie: adminCookie } })).status, 403);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: websiteAdminCookie } })).status, 403);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: legacyArchiveAdminCookie() } })).status, 403);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } })).status, 200);
+
+  const logout = await request("/api/admin/session?return_to=/archive", {
+    headers: { cookie: adminCookie },
+    redirect: "manual",
+  });
+  assert.match(logout.headers.get("set-cookie") ?? "", /mhji_admin_session=;/);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: "mhji_admin_session=" } })).status, 403);
+});
+
 test("archive administration requires auth and local CRUD rejects unsafe input", async () => {
   assert.equal((await request("/api/admin/archive/videos")).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: websiteAdminCookie } })).status, 403);
+  assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: legacyArchiveAdminCookie() } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 403);
   assert.equal((await request("/api/admin/archive/videos/worship-video", { method: "DELETE" })).status, 403);
   assert.equal((await request("/api/admin/archive/access")).status, 403);
   assert.equal((await request("/api/admin/archive/access", { method: "PATCH", headers: { "content-type": "application/json" }, body: "{}" })).status, 403);
   assert.equal((await request("/api/admin/archive/youtube?url=test")).status, 403);
 
-  assert.match(adminCookie, /^mhji_archive_admin_session=/);
+  assert.match(adminCookie, /^mhji_admin_session=/);
 
   const maliciousHost = await request("/api/admin/archive/videos", {
     method: "POST",

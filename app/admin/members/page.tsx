@@ -5,7 +5,7 @@ import AdminMembers from "./AdminMembers";
 export const dynamic = "force-dynamic";
 
 export default async function AdminMembersPage() {
-  const { user } = await requireAdminPage();
+  const { user, canManageArchive } = await requireAdminPage();
   const initialPendingMemberCount = await countPendingMembers().catch(() => null);
   return (
     <AdminMembers
@@ -13,6 +13,7 @@ export default async function AdminMembersPage() {
       userEmail={user.email}
       signOutPath="/api/admin/session?return_to=/"
       initialPendingMemberCount={initialPendingMemberCount}
+      canManageArchive={canManageArchive}
     />
   );
 }

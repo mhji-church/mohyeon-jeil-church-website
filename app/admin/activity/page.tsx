@@ -5,7 +5,7 @@ import UnifiedActivityAdmin from "./UnifiedActivityAdmin";
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
-  const { user } = await requireAdminPage();
+  const { user, canManageArchive } = await requireAdminPage();
   const initialPendingMemberCount = await countPendingMembers().catch(() => null);
   return (
     <UnifiedActivityAdmin
@@ -13,6 +13,7 @@ export default async function ActivityPage() {
       userEmail={user.email}
       signOutPath="/api/admin/session?return_to=/"
       initialPendingMemberCount={initialPendingMemberCount}
+      canManageArchive={canManageArchive}
     />
   );
 }

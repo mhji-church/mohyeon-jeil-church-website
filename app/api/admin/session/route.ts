@@ -4,28 +4,59 @@ import {
   createAdminSessionCookie,
   verifyAdminCredentials,
 } from "../../../credential-auth";
+import {
+  clearArchiveAdminSessionCookie,
+  isArchiveManagementUsername,
+  verifyArchiveAdminCredentials,
+} from "../../../archive-credential-auth";
+
+function safeReturn(value: unknown, canManageArchive: boolean) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return "/admin";
+  }
+  if (value.startsWith("/archive/admin")) {
+    return canManageArchive ? value : "/admin";
+  }
+  return value.startsWith("/admin") ? value : "/admin";
+}
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     username?: unknown;
     password?: unknown;
+    returnTo?: unknown;
   } | null;
   const username = typeof payload?.username === "string" ? payload.username : "";
   const password = typeof payload?.password === "string" ? payload.password : "";
 
-  if (!(await verifyAdminCredentials(username, password))) {
+  const websiteCredentialsValid = await verifyAdminCredentials(username, password);
+  const archiveCredentialsValid =
+    !websiteCredentialsValid &&
+    isArchiveManagementUsername(username) &&
+    (await verifyArchiveAdminCredentials(username, password));
+
+  if (!websiteCredentialsValid && !archiveCredentialsValid) {
     return Response.json(
       { error: "아이디 또는 비밀번호가 올바르지 않습니다." },
       { status: 401 },
     );
   }
 
-  await createAdminSessionCookie(username.trim());
-  return Response.json({ ok: true });
+  const scope = websiteCredentialsValid ? "website" : "archive";
+  const canManageArchive = isArchiveManagementUsername(username);
+  await createAdminSessionCookie(username.trim(), scope);
+  await clearArchiveAdminSessionCookie();
+  return Response.json({
+    ok: true,
+    returnTo: safeReturn(payload?.returnTo, canManageArchive),
+  });
 }
 
 export async function GET(request: Request) {
-  await clearAdminSessionCookie();
+  await Promise.all([
+    clearAdminSessionCookie(),
+    clearArchiveAdminSessionCookie(),
+  ]);
   const requested = new URL(request.url).searchParams.get("return_to");
   const returnTo =
     requested?.startsWith("/") && !requested.startsWith("//") ? requested : "/";

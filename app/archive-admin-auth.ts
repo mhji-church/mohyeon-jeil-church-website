@@ -1,13 +1,16 @@
 import { redirect } from "next/navigation";
-import { getArchiveAdminSession } from "./archive-credential-auth";
+import { getAdminSession } from "./credential-auth";
 
 export async function requireArchiveAdminPage(returnTo = "/archive/admin") {
-  const session = await getArchiveAdminSession();
-  if (!session) redirect(`/archive/admin/login?return_to=${encodeURIComponent(returnTo)}`);
+  const session = await getAdminSession();
+  if (!session) redirect(`/admin/login?return_to=${encodeURIComponent(returnTo)}`);
+  if (!session.canManageArchive) redirect("/admin");
   return { user: { displayName: "예배 아카이브 관리자", email: session.username, fullName: "예배 아카이브 관리자" }, authorized: true };
 }
 
 export async function requireArchiveAdminApi() {
-  const session = await getArchiveAdminSession();
-  return session ? { displayName: "예배 아카이브 관리자", email: session.username, fullName: "예배 아카이브 관리자" } : null;
+  const session = await getAdminSession();
+  return session?.canManageArchive
+    ? { displayName: "예배 아카이브 관리자", email: session.username, fullName: "예배 아카이브 관리자" }
+    : null;
 }

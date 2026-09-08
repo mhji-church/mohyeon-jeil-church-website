@@ -24,6 +24,7 @@ type Props = {
   initialPendingMemberCount: number | null;
   initialCreate: boolean;
   initialEditId: string | null;
+  canManageArchive: boolean;
 };
 
 type PendingImage = {
@@ -363,6 +364,7 @@ export default function AdminDashboard({
   signOutPath,
   initialType,
   initialPendingMemberCount,
+  canManageArchive,
   initialCreate,
   initialEditId,
 }: Props) {
@@ -812,7 +814,7 @@ export default function AdminDashboard({
 
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active={activeType} userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} />
+      <AdminSidebar active={activeType} userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} canManageWebsite canManageArchive={canManageArchive} />
 
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">

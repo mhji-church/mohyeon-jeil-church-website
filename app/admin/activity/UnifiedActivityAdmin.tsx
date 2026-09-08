@@ -29,6 +29,7 @@ export default function UnifiedActivityAdmin(props: {
   userEmail: string;
   signOutPath: string;
   initialPendingMemberCount: number | null;
+  canManageArchive: boolean;
 }) {
   const [logs, setLogs] = useState<Log[]>([]);
   const [total, setTotal] = useState(0);
@@ -59,7 +60,7 @@ export default function UnifiedActivityAdmin(props: {
   const pages = Math.max(1, Math.ceil(total / 20));
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active="activity" {...props} />
+      <AdminSidebar active="activity" canManageWebsite {...props} />
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar admin-activity-topbar">
           <div><span>ADMIN ACTIVITY</span><h1>활동 기록</h1><p>관리자 변경 이력을 민감정보 없이 확인합니다.</p></div>
