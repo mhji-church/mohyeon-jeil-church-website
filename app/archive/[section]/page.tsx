@@ -15,5 +15,5 @@ export default async function ArchiveSectionPage({
   if (!archiveSections.has(section)) notFound();
   const returnTo = `/archive/${section}`;
   const viewer = await requireArchiveWorshipPage(returnTo);
-  return <ArchivePortal initialAccess={{ authenticated: true, level: viewer.level, member: { name: viewer.name }, songStatsAllowed: await archiveViewerCanViewSongStats(viewer) }} />;
+  return <ArchivePortal initialAccess={{ authenticated: true, level: viewer.level, member: { name: viewer.name, position: viewer.position }, songStatsAllowed: await archiveViewerCanViewSongStats(viewer) }} />;
 }

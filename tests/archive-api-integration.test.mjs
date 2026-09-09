@@ -446,7 +446,7 @@ test("playback enforces member approval, password state, and archive level", asy
   assert.deepEqual(await pendingAccess.json(), {
     authenticated: true,
     approvalPending: true,
-    member: { name: "대기회원" },
+    member: { name: "대기회원", position: "" },
     level: "none",
     songStatsAllowed: false,
   });

@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 
 export default async function ArchivePage() {
   const viewer = await requireArchiveWorshipPage("/archive");
-  return <ArchivePortal initialAccess={{ authenticated: true, level: viewer.level, member: { name: viewer.name }, songStatsAllowed: await archiveViewerCanViewSongStats(viewer) }} />;
+  return <ArchivePortal initialAccess={{ authenticated: true, level: viewer.level, member: { name: viewer.name, position: viewer.position }, songStatsAllowed: await archiveViewerCanViewSongStats(viewer) }} />;
 }

@@ -3,8 +3,9 @@ import { getMemberSession } from "@/app/member-auth";
 import { redirect } from "next/navigation";
 import { getArchiveAccess, getArchiveSongStatsAccess } from "./archive";
 import type { ArchiveAccessLevel } from "./archive-shared";
+import { getMemberDisplayPosition } from "./member-display";
 
-export type ArchiveViewer = { kind: "admin" | "member"; id: string; name: string; level: ArchiveAccessLevel };
+export type ArchiveViewer = { kind: "admin" | "member"; id: string; name: string; position?: string; level: ArchiveAccessLevel };
 
 export async function getArchiveWorshipViewer(): Promise<ArchiveViewer | null> {
   const admin = await getArchiveAdminSession();
@@ -13,7 +14,7 @@ export async function getArchiveWorshipViewer(): Promise<ArchiveViewer | null> {
   if (!member || member.status !== "approved" || member.forcePasswordChange) return null;
   const level = await getArchiveAccess(member.id);
   if (level !== "worship" && level !== "full") return null;
-  return { kind: "member", id: member.id, name: member.name, level };
+  return { kind: "member", id: member.id, name: member.name, position: getMemberDisplayPosition(member.position), level };
 }
 
 export async function requireArchiveWorshipApi() {

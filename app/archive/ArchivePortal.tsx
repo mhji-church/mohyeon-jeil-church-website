@@ -8,7 +8,7 @@ import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "./ArchiveShell";
 import ArchiveVideoViewer, { type ArchivePlayingVideo } from "./ArchiveVideoViewer";
 
 export type ArchiveSection = "all" | "sunday" | "other" | "attendance";
-type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string }; songStatsAllowed: boolean };
+type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string; position?: string }; songStatsAllowed: boolean };
 const meta = {
   all: ["예배 아카이브", "모현제일교회의 예배와 공동체 기록을 한곳에서 만나보세요."],
   sunday: ["주일예배", "주일 1부와 주일 2부 예배 실황을 모았습니다."],
@@ -108,7 +108,12 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
 
   const searchFields = <><ArchiveIcon name="search" size={21} className="archive-search-glyph" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="날짜, 예배 종류, 설교제목 검색" aria-label="예배 기록 검색" /></>;
   const searchBox = <label className="archive-search">{searchFields}</label>;
-  const account = access.authenticated ? <Link aria-label={`${access.member?.name ?? "회원"} 회원 메뉴`} className="header-action-link user-link" href="/member"><ArchiveIcon name="user" size={17} /><span>{access.member?.name ?? "회원"}</span></Link> : <Link aria-label="회원 로그인" className="header-action-link login-link" href={`/member/login?return_to=${encodeURIComponent(pathname || "/archive")}`}><ArchiveIcon name="user" size={17} /><span>로그인</span></Link>;
+  const archiveMemberLabel = access.member
+    ? access.member.position === undefined
+      ? access.member.name
+      : `${access.member.name} ${access.member.position || "성도"}`
+    : "회원";
+  const account = access.authenticated ? <Link aria-label={`${archiveMemberLabel} 회원 메뉴`} className="header-action-link user-link" href="/member"><ArchiveIcon name="user" size={17} /><span>{archiveMemberLabel}</span></Link> : <Link aria-label="회원 로그인" className="header-action-link login-link" href={`/member/login?return_to=${encodeURIComponent(pathname || "/archive")}`}><ArchiveIcon name="user" size={17} /><span>로그인</span></Link>;
 
   const accessNotice = searchParams.get("access") === "songs-denied" ? "찬양 통계 열람 권한이 필요합니다. 관리자에게 문의해 주세요." : "";
 

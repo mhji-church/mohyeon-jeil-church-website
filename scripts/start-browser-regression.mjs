@@ -19,8 +19,8 @@ const salt = randomBytes(16);
 const hash = pbkdf2Sync("browser-test-password", salt, 100_000, 32, "sha256");
 const base64url = (value) => Buffer.from(value).toString("base64url");
 await client.execute({
-  sql: "INSERT INTO members (id, username, password_hash, password_salt, name, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  args: ["browser-member", "test-member", base64url(hash), base64url(salt), "브라우저테스트", "01000000000", "approved"],
+  sql: "INSERT INTO members (id, username, password_hash, password_salt, name, phone, position, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  args: ["browser-member", "test-member", base64url(hash), base64url(salt), "브라우저테스트", "01000000000", "집사 / 미디어팀", "approved"],
 });
 await client.execute({
   sql: "INSERT INTO member_app_access (member_id, app_code, access_level, granted_by) VALUES (?, 'worship_archive', 'full', 'browser-fixture')",

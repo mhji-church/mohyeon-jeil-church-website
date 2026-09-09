@@ -138,8 +138,13 @@ test("bulletin and news keep the current pagination button legible in every inte
 });
 
 test("login, signup, admin guard, and admin authoring work on the temporary database", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/member/signup");
   await expect(page.getByRole("heading", { name: "회원가입", exact: true })).toBeVisible();
+  await expect(page.getByText("소속이 있다면 ‘집사 / 미디어팀’처럼 입력해 주세요.")).toBeVisible();
+  await expect(page.getByLabel("직분 또는 소속 부서 선택")).toHaveAttribute("aria-describedby", "signup-position-help");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin\/login/);
   await page.getByLabel("아이디").fill("browser-admin");
@@ -562,5 +567,13 @@ test("approved local member can enter the worship archive", async ({ page }) => 
   await page.getByRole("button", { name: "교인 로그인" }).click();
   await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:4178\/archive(?:[/?#]|$)/);
   await expect(page.getByText("모현제일교회 예배 아카이브").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "브라우저테스트 집사 회원 메뉴" })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await expect(page.locator(".header-member-login.is-member")).toHaveText(/브라우저테스트 집사/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await expect(page.locator(".mobile-member-login.is-member")).toHaveText(/브라우저테스트 집사/);
+  await expect(page.getByText("미디어팀", { exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

@@ -1,6 +1,7 @@
 import { getAdminSession } from "../../credential-auth";
 import { getMemberSession } from "../../member-auth";
 import { apiError } from "../../../lib/api-response";
+import { getMemberDisplayPosition } from "../../../lib/member-display";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,9 @@ export async function GET() {
     return Response.json(
       {
         authenticated: Boolean(member || admin),
-        member: member ? { name: member.name, position: member.position } : null,
+        member: member
+          ? { name: member.name, position: getMemberDisplayPosition(member.position) }
+          : null,
       },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
