@@ -159,6 +159,7 @@ before(async () => {
     body: JSON.stringify({ username: TEST_WEBSITE_ADMIN_USERNAME, password: TEST_WEBSITE_ADMIN_PASSWORD }),
   });
   assert.equal(login.status, 200);
+  assert.equal((await login.clone().json()).returnTo, "/admin");
   websiteAdminCookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
   adminCookie = websiteAdminCookie;
 
@@ -225,6 +226,7 @@ before(async () => {
     body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
   });
   assert.equal(archiveLogin.status, 200);
+  assert.equal((await archiveLogin.clone().json()).returnTo, "/admin");
   adminCookie = (archiveLogin.headers.get("set-cookie") ?? "").split(";")[0];
 
   for (const video of [
@@ -471,12 +473,19 @@ test("archive administration menu and server access are scoped to the configured
 
   const archivePortal = await request("/admin", { headers: { cookie: adminCookie } });
   assert.equal(archivePortal.status, 200);
-  assert.match(await archivePortal.text(), /아카이브 관리/);
+  const archivePortalHtml = await archivePortal.text();
+  for (const label of ["관리자 홈", "주보 관리", "교회소식 관리", "갤러리 관리", "성도사업장 관리", "회원 관리", "활동 기록", "아카이브 관리"]) {
+    assert.match(archivePortalHtml, new RegExp(label));
+  }
+  assert.match(archivePortalHtml, /운영 현황/);
+  assert.doesNotMatch(archivePortalHtml, /예배 아카이브 관리/);
 
   const archivePage = await request("/archive/admin", { headers: { cookie: adminCookie } });
   assert.equal(archivePage.status, 200);
 
-  assert.equal((await request("/api/admin/members", { headers: { cookie: adminCookie } })).status, 403);
+  for (const pathname of ["/api/admin/members", "/api/admin/posts", "/api/admin/activity"]) {
+    assert.equal((await request(pathname, { headers: { cookie: adminCookie } })).status, 200);
+  }
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: websiteAdminCookie } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: legacyArchiveAdminCookie() } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } })).status, 200);

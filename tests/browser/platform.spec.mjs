@@ -210,8 +210,19 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await page.getByLabel("비밀번호").fill("browser-archive-password");
   await page.getByRole("button", { name: "관리자 로그인" }).click();
   await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+  const adminNavigation = page.locator(".admin-sidebar nav");
+  for (const label of ["관리자 홈", "주보 관리", "교회소식 관리", "갤러리 관리", "성도사업장 관리", "회원 관리", "활동 기록"]) {
+    await expect(adminNavigation.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  }
   const archiveLink = page.locator('.admin-sidebar nav a[href="/archive/admin"]');
   await expect(archiveLink).toBeVisible();
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+    await expect(archiveLink).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
   await archiveLink.click();
   await expect(page).toHaveURL(/\/archive\/admin$/);
   await expect(page.getByText("브라우저 아카이브 영상")).toBeVisible();
@@ -280,6 +291,36 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await page.goto("/archive/admin");
   await expect(page).toHaveURL(/\/admin\/login\?return_to=/);
   expect(errors.filter((error) => !/status of 503|503 \(Service Unavailable\)/.test(error))).toEqual([]);
+});
+
+test("website administrator keeps the full dashboard without archive management", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/admin");
+  await page.getByLabel("아이디").fill("browser-admin");
+  await page.getByLabel("비밀번호").fill("browser-admin-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  const websiteMenuLabels = ["관리자 홈", "주보 관리", "교회소식 관리", "갤러리 관리", "성도사업장 관리", "회원 관리", "활동 기록"];
+  const websiteNavigation = page.locator(".admin-sidebar nav");
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+    for (const label of websiteMenuLabels) {
+      await expect(websiteNavigation.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+    }
+    await expect(page.locator('.admin-sidebar nav a[href="/archive/admin"]')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
+
+  expect((await page.request.get("/api/admin/members")).status()).toBe(200);
+  expect((await page.request.get("/api/admin/archive/videos")).status()).toBe(403);
+  await page.goto("/archive/admin");
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.getByRole("link", { name: "로그아웃" }).click();
+  await page.goto("/archive/admin");
+  await expect(page).toHaveURL(/\/admin\/login\?return_to=/);
+  expect(errors).toEqual([]);
 });
 
 test("approved local member can enter the worship archive", async ({ page }) => {

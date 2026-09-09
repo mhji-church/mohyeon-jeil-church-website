@@ -117,11 +117,14 @@ export async function getAdminSessionFromToken(
   } catch {
     return null;
   }
+  const isWebsiteAdmin = username === config().username;
+  const isArchiveAdmin = isArchiveManagementUsername(username);
   const canManageWebsite =
-    scopeValue === "website" && username === config().username;
+    (scopeValue === "website" && isWebsiteAdmin) ||
+    (scopeValue === "archive" && isArchiveAdmin);
   const canManageArchive =
-    isArchiveManagementUsername(username) &&
-    (scopeValue === "archive" || canManageWebsite);
+    isArchiveAdmin &&
+    (scopeValue === "archive" || (scopeValue === "website" && isWebsiteAdmin));
   if (!canManageWebsite && !canManageArchive) return null;
 
   return { username, expiresAt, canManageWebsite, canManageArchive };

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdminPortalPage } from "../admin-auth";
+import { requireAdminPage } from "../admin-auth";
 import { getAdminContentSummary, type ContentPost, type ContentType } from "../../lib/content";
 import { getAdminMemberSummary } from "../../lib/members";
 import { getKoreaDate } from "../../lib/korea-date";
@@ -39,32 +39,7 @@ function getPublishDate(post: ContentPost) {
 }
 
 export default async function AdminHomePage() {
-  const { user, canManageWebsite, canManageArchive } = await requireAdminPortalPage();
-  if (!canManageWebsite) {
-    return (
-      <main className="admin-shell admin-members-shell">
-        <AdminSidebar
-          active="archive"
-          userName={user.fullName}
-          userEmail={user.email}
-          signOutPath="/api/admin/session?return_to=/"
-          initialPendingMemberCount={null}
-          canManageWebsite={false}
-          canManageArchive={canManageArchive}
-        />
-        <section className="admin-workspace admin-members-workspace admin-home-workspace">
-          <section className="admin-home-section" aria-labelledby="archive-entry-title">
-            <header className="admin-section-heading">
-              <div><span>ARCHIVE ADMIN</span><h2 id="archive-entry-title">예배 아카이브 관리</h2></div>
-            </header>
-            <div className="admin-empty">
-              <strong>예배 영상과 찬양·출석 기록을 관리할 수 있습니다.</strong>
-            </div>
-          </section>
-        </section>
-      </main>
-    );
-  }
+  const { user, canManageArchive } = await requireAdminPage();
   const month = getKoreaDate().slice(0, 7).replaceAll(".", "-");
   let memberSummary: Awaited<ReturnType<typeof getAdminMemberSummary>> | null = null;
   let contentSummary: Awaited<ReturnType<typeof getAdminContentSummary>> | null = null;

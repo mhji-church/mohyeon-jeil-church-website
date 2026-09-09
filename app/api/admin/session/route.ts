@@ -10,16 +10,6 @@ import {
   verifyArchiveAdminCredentials,
 } from "../../../archive-credential-auth";
 
-function safeReturn(value: unknown, canManageArchive: boolean) {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/admin";
-  }
-  if (value.startsWith("/archive/admin")) {
-    return canManageArchive ? value : "/admin";
-  }
-  return value.startsWith("/admin") ? value : "/admin";
-}
-
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     username?: unknown;
@@ -43,12 +33,11 @@ export async function POST(request: Request) {
   }
 
   const scope = websiteCredentialsValid ? "website" : "archive";
-  const canManageArchive = isArchiveManagementUsername(username);
   await createAdminSessionCookie(username.trim(), scope);
   await clearArchiveAdminSessionCookie();
   return Response.json({
     ok: true,
-    returnTo: safeReturn(payload?.returnTo, canManageArchive),
+    returnTo: "/admin",
   });
 }
 

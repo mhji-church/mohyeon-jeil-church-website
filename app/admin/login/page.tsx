@@ -18,10 +18,7 @@ export default async function AdminLoginPage({
       : "/admin";
   const session = await getAdminSession();
   if (session) {
-    if (returnTo.startsWith("/archive/admin") && session.canManageArchive) {
-      redirect(returnTo);
-    }
-    redirect(session.canManageWebsite ? "/admin" : "/archive/admin");
+    redirect("/admin");
   }
 
   return (
