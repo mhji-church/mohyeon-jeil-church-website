@@ -267,6 +267,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .cms-sidebar a { min-height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 13px; border-radius: 6px; }
 .archive-original-root .cms-sidebar a.active { background: var(--accent); color: var(--on-accent); }
 .archive-original-root .cms-sidebar a.is-pending { cursor: wait; }
+.archive-original-root .cms-sidebar .cms-website-link { margin-top: auto; border: 1px solid var(--border); }
 .archive-original-root .cms-nav-spinner { width: 15px; height: 15px; flex: 0 0 auto; margin-left: auto; border: 2px solid color-mix(in srgb, currentColor 28%, transparent); border-top-color: currentColor; border-radius: 50%; animation: archive-nav-spin .7s linear infinite; }
 .archive-original-root .cms-navigation-feedback { position: fixed; left: 50%; bottom: 28px; z-index: 170; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-elevated); box-shadow: var(--shadow); transform: translateX(-50%); }
 .archive-original-root .cms-navigation-feedback.is-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); color: var(--danger); }
@@ -507,6 +508,8 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root.admin-cms .cms-sidebar a { min-width: 0; min-height: 54px; flex-direction: column; justify-content: center; gap: 5px; padding: 5px 2px; font-size: 11px; font-weight: 700; text-align: center; }
   .archive-original-root.admin-cms .cms-sidebar a svg { width: 18px; height: 18px; }
   .archive-original-root.admin-cms .cms-sidebar a span { white-space: nowrap; }
+  .archive-original-root.admin-cms .cms-sidebar:has(.cms-website-link) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .archive-original-root.admin-cms .cms-sidebar .cms-website-link { margin-top: 0; }
   .archive-original-root .cms-content { padding: 18px 12px 32px; }
   .archive-original-root .cms-page-head.has-actions { align-items: stretch; flex-direction: column; gap: 14px; margin-bottom: 14px; }
   .archive-original-root .cms-page-head h1 { margin-bottom: 5px; font-size: 25px; }

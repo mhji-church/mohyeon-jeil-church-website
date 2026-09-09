@@ -5,7 +5,11 @@ export async function requireArchiveAdminPage(returnTo = "/archive/admin") {
   const session = await getAdminSession();
   if (!session) redirect(`/admin/login?return_to=${encodeURIComponent(returnTo)}`);
   if (!session.canManageArchive) redirect("/admin");
-  return { user: { displayName: "예배 아카이브 관리자", email: session.username, fullName: "예배 아카이브 관리자" }, authorized: true };
+  return {
+    user: { displayName: "예배 아카이브 관리자", email: session.username, fullName: "예배 아카이브 관리자" },
+    authorized: true,
+    canManageWebsite: session.canManageWebsite,
+  };
 }
 
 export async function requireArchiveAdminApi() {

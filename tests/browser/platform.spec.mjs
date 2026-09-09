@@ -230,6 +230,36 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await page.getByRole("button", { name: "수정" }).click();
   const editor = page.getByRole("dialog", { name: "영상 수정" });
   await editor.getByLabel("영상 제목").fill("저장하지 않은 영상 제목");
+  const homepageLink = page.getByRole("link", { name: "홈페이지 관리" });
+  await expect(homepageLink).toBeVisible();
+  expect(page.context().pages()).toHaveLength(1);
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("저장하지 않은 변경");
+    await dialog.dismiss();
+  });
+  await homepageLink.click();
+  await expect(editor).toBeVisible();
+  await expect(page).toHaveURL(/\/archive\/admin$/);
+
+  page.once("dialog", async (dialog) => dialog.accept());
+  await homepageLink.click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+  expect(page.context().pages()).toHaveLength(1);
+  const returnToArchiveLink = page.locator('.admin-sidebar nav a[href="/archive/admin"]');
+  await returnToArchiveLink.click();
+  await expect(page).toHaveURL(/\/archive\/admin$/);
+  await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+  await returnToArchiveLink.click();
+  await expect(page).toHaveURL(/\/archive\/admin$/);
+
+  await page.getByRole("button", { name: "수정" }).click();
+  const reopenedEditor = page.getByRole("dialog", { name: "영상 수정" });
+  await reopenedEditor.getByLabel("영상 제목").fill("저장하지 않은 영상 제목");
   const membersLink = page.getByRole("link", { name: "회원 관리" });
 
   page.once("dialog", async (dialog) => {
@@ -237,7 +267,7 @@ test("archive admin navigation stays responsive above the edit drawer and recove
     await dialog.dismiss();
   });
   await membersLink.click();
-  await expect(editor).toBeVisible();
+  await expect(reopenedEditor).toBeVisible();
   await expect(page).toHaveURL(/\/archive\/admin$/);
 
   page.once("dialog", async (dialog) => dialog.accept());

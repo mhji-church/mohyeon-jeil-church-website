@@ -70,6 +70,9 @@ test("archive mutations use the scoped website admin session", () => {
   }
   assert.match(read("app/archive-admin-auth.ts"), /getAdminSession/);
   assert.match(read("app/archive-admin-auth.ts"), /canManageArchive/);
+  assert.match(read("app/archive-admin-auth.ts"), /canManageWebsite:\s*session\.canManageWebsite/);
+  assert.match(read("app/archive/ArchiveShell.tsx"), /admin && hasWebsitePermission/);
+  assert.match(read("app/archive/ArchiveShell.tsx"), /href="\/admin"/);
   const credentials = read("app/archive-credential-auth.ts");
   assert.match(credentials, /process\.env\.ARCHIVE_ADMIN_USERNAME/);
   assert.match(credentials, /!expected\.username/);

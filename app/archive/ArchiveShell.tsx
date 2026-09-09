@@ -3,7 +3,7 @@
 import "./archive-original.css";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 export type ArchiveTheme = "system" | "light" | "dark";
 export type ArchiveNavKey = "home" | "sunday" | "other" | "songs" | "attendance" | "videos" | "members" | "activity" | "settings";
@@ -86,11 +86,20 @@ type ArchiveShellProps = {
   showSongs?: boolean;
   search?: ReactNode;
   account?: ReactNode;
+  canManageWebsite?: boolean;
   beforeAdminNavigate?: () => boolean;
   onAdminNavigate?: (key: ArchiveNavKey, href: string) => boolean;
 };
 
-export function ArchiveShell({ children, active, admin = false, showSongs = true, search, account, beforeAdminNavigate, onAdminNavigate }: ArchiveShellProps) {
+const ArchiveAdminWebsitePermission = createContext(false);
+
+export function ArchiveAdminPermissionProvider({ canManageWebsite, children }: { canManageWebsite: boolean; children: ReactNode }) {
+  return <ArchiveAdminWebsitePermission.Provider value={canManageWebsite}>{children}</ArchiveAdminWebsitePermission.Provider>;
+}
+
+export function ArchiveShell({ children, active, admin = false, showSongs = true, search, account, canManageWebsite = false, beforeAdminNavigate, onAdminNavigate }: ArchiveShellProps) {
+  const inheritedWebsitePermission = useContext(ArchiveAdminWebsitePermission);
+  const hasWebsitePermission = canManageWebsite || inheritedWebsitePermission;
   const nav = (admin ? adminNav : publicNav).filter(([key]) => admin || showSongs || key !== "songs");
   const router = useRouter();
   const pathname = usePathname();
@@ -130,6 +139,13 @@ export function ArchiveShell({ children, active, admin = false, showSongs = true
     beginNavigation(href);
   }
 
+  function handleWebsiteNavigation(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (beforeAdminNavigate && !beforeAdminNavigate()) return;
+    window.location.assign("/admin");
+  }
+
   useEffect(() => {
     if (!pendingHref || currentUrl !== pendingHref) return;
     const timer = setTimeout(() => {
@@ -144,7 +160,7 @@ export function ArchiveShell({ children, active, admin = false, showSongs = true
   return <div className={`archive-original-root${admin ? " admin-cms" : ""}`} data-theme="light">
     <span className="brand-structure-line" aria-hidden="true" />
     <header className={admin ? "cms-header" : `site-header${search ? " has-home-search" : ""}`}><ArchiveBrand admin={admin} onClick={admin ? (event) => handleAdminNavigation(event, "videos", "/archive/admin") : undefined} />{search && <div className="header-home-search-wrap">{search}</div>}<div className={admin ? "cms-header-actions" : "header-actions"}><Link aria-label="교회 홈페이지로" className="header-action-link church-home-link" href="/"><span>교회 홈페이지로</span><ArchiveIcon name="external" size={16} /></Link>{!admin && <Link aria-label="아카이브 관리자" className="header-action-link archive-admin-entry" href="/archive/admin"><ArchiveIcon name="lock" size={16} /><span>관리자</span></Link>}{account}<ThemePicker /></div></header>
-    <aside className={admin ? "cms-sidebar" : "archive-sidebar"} aria-label={admin ? "예배 아카이브 관리 메뉴" : "예배 아카이브 메뉴"}>{nav.map(([key, label, href, icon]) => <Link className={`${active === key ? "active" : ""}${pendingHref === href ? " is-pending" : ""}`} aria-current={active === key ? "page" : undefined} aria-busy={pendingHref === href || undefined} href={href} key={key} onClick={admin ? (event) => handleAdminNavigation(event, key, href) : undefined}><ArchiveIcon name={icon} size={20} /><span>{label}</span>{pendingHref === href && <span className="cms-nav-spinner" aria-label="이동 중" />}</Link>)}</aside>
+    <aside className={admin ? "cms-sidebar" : "archive-sidebar"} aria-label={admin ? "예배 아카이브 관리 메뉴" : "예배 아카이브 메뉴"}>{nav.map(([key, label, href, icon]) => <Link className={`${active === key ? "active" : ""}${pendingHref === href ? " is-pending" : ""}`} aria-current={active === key ? "page" : undefined} aria-busy={pendingHref === href || undefined} href={href} key={key} onClick={admin ? (event) => handleAdminNavigation(event, key, href) : undefined}><ArchiveIcon name={icon} size={20} /><span>{label}</span>{pendingHref === href && <span className="cms-nav-spinner" aria-label="이동 중" />}</Link>)}{admin && hasWebsitePermission && <a className="cms-website-link" href="/admin" onClick={handleWebsiteNavigation}><ArchiveIcon name="home" size={20} /><span>홈페이지 관리</span></a>}</aside>
     {admin && (pendingHref || failedHref) && <div className={`cms-navigation-feedback${failedHref ? " is-error" : ""}`} role={failedHref ? "alert" : "status"} aria-live="polite">{failedHref ? <><span>화면을 불러오지 못했습니다.</span><button type="button" onClick={() => beginNavigation(failedHref)}>다시 시도</button></> : <span>화면을 불러오는 중…</span>}</div>}
     {admin ? <main className="cms-content">{children}</main> : <main className="archive-main">{children}</main>}
     {!admin && <nav className={`mobile-bottom-nav${showSongs ? "" : " without-songs"}`} aria-label="모바일 예배 아카이브 메뉴">{nav.map(([key, label, href, icon]) => <Link className={active === key ? "active" : ""} href={href} key={key}><ArchiveIcon name={icon} size={22} /><span>{label}</span></Link>)}</nav>}

@@ -482,6 +482,9 @@ test("archive administration menu and server access are scoped to the configured
 
   const archivePage = await request("/archive/admin", { headers: { cookie: adminCookie } });
   assert.equal(archivePage.status, 200);
+  const archivePageHtml = await archivePage.text();
+  assert.match(archivePageHtml, /홈페이지 관리/);
+  assert.match(archivePageHtml, /href="\/admin"/);
 
   for (const pathname of ["/api/admin/members", "/api/admin/posts", "/api/admin/activity"]) {
     assert.equal((await request(pathname, { headers: { cookie: adminCookie } })).status, 200);
