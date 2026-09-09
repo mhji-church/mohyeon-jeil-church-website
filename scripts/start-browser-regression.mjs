@@ -74,7 +74,7 @@ Object.assign(process.env, {
   ADMIN_PASSWORD: "browser-admin-password",
   ADMIN_SESSION_SECRET: "browser-admin-session-secret",
   MEMBER_SESSION_SECRET: "browser-member-session-secret",
-  ARCHIVE_ADMIN_USERNAME: "admin-0691",
+  ARCHIVE_ADMIN_USERNAME: "browser-archive-admin",
   ARCHIVE_ADMIN_PASSWORD: "browser-archive-password",
   ARCHIVE_ADMIN_SESSION_SECRET: "browser-archive-session-secret",
   WRANGLER_LOG_PATH: ".browser-test/wrangler.log",

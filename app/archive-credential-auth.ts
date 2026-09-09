@@ -4,15 +4,14 @@ const COOKIE_NAME = "mhji_archive_admin_session";
 const SESSION_SECONDS = 8 * 60 * 60;
 type ArchiveAdminSession = { username: string; expiresAt: number };
 
-export const ARCHIVE_MANAGEMENT_USERNAME = "admin-0691";
-
 export function isArchiveManagementUsername(username: string) {
-  return username.trim() === ARCHIVE_MANAGEMENT_USERNAME;
+  const expectedUsername = config().username;
+  return Boolean(expectedUsername) && username.trim() === expectedUsername;
 }
 
 function config() {
   return {
-    username: process.env.ARCHIVE_ADMIN_USERNAME ?? "archive-admin",
+    username: process.env.ARCHIVE_ADMIN_USERNAME?.trim() ?? "",
     password: process.env.ARCHIVE_ADMIN_PASSWORD ?? (process.env.NODE_ENV === "development" ? "0691" : ""),
     secret: process.env.ARCHIVE_ADMIN_SESSION_SECRET ?? (process.env.NODE_ENV === "development" ? "local-archive-preview-session-secret" : ""),
   };
@@ -26,7 +25,7 @@ async function sign(value: string) { const key = await crypto.subtle.importKey("
 
 export async function verifyArchiveAdminCredentials(username: string, password: string) {
   const expected = config();
-  if (!expected.password) return false;
+  if (!expected.username || !expected.password) return false;
   return isArchiveManagementUsername(username) && equal(await digest(password), await digest(expected.password));
 }
 
@@ -41,7 +40,8 @@ export async function clearArchiveAdminSessionCookie() {
 }
 
 export async function getArchiveAdminSessionFromToken(token: string | null | undefined): Promise<ArchiveAdminSession | null> {
-  if (!token || !config().secret) return null;
+  const expected = config();
+  if (!token || !expected.username || !expected.secret) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [encoded, expiry, supplied] = parts;
@@ -51,7 +51,7 @@ export async function getArchiveAdminSessionFromToken(token: string | null | und
   if (!Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) return null;
   let username = "";
   try { username = decodeURIComponent(encoded); } catch { return null; }
-  return username === config().username ? { username, expiresAt } : null;
+  return username === expected.username ? { username, expiresAt } : null;
 }
 
 export async function getArchiveAdminSession(): Promise<ArchiveAdminSession | null> {

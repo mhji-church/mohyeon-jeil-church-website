@@ -14,7 +14,7 @@ import { applyNetlifyMigrations } from "../scripts/netlify-migrations.mjs";
 const TEST_MEMBER_SECRET = "local-archive-integration-member-secret";
 const TEST_WEBSITE_ADMIN_USERNAME = "mhji";
 const TEST_WEBSITE_ADMIN_PASSWORD = "local-website-admin-password";
-const TEST_ADMIN_USERNAME = "admin-0691";
+const TEST_ADMIN_USERNAME = "archive-test-admin";
 const TEST_ADMIN_PASSWORD = "local-archive-admin-password";
 const TEST_ARCHIVE_LEGACY_SECRET = "local-archive-integration-separate-secret";
 const TEST_YOUTUBE_IDS = {
@@ -211,6 +211,13 @@ before(async () => {
   });
   assert.equal(legacyArchiveLogin.status, 403);
   assert.equal(legacyArchiveLogin.headers.get("set-cookie"), null);
+
+  const unconfiguredArchiveLogin = await request("/api/admin/session", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "other-test-admin", password: TEST_ADMIN_PASSWORD }),
+  });
+  assert.equal(unconfiguredArchiveLogin.status, 401);
 
   const archiveLogin = await request("/api/admin/session", {
     method: "POST",
@@ -448,7 +455,7 @@ test("archive thumbnails require access and attendance faces respect the assigne
   assert.doesNotMatch(body, new RegExp(TEST_YOUTUBE_IDS.attendance));
 });
 
-test("archive administration menu and server access are scoped to admin-0691", async () => {
+test("archive administration menu and server access are scoped to the configured archive admin", async () => {
   const signedOutPage = await request("/archive/admin", { redirect: "manual" });
   assert.match(signedOutPage.headers.get("location") ?? "", /\/admin\/login\?return_to=/);
 

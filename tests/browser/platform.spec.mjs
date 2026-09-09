@@ -206,7 +206,7 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
     Object.keys(form).some((key) => key.startsWith("__reactProps")),
   )).toBe(true);
-  await page.getByLabel("아이디").fill("admin-0691");
+  await page.getByLabel("아이디").fill("browser-archive-admin");
   await page.getByLabel("비밀번호").fill("browser-archive-password");
   await page.getByRole("button", { name: "관리자 로그인" }).click();
   await expect(page).toHaveURL(/\/admin$/);
