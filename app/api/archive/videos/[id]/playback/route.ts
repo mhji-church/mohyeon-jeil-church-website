@@ -1,5 +1,6 @@
 import { getMemberSession } from "@/app/member-auth";
 import { canPlayArchiveVideo, getArchiveAccess, getArchiveVideo } from "@/lib/archive";
+import { attachArchiveAnalyses } from "@/lib/archive-analysis";
 import { apiError } from "@/lib/api-response";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,25 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!canPlayArchiveVideo(level, video.type)) {
       return Response.json({ error: "이 영상을 열람할 수 있는 아카이브 등급이 필요합니다." }, { status: 403 });
     }
+    const [publicVideo] = await attachArchiveAnalyses([video], true);
     return Response.json(
-      { embedUrl: `https://www.youtube-nocookie.com/embed/${video.youtubeId}?autoplay=1&rel=0`, note: video.note },
+      {
+        embedUrl: `https://www.youtube-nocookie.com/embed/${video.youtubeId}?autoplay=1&rel=0`,
+        note: video.note,
+        video: {
+          id: publicVideo.id,
+          type: publicVideo.type,
+          date: publicVideo.date,
+          serviceType: publicVideo.serviceType,
+          title: publicVideo.title,
+          preacher: publicVideo.preacher,
+          durationSeconds: publicVideo.durationSeconds,
+          note: publicVideo.note,
+          createdAt: "",
+          updatedAt: "",
+          analysis: publicVideo.analysis,
+        },
+      },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

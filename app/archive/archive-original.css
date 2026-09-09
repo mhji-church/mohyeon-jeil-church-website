@@ -188,6 +188,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .pager button { min-height: 38px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 
 .archive-original-root .viewer-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: var(--overlay); }
+.archive-original-root .viewer-backdrop.is-layered { z-index: 120; }
 .archive-original-root .viewer-modal { width: min(1000px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-elevated); box-shadow: var(--shadow); }
 .archive-original-root .viewer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 14px 20px; }
 .archive-original-root .viewer-head span { color: var(--accent-strong); font-size: 13px; font-weight: 700; }
@@ -249,7 +250,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .song-history-list article { display: grid; grid-template-columns: 100px minmax(0, 1fr) 90px 80px; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
 .archive-original-root .song-history-list article div { min-width: 0; display: grid; gap: 3px; }
 .archive-original-root .song-history-list article span { overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
-.archive-original-root .song-history-list article a { color: var(--accent-strong); font-weight: 800; }
+.archive-original-root .song-history-list article a, .archive-original-root .song-history-video-button { min-height: 44px; border: 0; background: transparent; color: var(--accent-strong); font-weight: 800; }
 .archive-original-root .song-manager .archive-list-head > input { width: min(360px, 100%); min-height: 42px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-soft); color: var(--text); }
 .archive-original-root .song-manager .archive-editor-form { display: grid; gap: 14px; }
 .archive-original-root .song-manager .archive-editor-form label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
@@ -262,8 +263,9 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 
 .archive-original-root.admin-cms { position: relative; min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); grid-template-rows: var(--header-height) 1fr; }
 .archive-original-root .cms-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.archive-original-root.admin-cms > .cms-header { position: sticky; top: 0; z-index: 150; }
 .archive-original-root .cms-sidebar { display: flex; flex-direction: column; gap: 8px; padding: 24px 16px; }
-.archive-original-root.admin-cms .cms-sidebar { position: relative; z-index: 140; background: var(--bg); }
+.archive-original-root.admin-cms .cms-sidebar { position: fixed; inset: var(--header-height) auto 0 0; z-index: 140; width: var(--sidebar-width); height: auto; max-height: calc(100dvh - var(--header-height)); overflow-y: auto; overscroll-behavior: contain; background: var(--bg); scrollbar-gutter: stable; }
 .archive-original-root .cms-sidebar a { min-height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 13px; border-radius: 6px; }
 .archive-original-root .cms-sidebar a.active { background: var(--accent); color: var(--on-accent); }
 .archive-original-root .cms-sidebar a.is-pending { cursor: wait; }
@@ -274,6 +276,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
 .archive-original-root .cms-navigation-feedback button { min-height: 34px; padding: 5px 10px; border: 1px solid currentColor; border-radius: 5px; background: transparent; font-weight: 750; cursor: pointer; }
 @keyframes archive-nav-spin { to { transform: rotate(360deg); } }
 .archive-original-root .cms-content { min-width: 0; padding: 28px 36px 48px; }
+.archive-original-root.admin-cms .cms-content { grid-column: 2; }
 .archive-original-root .cms-page-head { margin-bottom: var(--cms-page-gap); }
 .archive-original-root .cms-page-head.has-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .archive-original-root .cms-page-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
@@ -453,9 +456,12 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .song-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .archive-original-root.admin-cms { display: block; overflow-x: clip; padding-bottom: 0; }
   .archive-original-root .cms-header { height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) max-content; padding-inline: 14px; }
-  .archive-original-root .cms-sidebar { position: static; flex-direction: row; overflow-x: auto; border-bottom: 1px solid var(--border); }
+  .archive-original-root.admin-cms > .cms-header { position: relative; top: auto; }
+  .archive-original-root.admin-cms .cms-sidebar { position: relative; top: auto; width: auto; height: auto; max-height: none; overflow: visible; scrollbar-gutter: auto; }
+  .archive-original-root .cms-sidebar { flex-direction: row; overflow-x: auto; border-bottom: 1px solid var(--border); }
   .archive-original-root .cms-sidebar a { min-width: max-content; }
   .archive-original-root .cms-content { padding: 24px 18px; }
+  .archive-original-root.admin-cms .cms-content { grid-column: auto; }
   .archive-original-root .activity-summary { grid-template-columns: 1fr; }
   .archive-original-root .archive-list-head { align-items: stretch; flex-direction: column; gap: 12px; }
   .archive-original-root .archive-list-search { width: 100%; }
@@ -546,7 +552,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .song-summary-grid .wide { grid-column: 1 / -1; }
   .archive-original-root .song-summary-grid .wide strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
   .archive-original-root .song-history-list article { grid-template-columns: 78px minmax(0, 1fr); gap: 7px 10px; padding: 12px 14px; }
-  .archive-original-root .song-history-list article b, .archive-original-root .song-history-list article a { grid-column: 2; }
+  .archive-original-root .song-history-list article b, .archive-original-root .song-history-list article a, .archive-original-root .song-history-list article .song-history-video-button { grid-column: 2; }
   .archive-original-root .form-grid, .archive-original-root .activity-filters { grid-template-columns: 1fr; }
   .archive-original-root .youtube-url-field > div { align-items: stretch; flex-direction: column; }
   .archive-original-root .archive-video-list .table-wrap, .archive-original-root .archive-access-list .table-wrap, .archive-original-root .archive-activity .table-wrap { overflow: visible; }

@@ -184,6 +184,120 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await expect.poll(() => activityRequests.some((search) => search.includes("q=%ED%85%8C%EC%8A%A4%ED%8A%B8") && search.includes("action=content.create"))).toBe(true);
 });
 
+test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = watchErrors(page);
+  page.on("response", (response) => {
+    if (response.status() === 404) errors.push(`404 ${response.url()}`);
+  });
+  const history = Array.from({ length: 18 }, (_, index) => ({
+    videoId: `song-history-video-${index + 1}`,
+    date: `2026-08-${String(18 - index).padStart(2, "0")}`,
+    serviceType: index % 2 ? "주일 1부 예배" : "주일 2부 예배",
+    videoTitle: `찬양 이력 예배 영상 ${index + 1}`,
+    order: (index % 4) + 1,
+  }));
+  await page.route("**/api/archive/songs/stats?*", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      summary: { worshipCount: 18, songCount: 1, usageCount: 18, topSong: "브라우저 찬양" },
+      rankings: [{ rank: 1, id: "browser-song", displayTitle: "브라우저 찬양", baseTitle: "브라우저 찬양", aliases: [], totalCount: 18, sunday1Count: 9, sunday2Count: 9, wednesdayCount: 0, lastUsed: "2026-08-18" }],
+      stale: [],
+    }),
+  }));
+  await page.route("**/api/archive/songs/browser-song/history?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ history }) }));
+  await page.route("**/api/archive/videos/song-history-video-*/playback", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/").at(-2);
+    const item = history.find((entry) => entry.videoId === id);
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      embedUrl: `https://www.youtube-nocookie.com/embed/${id}`,
+      note: `재생 확인 ${id}`,
+      video: { id, type: "worship", date: item.date, serviceType: item.serviceType, title: item.videoTitle, preacher: "담임목사", durationSeconds: 3600, note: `재생 확인 ${id}`, createdAt: "", updatedAt: "", analysis: null },
+    }) });
+  });
+  await page.route("https://www.youtube-nocookie.com/embed/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>로컬 영상 플레이어</title><button>재생 중</button>" }));
+  await page.route("**/api/archive/videos/song-history-video-*/thumbnail", (route) => route.fulfill({
+    status: 200,
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9"><rect width="16" height="9" fill="#312f3d"/></svg>',
+  }));
+
+  await page.goto("/member/login?return_to=%2Farchive%2Fsongs");
+  await expect.poll(() => page.locator(".member-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 20_000 }).toBe(true);
+  await page.getByLabel("이름 또는 기존 아이디").fill("test-member");
+  await page.getByLabel("비밀번호").fill("browser-test-password");
+  await page.getByRole("button", { name: "교인 로그인" }).click();
+  await expect(page).toHaveURL(/\/archive\/songs$/);
+  await expect.poll(() => page.locator(".song-stats-page").evaluate((section) =>
+    Object.keys(section).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 20_000 }).toBe(true);
+  await page.getByLabel("예배 종류").selectOption("sunday2");
+  await page.getByPlaceholder("대표 제목·별칭 검색").fill("브라우저");
+  await page.getByRole("button", { name: "검색", exact: true }).click();
+  await page.getByLabel("오래된 찬양 정렬").selectOption("recent");
+
+  for (const viewport of [{ width: 1440, height: 700 }, { width: 390, height: 640 }]) {
+    await page.setViewportSize(viewport);
+    const songButton = page.getByRole("button", { name: "브라우저 찬양" });
+    await songButton.click();
+    const historyDialog = page.locator(".song-history-backdrop");
+    const historyModal = page.locator(".song-history-modal");
+    await expect(historyDialog).toBeVisible();
+    await expect(page).toHaveURL(/\/archive\/songs\?/);
+    await historyModal.evaluate((element) => { element.scrollTop = Math.floor(element.scrollHeight / 2); });
+
+    const videoButtons = page.getByRole("button", { name: "영상 보기" });
+    for (let index = 6; index < 9; index += 1) {
+      const trigger = videoButtons.nth(index);
+      await trigger.scrollIntoViewIfNeeded();
+      const scrollBefore = await historyModal.evaluate((element) => element.scrollTop);
+      await trigger.click();
+      const viewer = page.locator(".viewer-backdrop.is-layered");
+      await expect(viewer).toBeVisible();
+      await expect(viewer.getByRole("heading", { name: history[index].videoTitle })).toBeVisible();
+      await expect(historyDialog).toHaveAttribute("inert", "");
+      expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+      expect(await page.evaluate(() => Boolean(document.activeElement?.closest(".viewer-modal")))).toBe(true);
+      expect(await page.locator(".viewer-player iframe").getAttribute("src")).toContain(history[index].videoId);
+
+      if (index === 6) await viewer.getByRole("button", { name: "닫기" }).click();
+      else if (index === 7) await page.keyboard.press("Escape");
+      else await viewer.click({ position: { x: 4, y: 4 } });
+      await expect(viewer).not.toBeVisible();
+      await expect(historyDialog).toBeVisible();
+      expect(await historyModal.evaluate((element, before) => Math.abs(element.scrollTop - before), scrollBefore)).toBeLessThan(3);
+      await expect(trigger).toBeFocused();
+      await expect(page.locator(".viewer-player iframe")).toHaveCount(0);
+      expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+    }
+
+    const backTrigger = videoButtons.nth(8);
+    await backTrigger.click();
+    await expect(page.locator(".viewer-backdrop.is-layered")).toBeVisible();
+    await page.goBack();
+    await expect(page.locator(".viewer-backdrop.is-layered")).not.toBeVisible();
+    await expect(historyDialog).toBeVisible();
+    await page.goBack();
+    await expect(historyDialog).not.toBeVisible();
+    await expect(songButton).toBeFocused();
+    await expect(page.getByPlaceholder("대표 제목·별칭 검색")).toHaveValue("브라우저");
+    await expect(page.getByLabel("예배 종류")).toHaveValue("sunday2");
+    await expect(page.getByLabel("오래된 찬양 정렬")).toHaveValue("recent");
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
+  }
+
+  await page.route("**/api/archive/videos?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos: [{ id: history[0].videoId, type: "worship", date: history[0].date, serviceType: history[0].serviceType, title: history[0].videoTitle, preacher: "담임목사", durationSeconds: 3600, note: "", createdAt: "", updatedAt: "", analysis: null }], total: 1, page: 1, pageSize: 8 }) }));
+  await page.goto(`/archive/sunday?video=${history[0].videoId}`);
+  await expect(page.locator(".viewer-backdrop")).toBeVisible();
+  await expect(page.locator(".viewer-backdrop").getByRole("heading", { name: history[0].videoTitle })).toBeVisible();
+  await page.locator(".viewer-backdrop").getByRole("button", { name: "닫기" }).click();
+  await expect(page.locator(".viewer-backdrop")).not.toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("archive admin navigation stays responsive above the edit drawer and recovers member loading", async ({ page }) => {
   const errors = watchErrors(page);
   let memberAttempts = 0;
@@ -195,7 +309,8 @@ test("archive admin navigation stays responsive above the edit drawer and recove
       await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "임시 회원 조회 오류" }) });
       return;
     }
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members: [{ id: "browser-member", name: "브라우저테스트", username: "test-member", status: "approved", accessLevel: "full", songStatsAllowed: true }] }) });
+    const members = Array.from({ length: 28 }, (_, index) => ({ id: index === 0 ? "browser-member" : `browser-member-${index + 1}`, name: index === 0 ? "브라우저테스트" : `브라우저테스트 ${index + 1}`, username: index === 0 ? "test-member" : `test-member-${index + 1}`, status: "approved", accessLevel: "full", songStatsAllowed: true }));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members }) });
   });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -277,8 +392,39 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await expect(page.getByRole("alert")).toContainText("임시 회원 조회 오류");
   await page.getByRole("button", { name: "다시 시도" }).click();
   await expect(page.getByRole("status")).toContainText("회원 목록을 불러오는 중");
-  await expect(page.getByText("브라우저테스트")).toBeVisible();
+  await expect(page.getByText("브라우저테스트", { exact: true })).toBeVisible();
   expect(memberAttempts).toBe(2);
+
+  const archiveSidebar = page.locator(".cms-sidebar");
+  const homepageManagementLink = page.getByRole("link", { name: "홈페이지 관리" });
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(archiveSidebar).toHaveCSS("position", "fixed");
+  const sidebarTop = (await archiveSidebar.boundingBox()).y;
+  const homepageTop = (await homepageManagementLink.boundingBox()).y;
+  await page.evaluate(() => window.scrollTo(0, Math.floor(document.documentElement.scrollHeight / 2)));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(Math.abs((await archiveSidebar.boundingBox()).y - sidebarTop)).toBeLessThan(2);
+  expect(Math.abs((await homepageManagementLink.boundingBox()).y - homepageTop)).toBeLessThan(2);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(Math.abs((await archiveSidebar.boundingBox()).y - sidebarTop)).toBeLessThan(2);
+  expect(Math.abs((await homepageManagementLink.boundingBox()).y - homepageTop)).toBeLessThan(2);
+
+  await page.setViewportSize({ width: 1440, height: 360 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await archiveSidebar.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await archiveSidebar.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(homepageManagementLink).toBeVisible();
+  const smallHeaderBox = await page.locator(".cms-header").boundingBox();
+  const smallHomepageBox = await homepageManagementLink.boundingBox();
+  expect(smallHomepageBox.y).toBeGreaterThanOrEqual(smallHeaderBox.y + smallHeaderBox.height);
+  expect(smallHomepageBox.y + smallHomepageBox.height).toBeLessThanOrEqual(361);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(archiveSidebar).toHaveCSS("position", "relative");
+  await expect(homepageManagementLink).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   const videosLink = page.getByRole("link", { name: "영상 관리" });
   const settingsLink = page.getByRole("link", { name: "설정", exact: true });
@@ -298,7 +444,7 @@ test("archive admin navigation stays responsive above the edit drawer and recove
     await videosLink.click();
     await membersLink.dblclick();
     await expect(page).toHaveURL(/\/archive\/admin\?tab=access$/);
-    await expect(page.getByText("브라우저테스트")).toBeVisible();
+    await expect(page.getByText("브라우저테스트", { exact: true })).toBeVisible();
 
     await adminLogo.click();
     await expect(page).toHaveURL(/\/archive\/admin$/);

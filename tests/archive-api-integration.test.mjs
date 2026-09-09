@@ -429,7 +429,12 @@ test("playback enforces member approval, password state, and archive level", asy
 
   const worshipPlayback = await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(worshipPlayback.status, 200);
-  assert.match((await worshipPlayback.json()).embedUrl, new RegExp(TEST_YOUTUBE_IDS.worship));
+  const worshipPlaybackBody = await worshipPlayback.json();
+  assert.match(worshipPlaybackBody.embedUrl, new RegExp(TEST_YOUTUBE_IDS.worship));
+  assert.equal(worshipPlaybackBody.video.id, "worship-video");
+  assert.equal(worshipPlaybackBody.video.title, "테스트 예배");
+  assert.equal(worshipPlaybackBody.video.youtubeId, undefined);
+  assert.match(worshipPlayback.headers.get("cache-control") ?? "", /private, no-store/);
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 403);
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["full-user"]) } })).status, 200);
   assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["force-user"]) } })).status, 403);

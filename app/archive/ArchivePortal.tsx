@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideo } from "@/lib/archive-shared";
 import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "./ArchiveShell";
+import ArchiveVideoViewer, { type ArchivePlayingVideo } from "./ArchiveVideoViewer";
 
 export type ArchiveSection = "all" | "sunday" | "other" | "attendance";
 type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string }; songStatsAllowed: boolean };
@@ -22,16 +23,6 @@ function formatAttendanceTitle(value: string) {
   return `${year}년 ${month}월 ${day}일 출석 교인`;
 }
 function canPlay(level: ArchiveAccessLevel, type: ArchiveVideo["type"]) { return level === "full" || (level === "worship" && type === "worship"); }
-function publicSongs(video: ArchiveVideo) { return video.analysis?.songs.filter((song) => song.category !== "offertory" && song.title.trim()) ?? []; }
-function sermonTitleStyle(title: string) {
-  const length = [...title].length;
-  if (length >= 34) return { fontSize: "12px", letterSpacing: "-0.075em" };
-  if (length >= 28) return { fontSize: "13px", letterSpacing: "-0.06em" };
-  if (length >= 22) return { fontSize: "14px", letterSpacing: "-0.045em" };
-  if (length >= 17) return { fontSize: "15px", letterSpacing: "-0.025em" };
-  return { fontSize: "16px", letterSpacing: "normal" };
-}
-
 export default function ArchivePortal({ initialAccess }: { initialAccess: AccessState }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -49,8 +40,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [access] = useState<AccessState>(initialAccess);
-  const [playing, setPlaying] = useState<{ video: ArchiveVideo; embedUrl: string } | null>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
+  const [playing, setPlaying] = useState<ArchivePlayingVideo | null>(null);
   const launchButton = useRef<HTMLElement | null>(null);
   const openedVideo = useRef("");
 
@@ -73,13 +63,6 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
   }, [month, page, preacher, recentCount, search, section, service, sort, year]);
   useEffect(() => { const timer = setTimeout(() => void load(), 180); return () => clearTimeout(timer); }, [load]);
   useEffect(() => { const timer = setTimeout(() => setPage(1), 0); return () => clearTimeout(timer); }, [month, preacher, search, section, service, sort, year]);
-  useEffect(() => {
-    if (!playing) return;
-    document.body.style.overflow = "hidden"; closeButton.current?.focus();
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") setPlaying(null); };
-    document.addEventListener("keydown", key);
-    return () => { document.body.style.overflow = ""; document.removeEventListener("keydown", key); launchButton.current?.focus(); };
-  }, [playing]);
   useEffect(() => {
     const requested = searchParams.get("video") ?? "";
     if (!requested || openedVideo.current === requested || !access.authenticated) return;
@@ -147,6 +130,6 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
       {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : videos.length ? <div className="recent-grid list-media-grid">{videos.map((video) => renderCard(video))}</div> : <div className="archive-empty">조건에 맞는 기록이 없습니다.</div>}
       {totalPages > 1 && <div className="pager"><span>{Math.min((page - 1) * 8 + 1, total)}-{Math.min(page * 8, total)} / {total}</span><div><button disabled={page === 1} onClick={() => setPage((value) => value - 1)} type="button">‹ 이전</button><button disabled={page === totalPages} onClick={() => setPage((value) => value + 1)} type="button">다음 ›</button></div></div>}
     </div>}
-    {playing && <div className="viewer-backdrop" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onMouseDown={(event) => event.target === event.currentTarget && setPlaying(null)}><div className="viewer-modal"><div className="viewer-head"><div><span>{formatDate(playing.video.date)} · {playing.video.serviceType}</span><h2 id="viewer-title">{playing.video.title}</h2></div><button ref={closeButton} onClick={() => setPlaying(null)} aria-label="닫기" type="button">×</button></div><div className="viewer-player"><iframe src={playing.embedUrl} title={playing.video.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div><dl className="viewer-details"><div><dt>예배 날짜</dt><dd>{formatDate(playing.video.date)}</dd></div><div><dt>예배 종류</dt><dd>{playing.video.serviceType}</dd></div><div><dt>설교자</dt><dd>{playing.video.analysis?.sermon.preacher || playing.video.preacher || "모현제일교회"}</dd></div><div><dt>영상 길이</dt><dd>{formatArchiveDuration(playing.video.durationSeconds)}</dd></div><div><dt>비고</dt><dd>{playing.video.note || "기록 없음"}</dd></div></dl>{playing.video.analysis && <section className="viewer-analysis"><div><h3>찬양</h3>{publicSongs(playing.video).length ? <ol>{publicSongs(playing.video).map((song, index) => <li key={song.id}><b className="viewer-song-number">{index + 1}.</b><span>{song.title}</span></li>)}</ol> : <p>등록된 찬양 정보가 없습니다.</p>}</div><div><h3>말씀</h3><p><strong>설교 제목</strong><span className="viewer-sermon-title" style={sermonTitleStyle(playing.video.analysis.sermon.title || "등록된 정보 없음")}>{playing.video.analysis.sermon.title || "등록된 정보 없음"}</span></p><p><strong>본문</strong>{playing.video.analysis.sermon.biblePassage || "등록된 정보 없음"}</p></div><div><h3>대표기도</h3>{playing.video.analysis.representativePrayer.name ? <p className="viewer-prayer"><span>{playing.video.analysis.representativePrayer.name}</span>{playing.video.analysis.representativePrayer.role && <span>{playing.video.analysis.representativePrayer.role}</span>}</p> : <p className="viewer-prayer">등록된 정보 없음</p>}</div></section>}<p className="sharing-notice">유튜브 일부공개 영상은 주소가 외부에 공유되면 사이트 밖에서도 재생될 수 있습니다.</p></div></div>}
+    {playing && <ArchiveVideoViewer playing={playing} onClose={() => setPlaying(null)} returnFocusRef={launchButton} />}
   </ArchiveShell>;
 }
