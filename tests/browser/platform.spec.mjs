@@ -184,6 +184,60 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await expect.poll(() => activityRequests.some((search) => search.includes("q=%ED%85%8C%EC%8A%A4%ED%8A%B8") && search.includes("action=content.create"))).toBe(true);
 });
 
+test("archive mobile worship titles stay on one accessible line", async ({ page }) => {
+  const exampleTitle = "2026년 9월 6일 주일 2부 예배";
+  const longTitle = `${exampleTitle} 온 가족이 함께 드리는 감사와 찬양의 특별예배`;
+  const videos = [exampleTitle, longTitle].map((title, index) => ({
+    id: `mobile-title-${index + 1}`,
+    type: "worship",
+    date: "2026-09-06",
+    serviceType: "주일 2부 예배",
+    title,
+    preacher: "담임목사",
+    durationSeconds: 3600,
+    note: "",
+    createdAt: "",
+    updatedAt: "",
+    analysis: null,
+  }));
+  await page.route("**/api/archive/videos?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos, total: videos.length, page: 1, pageSize: 8 }) }));
+  await page.route("**/api/archive/videos/mobile-title-*/thumbnail", (route) => route.fulfill({
+    status: 200,
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#312f3d"/></svg>',
+  }));
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/member/login?return_to=%2Farchive%2Fsunday");
+  await expect.poll(() => page.locator(".member-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 20_000 }).toBe(true);
+  await page.getByLabel("이름 또는 기존 아이디").fill("test-member");
+  await page.getByLabel("비밀번호").fill("browser-test-password");
+  await page.getByRole("button", { name: "교인 로그인" }).click();
+  await expect(page).toHaveURL(/\/archive\/sunday$/);
+  const cards = page.locator(".list-media-grid .media-card--worship");
+  await expect(cards).toHaveCount(2);
+  const example = cards.nth(0).locator("h3");
+  const long = cards.nth(1).locator("h3");
+  await expect(example).toHaveAttribute("aria-label", exampleTitle);
+  await expect(long).toHaveAttribute("aria-label", longTitle);
+  for (const heading of [example, long]) {
+    await expect(heading).toHaveCSS("white-space", "nowrap");
+    await expect(heading).toHaveCSS("text-overflow", "ellipsis");
+  }
+  expect(await example.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await long.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect(example).toHaveCSS("white-space", "nowrap");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 820, height: 1000 });
+  await expect(example).not.toHaveCSS("white-space", "nowrap");
+});
+
 test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {
   test.setTimeout(120_000);
   const errors = watchErrors(page);

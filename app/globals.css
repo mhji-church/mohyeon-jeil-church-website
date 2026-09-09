@@ -8886,6 +8886,9 @@ body.modal-open { overflow: hidden; }
 .zoom-controls button:disabled { opacity: .35; cursor: default; }
 .zoom-controls output { min-width: 58px; font-size: 11px; font-weight: 760; }
 .zoom-controls .zoom-reset { min-width: 68px; border-right: 0; font-size: 11px; font-weight: 700; }
+.zoom-controls .zoom-fullscreen { display: none; border-right: 0; }
+.zoom-fullscreen svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gallery-photo-focus-count { display: none; }
 .gallery-modal-bottom { display: grid; min-height: 112px; flex: 0 0 auto; grid-template-columns: minmax(260px, .7fr) minmax(420px, 1.3fr); gap: 40px; align-items: center; padding: 18px 30px 20px; border-top: 1px solid rgba(255,255,255,.13); }
 .gallery-detail-copy { min-width: 0; }
 .gallery-detail-copy > p { margin: 0; color: rgba(255,255,255,.7); font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -9083,8 +9086,12 @@ body.modal-open { overflow: hidden; }
   .gallery-zoomable.has-mobile-intrinsic-size .zoomable-image-viewport { height: auto; aspect-ratio: var(--zoom-image-ratio, 4 / 3); }
   .gallery-zoomable .zoomable-image-viewport { touch-action: pan-y; overscroll-behavior: auto; }
   .gallery-zoomable .zoomable-image-viewport.is-zoomed { touch-action: none; overscroll-behavior: contain; }
-  .gallery-zoomable .zoom-controls { right: 8px; bottom: 8px; }
-  .gallery-zoomable .zoom-controls button, .gallery-zoomable .zoom-controls output { min-height: 44px; }
+  .gallery-zoomable .zoom-controls { right: 6px; bottom: 6px; border-radius: 5px; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+  .gallery-zoomable .zoom-controls button, .gallery-zoomable .zoom-controls output { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; font-size: 13px; }
+  .gallery-zoomable .zoom-controls output { font-size: 9px; }
+  .gallery-zoomable .zoom-controls .zoom-reset { width: 52px; min-width: 52px; border-right: 1px solid rgba(255,255,255,.16); font-size: 9px; }
+  .gallery-zoomable .zoom-controls .zoom-fullscreen { display: grid; border-right: 0; }
+  .gallery-zoomable .zoom-fullscreen svg { width: 16px; height: 16px; }
   .gallery-stage > button { width: 44px; height: 44px; top: 50%; font-size: 15px; }
   .gallery-stage > button:first-child { left: 12px; }
   .gallery-stage > button:last-child { right: 12px; }
@@ -9101,6 +9108,32 @@ body.modal-open { overflow: hidden; }
   .gallery-thumbnail-picker > button { width: 44px; min-height: 44px; }
   .gallery-thumbnails { gap: 7px; }
   .gallery-thumbnails button { width: 92px; flex: 0 0 92px; }
+  .gallery-viewer.is-photo-focus .gallery-viewer-panel > header,
+  .gallery-viewer.is-photo-focus .gallery-modal-bottom { display: none; }
+  .gallery-viewer.is-photo-focus .gallery-viewer-content { overflow: hidden; }
+  .gallery-viewer.is-photo-focus .gallery-stage,
+  .gallery-stage:fullscreen {
+    position: fixed;
+    z-index: 320;
+    inset: 0;
+    display: flex;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100svh;
+    align-items: stretch;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: #0e0d12;
+  }
+  .gallery-viewer.is-photo-focus .gallery-stage > .gallery-zoomable,
+  .gallery-stage:fullscreen > .gallery-zoomable { height: 100%; min-height: 0; flex: 1 1 auto; }
+  .gallery-viewer.is-photo-focus .gallery-zoomable.has-mobile-intrinsic-size .zoomable-image-viewport,
+  .gallery-stage:fullscreen .gallery-zoomable.has-mobile-intrinsic-size .zoomable-image-viewport { height: 100%; aspect-ratio: auto; touch-action: none; overscroll-behavior: contain; }
+  .gallery-viewer.is-photo-focus .gallery-photo-focus-count,
+  .gallery-stage:fullscreen .gallery-photo-focus-count { position: absolute; z-index: 5; top: calc(8px + env(safe-area-inset-top)); left: 50%; display: block; min-height: 28px; padding: 5px 9px; border-radius: 999px; background: rgba(24,23,31,.76); color: white; font-size: 11px; font-weight: 740; line-height: 18px; transform: translateX(-50%); backdrop-filter: blur(8px); }
+  .gallery-viewer.is-photo-focus .gallery-stage > button:first-of-type,
+  .gallery-stage:fullscreen > button:first-of-type { left: max(8px, env(safe-area-inset-left)); }
+  .gallery-viewer.is-photo-focus .gallery-stage > button:last-of-type,
+  .gallery-stage:fullscreen > button:last-of-type { right: max(8px, env(safe-area-inset-right)); }
 }
 
 @media (max-width: 520px) {

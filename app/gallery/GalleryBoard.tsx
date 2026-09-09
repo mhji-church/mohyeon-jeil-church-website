@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
 import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
@@ -83,7 +83,7 @@ export default function GalleryBoard({
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
   }, [page]);
 
-  const openViewer = (album: GalleryModalAlbum, trigger: HTMLElement) => {
+  const openViewer = useCallback((album: GalleryModalAlbum, trigger: HTMLElement) => {
     viewerTriggerRef.current = trigger;
     const url = new URL(window.location.href);
     url.searchParams.set("album", album.id);
@@ -93,9 +93,9 @@ export default function GalleryBoard({
       window.history.replaceState(window.history.state, "", url);
     }
     window.dispatchEvent(new Event("gallery-location-change"));
-  };
+  }, []);
 
-  const closeViewer = () => {
+  const closeViewer = useCallback(() => {
     if (window.history.state?.mhjiGallery) {
       window.history.back();
       return;
@@ -105,7 +105,7 @@ export default function GalleryBoard({
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new Event("gallery-location-change"));
     window.requestAnimationFrame(() => viewerTriggerRef.current?.focus({ preventScroll: true }));
-  };
+  }, []);
 
   return (
     <section className="content-section gallery-board" ref={boardRef}>

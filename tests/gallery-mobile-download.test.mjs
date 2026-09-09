@@ -17,6 +17,15 @@ test("mobile gallery uses full-width cards and keeps the detail body scrollable"
   assert.match(styles, /\.gallery-download-actions \{ display: none; \}/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.gallery-download-actions \{ display: block;/);
   assert.match(styles, /\.gallery-download-button \{[^}]*width: 100%;[^}]*min-height: 46px;/);
+  assert.match(styles, /\.gallery-zoomable \.zoom-controls \.zoom-fullscreen \{ display: grid;/);
+  assert.match(styles, /\.gallery-viewer\.is-photo-focus \.gallery-stage,[\s\S]*?\.gallery-stage:fullscreen/);
+  assert.match(styles, /\.gallery-viewer\.is-photo-focus \.gallery-modal-bottom \{ display: none;/);
+  const viewer = read("app/gallery/GalleryViewer.tsx");
+  const zoomable = read("app/components/ZoomableImage.tsx");
+  assert.match(viewer, /stage\.requestFullscreen\?\./);
+  assert.match(viewer, /mhjiGalleryPhotoFocus/);
+  assert.match(viewer, /document\.exitFullscreen/);
+  assert.match(zoomable, /사진 전체화면 종료/);
 });
 
 test("gallery download resolves only a validated post image and never accepts a client URL", () => {

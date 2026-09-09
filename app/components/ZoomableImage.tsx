@@ -38,6 +38,9 @@ export default function ZoomableImage({
   onSwipe,
   mobileScroll = false,
   mobileIntrinsicSize = false,
+  photoFocusActive,
+  onPhotoFocusToggle,
+  onPhotoFocusButton,
 }: {
   src: string;
   alt: string;
@@ -45,6 +48,9 @@ export default function ZoomableImage({
   onSwipe?: (direction: "next" | "prev") => void;
   mobileScroll?: boolean;
   mobileIntrinsicSize?: boolean;
+  photoFocusActive?: boolean;
+  onPhotoFocusToggle?: () => void;
+  onPhotoFocusButton?: (button: HTMLButtonElement | null) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
@@ -296,6 +302,20 @@ export default function ZoomableImage({
         >
           화면 맞춤
         </button>
+        {onPhotoFocusToggle ? (
+          <button
+            className="zoom-fullscreen"
+            ref={onPhotoFocusButton}
+            type="button"
+            aria-label={photoFocusActive ? "사진 전체화면 종료" : "사진 전체화면 보기"}
+            aria-pressed={photoFocusActive}
+            onClick={onPhotoFocusToggle}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />
+            </svg>
+          </button>
+        ) : null}
       </div>
     </div>
   );

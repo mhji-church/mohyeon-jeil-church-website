@@ -39,8 +39,16 @@ export default function GalleryViewer({
   const [activeImage, setActiveImage] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
+  const [photoFocus, setPhotoFocus] = useState(false);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
+  const savedReaderScroll = useRef(0);
+  const photoFocusRef = useRef(false);
+  const suppressFullscreenChange = useRef(false);
+  const focusRestoreTimer = useRef<number | null>(null);
 
   const moveImage = useCallback((amount: number) => {
     if (!album.images.length) return;
@@ -50,19 +58,109 @@ export default function GalleryViewer({
     );
   }, [album.images.length]);
 
+  const finishPhotoFocus = useCallback((navigateBack: boolean) => {
+    if (!photoFocusRef.current) return;
+    photoFocusRef.current = false;
+    setPhotoFocus(false);
+    const restoreView = () => window.requestAnimationFrame(() => {
+      if (contentRef.current) contentRef.current.scrollTop = savedReaderScroll.current;
+      fullscreenButtonRef.current?.focus({ preventScroll: true });
+    });
+    if (navigateBack && window.history.state?.mhjiGalleryPhotoFocus) {
+      const restoreAfterHistory = () => {
+        window.removeEventListener("popstate", restoreAfterHistory);
+        if (focusRestoreTimer.current) window.clearTimeout(focusRestoreTimer.current);
+        focusRestoreTimer.current = null;
+        restoreView();
+      };
+      window.addEventListener("popstate", restoreAfterHistory, { once: true });
+      window.history.back();
+      focusRestoreTimer.current = window.setTimeout(restoreAfterHistory, 300);
+      return;
+    }
+    restoreView();
+  }, []);
+
+  const exitPhotoFocus = useCallback(async (navigateBack: boolean) => {
+    const fullscreen = document.fullscreenElement;
+    if (fullscreen) {
+      suppressFullscreenChange.current = true;
+      try {
+        await document.exitFullscreen();
+      } catch {
+        suppressFullscreenChange.current = false;
+      }
+    } else {
+      suppressFullscreenChange.current = false;
+    }
+    finishPhotoFocus(navigateBack);
+  }, [finishPhotoFocus]);
+
+  const togglePhotoFocus = useCallback(async () => {
+    if (photoFocusRef.current) {
+      await exitPhotoFocus(true);
+      return;
+    }
+    const stage = stageRef.current;
+    if (!stage || !window.matchMedia("(max-width: 760px)").matches) return;
+    savedReaderScroll.current = contentRef.current?.scrollTop ?? 0;
+    window.history.pushState({ ...window.history.state, mhjiGalleryPhotoFocus: true }, "", window.location.href);
+    photoFocusRef.current = true;
+    setPhotoFocus(true);
+    try {
+      await stage.requestFullscreen?.({ navigationUI: "hide" });
+    } catch {
+      // Keep the CSS photo-focus fallback active when native fullscreen is unavailable.
+    }
+  }, [exitPhotoFocus]);
+
+  const registerFullscreenButton = useCallback((button: HTMLButtonElement | null) => {
+    fullscreenButtonRef.current = button;
+  }, []);
+
   useEffect(() => {
+    const fullscreenStage = stageRef.current;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        if (photoFocusRef.current) {
+          event.preventDefault();
+          void exitPhotoFocus(true);
+        } else {
+          onClose();
+        }
+      }
       if (event.key === "ArrowLeft") moveImage(-1);
       if (event.key === "ArrowRight") moveImage(1);
     };
+    const handlePopState = (event: PopStateEvent) => {
+      if (photoFocusRef.current && !event.state?.mhjiGalleryPhotoFocus) void exitPhotoFocus(false);
+    };
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement || !photoFocusRef.current) return;
+      if (suppressFullscreenChange.current) {
+        suppressFullscreenChange.current = false;
+        return;
+      }
+      if (window.history.state?.mhjiGalleryPhotoFocus) {
+        const nextState = { ...window.history.state };
+        delete nextState.mhjiGalleryPhotoFocus;
+        window.history.replaceState(nextState, "", window.location.href);
+      }
+      finishPhotoFocus(false);
+    };
     document.body.classList.add("modal-open");
     window.addEventListener("keydown", handleKey);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
       document.body.classList.remove("modal-open");
       window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      if (focusRestoreTimer.current) window.clearTimeout(focusRestoreTimer.current);
+      if (document.fullscreenElement === fullscreenStage) void document.exitFullscreen().catch(() => undefined);
     };
-  }, [moveImage, onClose]);
+  }, [exitPhotoFocus, finishPhotoFocus, moveImage, onClose]);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -139,7 +237,7 @@ export default function GalleryViewer({
 
   return (
     <div
-      className="focus-modal gallery-viewer"
+      className={`focus-modal gallery-viewer${photoFocus ? " is-photo-focus" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={`${album.title} 사진 보기`}
@@ -164,10 +262,11 @@ export default function GalleryViewer({
             ×
           </button>
         </header>
-        <div className="gallery-viewer-content">
+        <div className="gallery-viewer-content" ref={contentRef}>
         {album.images.length ? (
           <>
-            <div className="gallery-stage">
+            <div className="gallery-stage" ref={stageRef}>
+              {photoFocus ? <span className="gallery-photo-focus-count" aria-live="polite">{activeImage + 1} / {album.images.length}</span> : null}
               {album.images.length > 1 ? (
                 <button type="button" onClick={() => moveImage(-1)} aria-label="이전 사진">
                   ←
@@ -180,6 +279,9 @@ export default function GalleryViewer({
                 className="gallery-zoomable"
                 mobileScroll
                 mobileIntrinsicSize
+                photoFocusActive={photoFocus}
+                onPhotoFocusButton={registerFullscreenButton}
+                onPhotoFocusToggle={() => void togglePhotoFocus()}
                 onSwipe={(direction) => moveImage(direction === "next" ? 1 : -1)}
               />
               {album.images.length > 1 ? (

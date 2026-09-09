@@ -115,6 +115,7 @@ test("archive worship contents are saved from direct admin input without time of
   const archive = readSource("../app/admin/archive/ArchiveAdmin.tsx");
   const route = readSource("../app/api/admin/archive/videos/route.ts");
   const portal = readSource("../app/archive/ArchivePortal.tsx");
+  const viewer = readSource("../app/archive/ArchiveVideoViewer.tsx");
   const styles = readSource("../app/archive/archive-original.css");
 
   assert.match(archive, /songsText/);
@@ -124,10 +125,10 @@ test("archive worship contents are saved from direct admin input without time of
   assert.match(route, /manual-entry-v1/);
   assert.match(route, /startSeconds: null/);
   assert.doesNotMatch(route, /queueArchiveVideoAnalysis|processNextArchiveAnalysisJob/);
-  assert.match(portal, /viewer-song-number/);
-  assert.match(portal, /sermonTitleStyle/);
-  assert.match(portal, /viewer-sermon-title/);
-  assert.ok(portal.includes("{index + 1}."));
+  assert.match(viewer, /viewer-song-number/);
+  assert.match(viewer, /sermonTitleStyle/);
+  assert.match(viewer, /viewer-sermon-title/);
+  assert.ok(viewer.includes("{index + 1}."));
   assert.match(portal, /<p>설교 · \{video\.preacher \|\| "모현제일교회"\}<\/p>/);
   assert.match(portal, /<h1>\{featured\.title\}<\/h1>/);
   assert.doesNotMatch(portal, /찬양 \$\{publicSongs|sermonSummary/);
