@@ -141,7 +141,7 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/member/signup");
   await expect(page.getByRole("heading", { name: "회원가입", exact: true })).toBeVisible();
-  await expect(page.getByText("소속이 있다면 ‘집사 / 미디어팀’처럼 입력해 주세요.")).toBeVisible();
+  await expect(page.getByText("소속이 있다면 ‘집사 / 남전도회’처럼 입력해 주세요.")).toBeVisible();
   await expect(page.getByLabel("직분 또는 소속 부서 선택")).toHaveAttribute("aria-describedby", "signup-position-help");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -205,7 +205,12 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
     updatedAt: "",
     analysis: null,
   }));
-  await page.route("**/api/archive/videos?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos, total: videos.length, page: 1, pageSize: 8 }) }));
+  const otherTitle = "2026년 9월 9일 수요예배";
+  const otherVideos = [{ ...videos[0], id: "mobile-title-other", date: "2026-09-09", serviceType: "수요예배", title: otherTitle }];
+  await page.route("**/api/archive/videos?*", (route) => {
+    const selectedVideos = new URL(route.request().url()).searchParams.get("group") === "other" ? otherVideos : videos;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos: selectedVideos, total: selectedVideos.length, page: 1, pageSize: 8 }) });
+  });
   await page.route("**/api/archive/videos/mobile-title-*/thumbnail", (route) => route.fulfill({
     status: 200,
     contentType: "image/svg+xml",
@@ -227,10 +232,20 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   const long = cards.nth(1).locator("h3");
   await expect(example).toHaveAttribute("aria-label", exampleTitle);
   await expect(long).toHaveAttribute("aria-label", longTitle);
+  await expect(cards.nth(0).locator(".media-date")).toBeHidden();
+  await expect(cards.nth(1).locator(".media-date")).toBeVisible();
   for (const heading of [example, long]) {
     await expect(heading).toHaveCSS("white-space", "nowrap");
     await expect(heading).toHaveCSS("text-overflow", "ellipsis");
   }
+  const placement = await cards.nth(0).evaluate((card) => {
+    const thumbnail = card.querySelector(".media-thumb")?.getBoundingClientRect();
+    const heading = card.querySelector("h3")?.getBoundingClientRect();
+    const preacher = card.querySelector(".media-meta p")?.getBoundingClientRect();
+    return { thumbnailRight: thumbnail?.right ?? 0, headingLeft: heading?.left ?? 0, headingBottom: heading?.bottom ?? 0, preacherTop: preacher?.top ?? 0 };
+  });
+  expect(placement.headingLeft).toBeGreaterThanOrEqual(placement.thumbnailRight);
+  expect(placement.preacherTop).toBeGreaterThanOrEqual(placement.headingBottom);
   expect(await example.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   expect(await long.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -239,8 +254,16 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   await expect(example).toHaveCSS("white-space", "nowrap");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
+  await page.goto("/archive/other");
+  const otherCard = page.locator(".list-media-grid .media-card--worship");
+  await expect(otherCard).toHaveCount(1);
+  await expect(otherCard.locator("h3")).toHaveAttribute("title", otherTitle);
+  await expect(otherCard.locator(".media-date")).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
   await page.setViewportSize({ width: 820, height: 1000 });
-  await expect(example).not.toHaveCSS("white-space", "nowrap");
+  await expect(otherCard.locator("h3")).not.toHaveCSS("white-space", "nowrap");
+  await expect(otherCard.locator(".media-date")).toBeVisible();
 });
 
 test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {

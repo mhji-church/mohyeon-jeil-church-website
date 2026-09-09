@@ -27,5 +27,5 @@ test("display-only formatting does not alter member administration values", asyn
   assert.match(memberAdmin, /\{member\.position \|\| "-"\}/);
   assert.match(memberProfile, /defaultValue=\{member\.position\}/);
   assert.match(signup, /signup-position-help/);
-  assert.match(signup, /집사 \/ 미디어팀/);
+  assert.match(signup, /집사 \/ 남전도회/);
 });

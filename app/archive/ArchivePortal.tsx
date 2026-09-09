@@ -18,6 +18,18 @@ const meta = {
 
 function sectionFromPath(path: string | null): ArchiveSection { if (path?.endsWith("/sunday")) return "sunday"; if (path?.endsWith("/other")) return "other"; if (path?.endsWith("/attendance")) return "attendance"; return "all"; }
 function formatDate(value: string) { return value.replaceAll("-", "."); }
+function normalizeWorshipLabel(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/(\d{4})\s*(?:년|[./-])\s*0?(\d{1,2})\s*(?:월|[./-])\s*0?(\d{1,2})\s*일?/g, "$1$2$3")
+    .replace(/[·•∙⋅・]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+function hasDuplicateWorshipMetadata(video: ArchiveVideo) {
+  if (video.type !== "worship") return false;
+  return normalizeWorshipLabel(video.title) === normalizeWorshipLabel(`${video.date} ${video.serviceType}`);
+}
 function formatAttendanceTitle(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return `${year}년 ${month}월 ${day}일 출석 교인`;
@@ -94,6 +106,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const secure = video.type === "attendance" && !allowed;
     const worshipObscured = !access.authenticated && video.type === "worship";
     const thumbnailSrc = `/api/archive/videos/${encodeURIComponent(video.id)}/thumbnail`;
+    const duplicateWorshipMetadata = hasDuplicateWorshipMetadata(video);
     return <article key={video.id} className={`media-card${video.type === "worship" ? " media-card--worship" : ""}${featuredCard ? " featured" : ""}`}>
       <button className={`media-thumb${secure ? " attendance-obscured" : ""}${worshipObscured ? " worship-obscured" : ""}`} onClick={(event) => void play(video, event.currentTarget)} type="button" aria-label={`${video.title} ${allowed ? "재생" : "로그인 후 시청"}`}>
         <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard ? "eager" : "lazy"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.webp"; }} />
@@ -102,7 +115,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
         {allowed && <span className="play-overlay"><span className="archive-play-icon"><ArchiveIcon name="play" size={22} /></span></span>}
         {video.durationSeconds != null && <span className="media-duration">{formatArchiveDuration(video.durationSeconds)}</span>}
       </button>
-      {!featuredCard && <div className="media-meta"><span className="media-date">{formatDate(video.date)} · {video.serviceType}</span><h3 aria-label={video.title} title={video.title}>{video.type === "attendance" ? <><span className="attendance-title-desktop">{video.title}</span><span className="attendance-title-mobile">{formatAttendanceTitle(video.date)}</span></> : video.title}</h3>{video.type !== "attendance" && <p>설교 · {video.preacher || "모현제일교회"}</p>}</div>}
+      {!featuredCard && <div className="media-meta"><span className={`media-date${duplicateWorshipMetadata ? " is-title-duplicate" : ""}`}>{formatDate(video.date)} · {video.serviceType}</span><h3 aria-label={video.title} title={video.title}>{video.type === "attendance" ? <><span className="attendance-title-desktop">{video.title}</span><span className="attendance-title-mobile">{formatAttendanceTitle(video.date)}</span></> : video.title}</h3>{video.type !== "attendance" && <p>설교 · {video.preacher || "모현제일교회"}</p>}</div>}
     </article>;
   }
 

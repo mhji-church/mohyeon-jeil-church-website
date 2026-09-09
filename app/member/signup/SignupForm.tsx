@@ -351,7 +351,7 @@ export default function SignupForm() {
             aria-describedby="signup-position-help"
             onChange={(event) => setValues((current) => ({ ...current, position: event.target.value }))}
           />
-          <small id="signup-position-help">소속이 있다면 ‘집사 / 미디어팀’처럼 입력해 주세요.</small>
+          <small id="signup-position-help">소속이 있다면 ‘집사 / 남전도회’처럼 입력해 주세요.</small>
         </label>
 
         <label>
