@@ -1,4 +1,8 @@
 import { normalizeMobilePhone } from "./phone";
+import {
+  findMemberDuplicateCheck,
+  type MemberDuplicateCheck,
+} from "./member-duplicates";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 import { adminAuditStatement } from "./admin-audit";
 import {
@@ -35,6 +39,8 @@ export type MemberSignupInput = {
   birthDate: string;
   position: string;
 };
+
+export type AdminMember = Member & { duplicateCheck: MemberDuplicateCheck | null };
 
 const PASSWORD_HASH_ITERATIONS = 100_000;
 const LOGIN_FAILURE_LIMIT = 5;
@@ -460,6 +466,28 @@ export async function deleteMember(id: string, adminUsername?: string) {
     targetId: id,
   }));
   await db.batch(statements);
+}
+
+export async function listAdminMembers() {
+  const members = await listMembers();
+  return members.map((member): AdminMember => ({
+    ...member,
+    duplicateCheck: findMemberDuplicateCheck(member, members),
+  }));
+}
+
+export async function getMemberDuplicateCheck(
+  id: string,
+  proposed: Partial<Pick<Member, "phone" | "birthDate">> = {},
+) {
+  const members = await listMembers();
+  const current = members.find((member) => member.id === id);
+  if (!current) throw new Error("회원을 찾을 수 없습니다.");
+  return findMemberDuplicateCheck({
+    ...current,
+    phone: proposed.phone ?? current.phone,
+    birthDate: proposed.birthDate ?? current.birthDate,
+  }, members);
 }
 
 async function hashPassword(password: string, suppliedSalt?: Uint8Array) {

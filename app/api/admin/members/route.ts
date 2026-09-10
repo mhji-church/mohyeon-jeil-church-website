@@ -1,7 +1,9 @@
 import {
   countPendingMembers,
   deleteMember,
-  listMembers,
+  getMember,
+  getMemberDuplicateCheck,
+  listAdminMembers,
   resetMemberPassword,
   updateMember,
   type MemberStatus,
@@ -27,7 +29,11 @@ export async function GET(request: Request) {
     if (new URL(request.url).searchParams.get("summary") === "pending") {
       return Response.json({ pendingCount: await countPendingMembers() });
     }
-    return Response.json({ members: await listMembers() });
+    const members = await listAdminMembers();
+    return Response.json({
+      members,
+      duplicateCount: members.filter((member) => member.duplicateCheck).length,
+    });
   } catch (error) {
     return apiError("admin.members.list", error, "회원 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", 503);
   }
@@ -39,6 +45,7 @@ export async function PATCH(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     id?: unknown;
     action?: unknown;
+    duplicateFingerprint?: unknown;
     member?: {
       name?: unknown;
       phone?: unknown;
@@ -62,6 +69,26 @@ export async function PATCH(request: Request) {
       allowedStatuses.has(payload.member.status as MemberStatus)
         ? (payload.member.status as MemberStatus)
         : undefined;
+    const currentMember = requestedStatus === "approved" ? await getMember(id) : null;
+    if (requestedStatus === "approved" && currentMember?.status !== "approved") {
+      const duplicateCheck = await getMemberDuplicateCheck(id, {
+        phone: typeof payload?.member?.phone === "string" ? payload.member.phone : undefined,
+        birthDate: typeof payload?.member?.birthDate === "string" ? payload.member.birthDate : undefined,
+      });
+      if (
+        duplicateCheck &&
+        payload?.duplicateFingerprint !== duplicateCheck.fingerprint
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            requiresDuplicateConfirmation: true,
+            error: "중복 가입 가능성을 확인한 뒤 다시 승인해 주세요.",
+            duplicateCheck,
+          },
+        );
+      }
+    }
     await updateMember(
       id,
       {

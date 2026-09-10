@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Member, MemberStatus } from "../../../lib/members";
+import type { AdminMember, MemberStatus } from "../../../lib/members";
+import type {
+  MemberDuplicateCheck,
+  MemberDuplicateField,
+} from "../../../lib/member-duplicates";
 import AdminPagination from "../AdminPagination";
 import AdminSidebar from "../AdminSidebar";
 
@@ -20,6 +24,40 @@ const statusLabel: Record<MemberStatus, string> = {
   suspended: "이용 중지",
 };
 
+type MemberFilter = MemberStatus | "all" | "duplicate";
+type MemberPatch = Partial<Pick<AdminMember, "name" | "phone" | "birthDate" | "position" | "status">>;
+type PendingDuplicateApproval = {
+  member: AdminMember;
+  patch: MemberPatch;
+  check: MemberDuplicateCheck;
+  source: "status" | "edit";
+};
+
+function duplicateReasonLabel(fields: MemberDuplicateField[]) {
+  if (fields.includes("phone") && fields.includes("birthDate")) return "휴대폰·생년월일 일치";
+  return fields.includes("phone") ? "휴대폰 일치" : "생년월일 일치";
+}
+
+function DuplicateMatchList({ check }: { check: MemberDuplicateCheck }) {
+  return (
+    <div className="admin-duplicate-match-list">
+      {check.matches.map((match) => (
+        <article key={match.id}>
+          <div>
+            <strong>{match.name}</strong>
+            <span>{match.username}</span>
+          </div>
+          <dl>
+            <div><dt>상태</dt><dd>{statusLabel[match.status as MemberStatus] ?? match.status}</dd></div>
+            <div><dt>가입일</dt><dd>{formatDate(match.createdAt)}</dd></div>
+          </dl>
+          <b>{duplicateReasonLabel(match.matchedFields)}</b>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function formatDate(value: string | null) {
   if (!value) return "-";
   return value.slice(0, 10).replaceAll("-", ".");
@@ -29,31 +67,36 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<AdminMember[]>([]);
+  const [duplicateCount, setDuplicateCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const filterValue = searchParams.get("status");
-  const filter: MemberStatus | "all" = ["pending", "approved", "suspended"].includes(filterValue ?? "") ? filterValue as MemberStatus : "all";
-  const [editing, setEditing] = useState<Member | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<Member | null>(null);
-  const [confirmPasswordReset, setConfirmPasswordReset] = useState<Member | null>(null);
+  const filter: MemberFilter = ["pending", "approved", "suspended", "duplicate"].includes(filterValue ?? "") ? filterValue as MemberFilter : "all";
+  const [editing, setEditing] = useState<AdminMember | null>(null);
+  const [duplicateDetails, setDuplicateDetails] = useState<AdminMember | null>(null);
+  const [duplicateApproval, setDuplicateApproval] = useState<PendingDuplicateApproval | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AdminMember | null>(null);
+  const [confirmPasswordReset, setConfirmPasswordReset] = useState<AdminMember | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<{
-    member: Member;
+    member: AdminMember;
     password: string;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState("");
   const [resettingPassword, setResettingPassword] = useState(false);
   const [passwordResetError, setPasswordResetError] = useState("");
   const listStartRef = useRef<HTMLElement>(null);
 
-  const loadMembers = useCallback(async () => {
+  const loadMembers = useCallback(async (preserveNotice = false) => {
     setLoading(true);
-    setNotice("");
+    if (!preserveNotice) setNotice("");
     try {
       const response = await fetch("/api/admin/members", { cache: "no-store" });
       const data = (await response.json().catch(() => ({}))) as {
-        members?: Member[];
+        members?: AdminMember[];
+        duplicateCount?: number;
         error?: string;
       };
       if (!response.ok) {
@@ -61,6 +104,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
         return;
       }
       setMembers(data.members ?? []);
+      setDuplicateCount(data.duplicateCount ?? 0);
     } catch {
       setNotice("회원 목록을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.");
     } finally {
@@ -76,7 +120,8 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const visibleMembers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return members.filter((member) => {
-      if (filter !== "all" && member.status !== filter) return false;
+      if (filter === "duplicate" && !member.duplicateCheck) return false;
+      if (filter !== "all" && filter !== "duplicate" && member.status !== filter) return false;
       if (!term) return true;
       return [member.name, member.username, member.phone, member.position]
         .join(" ")
@@ -102,33 +147,61 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     if (!loading && requestedPage !== currentPage) changePage(currentPage, true);
   }, [changePage, currentPage, loading, requestedPage]);
 
-  const changeFilter = (status: MemberStatus | "all") => {
+  const changeFilter = (status: MemberFilter) => {
     const params = new URLSearchParams(searchParams.toString());
     if (status === "all") params.delete("status"); else params.set("status", status);
     params.delete("page");
     router.push(`${pathname}${params.size ? `?${params}` : ""}`, { scroll: false });
   };
 
-  async function changeStatus(member: Member, status: MemberStatus) {
+  async function submitMemberUpdate(
+    member: AdminMember,
+    patch: MemberPatch,
+    source: "status" | "edit",
+    duplicateFingerprint?: string,
+  ) {
     const response = await fetch("/api/admin/members", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: member.id, member: { status } }),
+      body: JSON.stringify({ id: member.id, member: patch, duplicateFingerprint }),
     });
-    const data = (await response.json()) as { error?: string };
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      requiresDuplicateConfirmation?: boolean;
+      duplicateCheck?: MemberDuplicateCheck;
+    };
+    if (data.requiresDuplicateConfirmation && data.duplicateCheck) {
+      setDuplicateApproval({ member, patch, check: data.duplicateCheck, source });
+      return false;
+    }
     if (!response.ok) {
       setNotice(data.error ?? "회원 상태를 변경하지 못했습니다.");
-      return;
+      return false;
     }
+    setDuplicateApproval(null);
+    if (source === "edit") setEditing(null);
+    const status = patch.status;
     setNotice(
-      status === "approved"
+      source === "edit"
+        ? `${member.name} 회원 정보를 수정했습니다.`
+        : status === "approved"
         ? `${member.name} 회원을 승인했습니다.`
         : status === "suspended"
           ? `${member.name} 회원의 이용을 중지했습니다.`
           : `${member.name} 회원을 승인 대기로 변경했습니다.`,
     );
-    await loadMembers();
+    await loadMembers(true);
     window.dispatchEvent(new Event("admin-members-updated"));
+    return true;
+  }
+
+  async function changeStatus(member: AdminMember, status: MemberStatus) {
+    setApprovingId(member.id);
+    try {
+      await submitMemberUpdate(member, { status }, "status");
+    } finally {
+      setApprovingId("");
+    }
   }
 
   async function saveMember(event: React.FormEvent<HTMLFormElement>) {
@@ -136,33 +209,17 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     if (!editing) return;
     setSaving(true);
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/admin/members", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: editing.id,
-        member: {
-          name: String(form.get("name") ?? ""),
-          phone: String(form.get("phone") ?? ""),
-          birthDate: String(form.get("birthDate") ?? ""),
-          position: String(form.get("position") ?? ""),
-          status: String(form.get("status") ?? editing.status),
-        },
-      }),
-    });
-    const data = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setNotice(data.error ?? "회원 정보를 수정하지 못했습니다.");
-    } else {
-      setNotice(`${editing.name} 회원 정보를 수정했습니다.`);
-      setEditing(null);
-      await loadMembers();
-      window.dispatchEvent(new Event("admin-members-updated"));
-    }
+    await submitMemberUpdate(editing, {
+      name: String(form.get("name") ?? ""),
+      phone: String(form.get("phone") ?? ""),
+      birthDate: String(form.get("birthDate") ?? ""),
+      position: String(form.get("position") ?? ""),
+      status: String(form.get("status") ?? editing.status) as MemberStatus,
+    }, "edit");
     setSaving(false);
   }
 
-  async function resetPassword(member: Member) {
+  async function resetPassword(member: AdminMember) {
     setResettingPassword(true);
     setNotice("");
     setPasswordResetError("");
@@ -205,7 +262,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     }
     setNotice(`${confirmDelete.name} 회원을 삭제했습니다.`);
     setConfirmDelete(null);
-    await loadMembers();
+    await loadMembers(true);
     window.dispatchEvent(new Event("admin-members-updated"));
   }
 
@@ -230,10 +287,18 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
             <div>
               <h2>전체 회원</h2>
               <span>총 {members.length}명{filter !== "all" || search ? ` · 표시 ${visibleMembers.length}명` : ""}</span>
+              <button
+                className="admin-duplicate-summary"
+                type="button"
+                aria-pressed={filter === "duplicate"}
+                onClick={() => changeFilter("duplicate")}
+              >
+                중복 가입자 <strong>{duplicateCount}명</strong>
+              </button>
             </div>
             <div className="admin-member-list-tools">
               <div className="admin-member-filters" role="group" aria-label="회원 상태 필터">
-                {([['all', '전체'], ['pending', '승인 대기'], ['approved', '승인'], ['suspended', '이용 중지']] as const).map(([key, label]) => <button type="button" className={filter === key ? "is-active" : ""} aria-pressed={filter === key} onClick={() => changeFilter(key)} key={key}>{label}</button>)}
+                {([['all', '전체'], ['pending', '승인 대기'], ['approved', '승인'], ['suspended', '이용 중지'], ['duplicate', '중복 가입']] as const).map(([key, label]) => <button type="button" className={filter === key ? "is-active" : key === "duplicate" ? "is-duplicate-filter" : ""} aria-pressed={filter === key} onClick={() => changeFilter(key)} key={key}>{label}</button>)}
               </div>
               <label>
               <span className="sr-only">회원 검색</span>
@@ -270,7 +335,19 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                   {paginatedMembers.map((member) => (
                     <tr key={member.id}>
                       <td>
-                        <strong>{member.name}</strong>
+                        <div className="admin-member-name-line">
+                          <strong>{member.name}</strong>
+                          {member.duplicateCheck && (
+                            <button
+                              className="admin-duplicate-badge"
+                              type="button"
+                              onClick={() => setDuplicateDetails(member)}
+                              aria-label={`${member.name} 중복 가입 상세 보기`}
+                            >
+                              중복 가입
+                            </button>
+                          )}
+                        </div>
                         <small>{member.username}</small>
                       </td>
                       <td>{member.phone}</td>
@@ -285,8 +362,8 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                       <td>
                         <div className="admin-row-actions member-row-actions">
                           {member.status !== "approved" && (
-                            <button type="button" onClick={() => void changeStatus(member, "approved")}>
-                              승인
+                            <button type="button" disabled={approvingId === member.id} onClick={() => void changeStatus(member, "approved")}>
+                              {approvingId === member.id ? "확인 중…" : "승인"}
                             </button>
                           )}
                           {member.status === "approved" && (
@@ -329,6 +406,15 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
               <button type="button" onClick={() => setEditing(null)} aria-label="닫기">×</button>
             </header>
             <div className="admin-editor-body">
+              {editing.duplicateCheck && (
+                <section className="admin-editor-duplicate-panel">
+                  <div>
+                    <strong>중복 가입 가능성</strong>
+                    <span>{duplicateReasonLabel(editing.duplicateCheck.matchedFields)}</span>
+                  </div>
+                  <button type="button" onClick={() => setDuplicateDetails(editing)}>일치 회원 확인</button>
+                </section>
+              )}
               <div className="admin-field-row">
                 <label>
                   <span>이름</span>
@@ -381,6 +467,56 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
               </button>
             </footer>
           </form>
+        </div>
+      )}
+
+      {duplicateDetails?.duplicateCheck && (
+        <div className="admin-confirm-backdrop" role="dialog" aria-modal="true" aria-label="중복 가입 상세">
+          <section className="admin-duplicate-dialog">
+            <span>DUPLICATE REVIEW</span>
+            <h2>{duplicateDetails.name} 회원의 중복 가입 가능성</h2>
+            <p>자동 판정은 참고 정보입니다. 가족 공용 연락처나 동명이 생년월일일 수 있으므로 기존 회원을 직접 확인해 주세요.</p>
+            <DuplicateMatchList check={duplicateDetails.duplicateCheck} />
+            <div>
+              <button type="button" onClick={() => setDuplicateDetails(null)}>닫기</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {duplicateApproval && (
+        <div className="admin-confirm-backdrop admin-duplicate-approval-backdrop" role="alertdialog" aria-modal="true" aria-label="중복 가입 승인 확인">
+          <section className="admin-duplicate-dialog">
+            <span>APPROVAL REVIEW</span>
+            <h2>중복 가능성을 확인하고 승인할까요?</h2>
+            <p>‘{duplicateApproval.member.name}’ 회원은 아래 기존 회원과 정보가 일치합니다. 계정 병합이나 삭제는 수행되지 않습니다.</p>
+            <DuplicateMatchList check={duplicateApproval.check} />
+            <div>
+              <button type="button" disabled={approvingId === duplicateApproval.member.id || saving} onClick={() => setDuplicateApproval(null)}>취소</button>
+              <button
+                className="admin-confirm-duplicate-button"
+                type="button"
+                disabled={approvingId === duplicateApproval.member.id || saving}
+                onClick={async () => {
+                  const pending = duplicateApproval;
+                  if (pending.source === "edit") setSaving(true); else setApprovingId(pending.member.id);
+                  try {
+                    await submitMemberUpdate(
+                      pending.member,
+                      pending.patch,
+                      pending.source,
+                      pending.check.fingerprint,
+                    );
+                  } finally {
+                    setSaving(false);
+                    setApprovingId("");
+                  }
+                }}
+              >
+                {approvingId === duplicateApproval.member.id || saving ? "최신 정보 확인 중…" : "확인 후 승인"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

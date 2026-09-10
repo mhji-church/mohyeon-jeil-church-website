@@ -171,11 +171,11 @@ before(async () => {
     ["pending-user", "대기회원", "pending"],
     ["suspended-user", "정지회원", "suspended"],
   ];
-  for (const [username, name] of memberRows) {
+  for (const [index, [username, name]] of memberRows.entries()) {
     const signup = await request("/api/members/signup", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username, password: "local-test-password", name, phone: "010-0000-0000", birthDate: "", position: "" }),
+      body: JSON.stringify({ username, password: "local-test-password", name, phone: `010-8000-${String(1000 + index)}`, birthDate: "", position: "" }),
     });
     assert.equal(signup.status, 201);
   }
@@ -338,7 +338,25 @@ test("accessible member signup preserves legacy accounts and safely creates name
   assert.ok(created);
   assert.equal(created.name, "홍길동");
   assert.equal(created.birthDate, "1956-02-29");
+  assert.deepEqual(created.duplicateCheck.matchedFields, ["phone", "birthDate"]);
+  assert.equal(created.duplicateCheck.matches.length, 2);
+  assert.ok(created.duplicateCheck.matches.every((match) => match.matchedFields.join(",") === "phone,birthDate"));
   assert.ok(members.some((member) => member.username === "worship-user"));
+
+  const uniqueUpdate = await request("/api/admin/members", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+    body: JSON.stringify({ id: created.id, member: { phone: "010-7777-1212", birthDate: "1977-12-12" } }),
+  });
+  assert.equal(uniqueUpdate.status, 200);
+  const uniqueMembers = (await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json()).members;
+  assert.equal(uniqueMembers.find((member) => member.id === created.id).duplicateCheck, null);
+  const duplicateUpdate = await request("/api/admin/members", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+    body: JSON.stringify({ id: created.id, member: { phone: baseMember.phone, birthDate: baseMember.birthDate } }),
+  });
+  assert.equal(duplicateUpdate.status, 200);
 
   const pendingLogin = await loginMember("홍길동", "482915", "198.51.100.11");
   assert.equal(pendingLogin.status, 200);
@@ -355,9 +373,39 @@ test("accessible member signup preserves legacy accounts and safely creates name
     body: JSON.stringify({ id: created.id, member: { status: "approved" } }),
   });
   assert.equal(approve.status, 200);
+  const duplicateApproval = await approve.json();
+  assert.equal(duplicateApproval.requiresDuplicateConfirmation, true);
+  assert.match(duplicateApproval.error, /중복 가입 가능성/);
+  assert.equal(duplicateApproval.duplicateCheck.matches.length, 2);
+  const staleApprove = await request("/api/admin/members", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+    body: JSON.stringify({
+      id: created.id,
+      member: { status: "approved" },
+      duplicateFingerprint: "stale-local-fingerprint",
+    }),
+  });
+  assert.equal(staleApprove.status, 200);
+  const staleApprovalPayload = await staleApprove.json();
+  assert.equal(staleApprovalPayload.requiresDuplicateConfirmation, true);
+  assert.equal(staleApprovalPayload.duplicateCheck.fingerprint, duplicateApproval.duplicateCheck.fingerprint);
+  const confirmedApprove = await request("/api/admin/members", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+    body: JSON.stringify({
+      id: created.id,
+      member: { status: "approved" },
+      duplicateFingerprint: duplicateApproval.duplicateCheck.fingerprint,
+    }),
+  });
+  assert.equal(confirmedApprove.status, 200);
   const approvedLogin = await loginMember("홍길동", "482915", "198.51.100.11");
   assert.equal(approvedLogin.status, 200);
-  assert.doesNotMatch(await approvedLogin.text(), /482915/);
+  const approvedLoginText = await approvedLogin.text();
+  assert.doesNotMatch(approvedLoginText, /482915/);
+  assert.equal((await request("/api/admin/members")).status, 403);
+  assert.doesNotMatch(approvedLoginText, /duplicateCheck|duplicateCount|중복 가입/);
 });
 
 test("member login throttling survives requests without exposing raw identifiers", async () => {

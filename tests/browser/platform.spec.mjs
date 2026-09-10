@@ -726,6 +726,107 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   expect(errors.filter((error) => !/status of 503|503 \(Service Unavailable\)/.test(error))).toEqual([]);
 });
 
+test("admin member duplicates stay clear and require a fresh server confirmation", async ({ page }) => {
+  const errors = watchErrors(page);
+  const duplicateCheck = {
+    matchedFields: ["phone", "birthDate"],
+    fingerprint: "existing-member:phone+birthDate",
+    matches: [{
+      id: "existing-member",
+      name: "기존 가상회원",
+      username: "existing-user",
+      status: "approved",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      matchedFields: ["phone", "birthDate"],
+    }],
+  };
+  let approved = false;
+  const members = Array.from({ length: 12 }, (_, index) => ({
+    id: index === 0 ? "duplicate-pending" : `unique-member-${index}`,
+    name: index === 0 ? "중복 의심회원" : `일반 가상회원 ${index}`,
+    username: index === 0 ? "duplicate-user" : `unique-user-${index}`,
+    phone: index === 0 ? "010-1234-5678" : `010-9000-${String(1000 + index)}`,
+    birthDate: index === 0 ? "1980-05-05" : "",
+    position: "집사",
+    status: index === 0 && !approved ? "pending" : "approved",
+    forcePasswordChange: false,
+    approvedAt: null,
+    approvedBy: null,
+    lastLoginAt: null,
+    createdAt: `2026-09-${String(10 - Math.min(index, 9)).padStart(2, "0")}T00:00:00.000Z`,
+    updatedAt: "2026-09-10T00:00:00.000Z",
+    duplicateCheck: index === 0 ? duplicateCheck : null,
+  }));
+  await page.route("**/api/admin/members**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET") {
+      if (url.searchParams.get("summary") === "pending") {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ pendingCount: approved ? 0 : 1 }) });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members, duplicateCount: 1 }) });
+    }
+    if (request.method() === "PATCH") {
+      const payload = request.postDataJSON();
+      if (payload?.member?.status === "approved" && payload.duplicateFingerprint !== duplicateCheck.fingerprint) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, requiresDuplicateConfirmation: true, error: "중복 가입 가능성을 확인한 뒤 다시 승인해 주세요.", duplicateCheck }) });
+      }
+      approved = true;
+      members[0].status = "approved";
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+    }
+    return route.continue();
+  });
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/admin/login?return_to=%2Fadmin%2Fmembers");
+  await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  )).toBe(true);
+  await page.getByLabel("아이디").fill("browser-admin");
+  await page.getByLabel("비밀번호").fill("browser-admin-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto("/admin/members");
+  await expect(page).toHaveURL(/\/admin\/members$/);
+  await expect(page.getByRole("button", { name: /중복 가입자 1명/ })).toBeVisible();
+  const duplicateBadge = page.locator(".admin-duplicate-badge");
+  await expect(duplicateBadge).toHaveText("중복 가입");
+  await page.screenshot({ path: "test-results/admin-members-duplicates-list-desktop-1440.png" });
+  await duplicateBadge.click();
+  const detailDialog = page.getByRole("dialog", { name: "중복 가입 상세" });
+  await expect(detailDialog).toContainText("기존 가상회원");
+  await expect(detailDialog).toContainText("existing-user");
+  await expect(detailDialog).toContainText("승인");
+  await expect(detailDialog).toContainText("2026.08.20");
+  await expect(detailDialog).toContainText("휴대폰·생년월일 일치");
+  await page.screenshot({ path: "test-results/admin-members-duplicates-desktop-1440.png" });
+  await detailDialog.getByRole("button", { name: "닫기" }).click();
+
+  await page.getByRole("button", { name: "중복 가입", exact: true }).click();
+  await expect(page.locator(".admin-members-table tbody tr")).toHaveCount(1);
+  await page.locator(".admin-members-table tbody tr").getByRole("button", { name: "승인", exact: true }).click();
+  const approvalDialog = page.getByRole("alertdialog", { name: "중복 가입 승인 확인" });
+  await expect(approvalDialog).toContainText("기존 가상회원");
+  await expect(approvalDialog).toContainText("휴대폰·생년월일 일치");
+  await approvalDialog.getByRole("button", { name: "확인 후 승인" }).click();
+  await expect(approvalDialog).not.toBeVisible();
+  await expect(page.getByRole("status")).toContainText("승인했습니다");
+
+  approved = false;
+  members[0].status = "pending";
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator(".admin-duplicate-badge")).toBeVisible();
+  await page.locator(".admin-duplicate-badge").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/admin-members-duplicates-list-mobile-390.png" });
+  await page.locator(".admin-duplicate-badge").click();
+  await expect(page.getByRole("dialog", { name: "중복 가입 상세" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/admin-members-duplicates-mobile-390.png" });
+  expect(errors).toEqual([]);
+});
+
 test("website administrator keeps the full dashboard without archive management", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/admin");
