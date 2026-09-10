@@ -1,6 +1,7 @@
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 import { attachArchiveAnalyses } from "./archive-analysis";
 import type { ArchiveAccessLevel, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
+import { resolveRepresentativeMemberId } from "./member-merges";
 
 export type { ArchiveAccessLevel, ArchiveVideo, ArchiveVideoAdmin, ArchiveVideoType } from "./archive-shared";
 
@@ -148,20 +149,22 @@ export async function getArchiveVideo(id: string) {
 
 export async function getArchiveAccess(memberId: string): Promise<ArchiveAccessLevel> {
   await ensureNetlifySchema();
+  const representativeId = await resolveRepresentativeMemberId(memberId);
   const row = await getNetlifyDb()
     .prepare("SELECT access_level FROM member_app_access WHERE member_id = ? AND app_code = ?")
-    .bind(memberId, ARCHIVE_APP_CODE)
+    .bind(representativeId, ARCHIVE_APP_CODE)
     .first<{ access_level: ArchiveAccessLevel }>();
   return row?.access_level ?? "none";
 }
 
 export async function getArchiveSongStatsAccess(memberId: string, archiveLevel?: ArchiveAccessLevel) {
-  const level = archiveLevel ?? await getArchiveAccess(memberId);
+  const representativeId = await resolveRepresentativeMemberId(memberId);
+  const level = archiveLevel ?? await getArchiveAccess(representativeId);
   if (level !== "worship" && level !== "full") return false;
   await ensureNetlifySchema();
   const row = await getNetlifyDb()
     .prepare("SELECT access_level FROM member_app_access WHERE member_id = ? AND app_code = ?")
-    .bind(memberId, ARCHIVE_SONG_STATS_APP_CODE)
+    .bind(representativeId, ARCHIVE_SONG_STATS_APP_CODE)
     .first<{ access_level: string }>();
   return row ? row.access_level === "full" : true;
 }
@@ -173,21 +176,23 @@ export function canPlayArchiveVideo(level: ArchiveAccessLevel, type: ArchiveVide
 
 export async function setArchiveAccess(memberId: string, level: ArchiveAccessLevel, adminUsername: string) {
   await ensureNetlifySchema();
+  const representativeId = await resolveRepresentativeMemberId(memberId);
   await getNetlifyDb()
     .prepare(`INSERT INTO member_app_access (member_id, app_code, access_level, granted_by, granted_at, updated_at)
       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
-    .bind(memberId, ARCHIVE_APP_CODE, level, adminUsername)
+    .bind(representativeId, ARCHIVE_APP_CODE, level, adminUsername)
     .run();
 }
 
 export async function setArchiveSongStatsAccess(memberId: string, allowed: boolean, adminUsername: string) {
   await ensureNetlifySchema();
+  const representativeId = await resolveRepresentativeMemberId(memberId);
   await getNetlifyDb()
     .prepare(`INSERT INTO member_app_access (member_id, app_code, access_level, granted_by, granted_at, updated_at)
       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
-    .bind(memberId, ARCHIVE_SONG_STATS_APP_CODE, allowed ? "full" : "none", adminUsername)
+    .bind(representativeId, ARCHIVE_SONG_STATS_APP_CODE, allowed ? "full" : "none", adminUsername)
     .run();
 }
 

@@ -6,7 +6,10 @@ import type { AdminMember, MemberStatus } from "../../../lib/members";
 import type {
   MemberDuplicateCheck,
   MemberDuplicateField,
+  MemberDuplicateGroup,
+  MemberDuplicateSummary,
 } from "../../../lib/member-duplicates";
+import type { MemberMergePreview } from "../../../lib/member-merges";
 import AdminPagination from "../AdminPagination";
 import AdminSidebar from "../AdminSidebar";
 
@@ -31,6 +34,14 @@ type PendingDuplicateApproval = {
   patch: MemberPatch;
   check: MemberDuplicateCheck;
   source: "status" | "edit";
+};
+type MergeDraft = {
+  representativeMemberId: string;
+  name: string;
+  phone: string;
+  birthDate: string;
+  position: string;
+  confirmed: boolean;
 };
 
 function duplicateReasonLabel(fields: MemberDuplicateField[]) {
@@ -63,19 +74,28 @@ function formatDate(value: string | null) {
   return value.slice(0, 10).replaceAll("-", ".");
 }
 
+function hasDifferentValues(group: MemberDuplicateGroup, field: "name" | "phone" | "birthDate" | "position") {
+  return new Set(group.accounts.map((account) => String(account[field] ?? "").trim())).size > 1;
+}
+
 export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount, canManageArchive }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [members, setMembers] = useState<AdminMember[]>([]);
-  const [duplicateCount, setDuplicateCount] = useState(0);
+  const [duplicateGroups, setDuplicateGroups] = useState<MemberDuplicateGroup[]>([]);
+  const [duplicateSummary, setDuplicateSummary] = useState<MemberDuplicateSummary>({ groupCount: 0, accountCount: 0, additionalCount: 0 });
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const filterValue = searchParams.get("status");
   const filter: MemberFilter = ["pending", "approved", "suspended", "duplicate"].includes(filterValue ?? "") ? filterValue as MemberFilter : "all";
   const [editing, setEditing] = useState<AdminMember | null>(null);
-  const [duplicateDetails, setDuplicateDetails] = useState<AdminMember | null>(null);
+  const [compareGroup, setCompareGroup] = useState<MemberDuplicateGroup | null>(null);
+  const [mergePreview, setMergePreview] = useState<MemberMergePreview | null>(null);
+  const [mergeDraft, setMergeDraft] = useState<MergeDraft | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [duplicateApproval, setDuplicateApproval] = useState<PendingDuplicateApproval | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AdminMember | null>(null);
   const [confirmPasswordReset, setConfirmPasswordReset] = useState<AdminMember | null>(null);
@@ -88,6 +108,9 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const [resettingPassword, setResettingPassword] = useState(false);
   const [passwordResetError, setPasswordResetError] = useState("");
   const listStartRef = useRef<HTMLElement>(null);
+  const mergeDialogRef = useRef<HTMLElement>(null);
+  const compareDialogRef = useRef<HTMLElement>(null);
+  const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const loadMembers = useCallback(async (preserveNotice = false) => {
     setLoading(true);
@@ -96,7 +119,8 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
       const response = await fetch("/api/admin/members", { cache: "no-store" });
       const data = (await response.json().catch(() => ({}))) as {
         members?: AdminMember[];
-        duplicateCount?: number;
+        duplicateGroups?: MemberDuplicateGroup[];
+        duplicateSummary?: MemberDuplicateSummary;
         error?: string;
       };
       if (!response.ok) {
@@ -104,7 +128,8 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
         return;
       }
       setMembers(data.members ?? []);
-      setDuplicateCount(data.duplicateCount ?? 0);
+      setDuplicateGroups(data.duplicateGroups ?? []);
+      setDuplicateSummary(data.duplicateSummary ?? { groupCount: 0, accountCount: 0, additionalCount: 0 });
     } catch {
       setNotice("회원 목록을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.");
     } finally {
@@ -130,10 +155,21 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     });
   }, [filter, members, search]);
 
+  const visibleDuplicateGroups = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return duplicateGroups;
+    return duplicateGroups.filter((group) => group.accounts.some((account) =>
+      [account.name, account.username, account.phone, account.birthDate, account.position ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(term)));
+  }, [duplicateGroups, search]);
+
   const requestedPage = Number(searchParams.get("page") ?? "1");
-  const totalPages = Math.max(1, Math.ceil(visibleMembers.length / 10));
+  const totalPages = Math.max(1, Math.ceil((filter === "duplicate" ? visibleDuplicateGroups.length : visibleMembers.length) / 10));
   const currentPage = Math.min(Math.max(Number.isInteger(requestedPage) ? requestedPage : 1, 1), totalPages);
   const paginatedMembers = visibleMembers.slice((currentPage - 1) * 10, currentPage * 10);
+  const paginatedDuplicateGroups = visibleDuplicateGroups.slice((currentPage - 1) * 10, currentPage * 10);
 
   const changePage = useCallback((page: number, replace = false) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -153,6 +189,28 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     params.delete("page");
     router.push(`${pathname}${params.size ? `?${params}` : ""}`, { scroll: false });
   };
+
+  const openDuplicateGroup = (groupId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("status", "duplicate");
+    params.set("group", groupId);
+    params.delete("page");
+    setExpandedGroups((current) => new Set(current).add(groupId));
+    router.push(`${pathname}?${params}`, { scroll: false });
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-duplicate-group-id="${CSS.escape(groupId)}"]`)?.scrollIntoView({ block: "start" });
+    });
+  };
+
+  useEffect(() => {
+    if (filter !== "duplicate") return;
+    const groupId = searchParams.get("group");
+    if (!groupId) return;
+    const timer = window.setTimeout(() => {
+      document.querySelector<HTMLElement>(`[data-duplicate-group-id="${CSS.escape(groupId)}"]`)?.scrollIntoView({ block: "start" });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [filter, searchParams]);
 
   async function submitMemberUpdate(
     member: AdminMember,
@@ -266,6 +324,149 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     window.dispatchEvent(new Event("admin-members-updated"));
   }
 
+  async function openMerge(groupId: string) {
+    dialogReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    setMergeLoading(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/members/merge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "preview", groupId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { preview?: MemberMergePreview; error?: string };
+      if (!response.ok || !data.preview) {
+        setNotice(data.error ?? "병합 정보를 불러오지 못했습니다.");
+        return;
+      }
+      setMergePreview(data.preview);
+      setMergeDraft({
+        representativeMemberId: data.preview.recommendedRepresentativeId,
+        ...data.preview.recommendedProfile,
+        confirmed: false,
+      });
+    } catch {
+      setNotice("병합 정보를 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.");
+    } finally {
+      setMergeLoading(false);
+    }
+  }
+
+  function openComparison(group: MemberDuplicateGroup) {
+    dialogReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    setCompareGroup(group);
+  }
+
+  const closeDialog = useCallback((kind: "merge" | "compare") => {
+    if (kind === "merge") {
+      setMergePreview(null);
+      setMergeDraft(null);
+    } else {
+      setCompareGroup(null);
+    }
+    window.requestAnimationFrame(() => dialogReturnFocusRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    const dialog = mergePreview ? mergeDialogRef.current : compareGroup ? compareDialogRef.current : null;
+    if (!dialog) return;
+    dialog.scrollTop = 0;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), select:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex='-1'])")];
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDialog(mergePreview ? "merge" : "compare");
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [closeDialog, compareGroup, mergePreview]);
+
+  async function executeMerge() {
+    if (!mergePreview || !mergeDraft || !mergeDraft.confirmed || mergePreview.blockedReasons.length) return;
+    setMergeLoading(true);
+    try {
+      const response = await fetch("/api/admin/members/merge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "merge",
+          groupId: mergePreview.groupId,
+          fingerprint: mergePreview.fingerprint,
+          representativeMemberId: mergeDraft.representativeMemberId,
+          profile: {
+            name: mergeDraft.name,
+            phone: mergeDraft.phone,
+            birthDate: mergeDraft.birthDate,
+            position: mergeDraft.position,
+          },
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setNotice(data.error ?? "계정을 병합하지 못했습니다. 최신 정보를 다시 확인해 주세요.");
+        setMergePreview(null);
+        setMergeDraft(null);
+        await loadMembers(true);
+        return;
+      }
+      setNotice(`${mergePreview.accounts.length}개 계정을 하나의 회원으로 병합했습니다. 기존 로그인 아이디는 모두 보존됩니다.`);
+      setMergePreview(null);
+      setMergeDraft(null);
+      await loadMembers(true);
+      window.dispatchEvent(new Event("admin-members-updated"));
+    } catch {
+      setNotice("계정을 병합하지 못했습니다. 네트워크 연결을 확인해 주세요.");
+    } finally {
+      setMergeLoading(false);
+    }
+  }
+
+  async function toggleAlias(member: AdminMember, username: string, enabled: boolean) {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/members/merge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "alias",
+          representativeMemberId: member.id,
+          username,
+          enabled,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setNotice(data.error ?? "로그인 아이디 상태를 변경하지 못했습니다.");
+        return;
+      }
+      setNotice(`${username} 로그인 아이디를 ${enabled ? "활성화" : "비활성화"}했습니다.`);
+      setEditing(null);
+      await loadMembers(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="admin-shell admin-members-shell">
       <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} canManageWebsite canManageArchive={canManageArchive} />
@@ -286,19 +487,20 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
           <header className="admin-members-header">
             <div>
               <h2>전체 회원</h2>
-              <span>총 {members.length}명{filter !== "all" || search ? ` · 표시 ${visibleMembers.length}명` : ""}</span>
+              <span>총 {members.length}명{filter !== "all" || search ? ` · 표시 ${filter === "duplicate" ? visibleDuplicateGroups.length : visibleMembers.length}${filter === "duplicate" ? "그룹" : "명"}` : ""}</span>
               <button
                 className="admin-duplicate-summary"
                 type="button"
                 aria-pressed={filter === "duplicate"}
                 onClick={() => changeFilter("duplicate")}
               >
-                중복 가입자 <strong>{duplicateCount}명</strong>
+                중복 가입자 <strong>{duplicateSummary.groupCount}명</strong>
+                <span>· 관련 계정 {duplicateSummary.accountCount}개 · 추가 계정 {duplicateSummary.additionalCount}개</span>
               </button>
             </div>
             <div className="admin-member-list-tools">
               <div className="admin-member-filters" role="group" aria-label="회원 상태 필터">
-                {([['all', '전체'], ['pending', '승인 대기'], ['approved', '승인'], ['suspended', '이용 중지'], ['duplicate', '중복 가입']] as const).map(([key, label]) => <button type="button" className={filter === key ? "is-active" : key === "duplicate" ? "is-duplicate-filter" : ""} aria-pressed={filter === key} onClick={() => changeFilter(key)} key={key}>{label}</button>)}
+                {([['all', '전체'], ['pending', '승인 대기'], ['approved', '승인'], ['suspended', '이용 중지'], ['duplicate', `중복 가입 ${duplicateSummary.groupCount}`]] as const).map(([key, label]) => <button type="button" className={filter === key ? "is-active" : key === "duplicate" ? "is-duplicate-filter" : ""} aria-pressed={filter === key} onClick={() => changeFilter(key)} key={key}>{label}</button>)}
               </div>
               <label>
               <span className="sr-only">회원 검색</span>
@@ -313,9 +515,66 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
           </header>
           {loading ? (
             <div className="admin-empty">회원 목록을 불러오고 있습니다.</div>
-          ) : visibleMembers.length === 0 ? (
+          ) : (filter === "duplicate" ? visibleDuplicateGroups.length : visibleMembers.length) === 0 ? (
             <div className="admin-empty">
               <strong>조건에 맞는 회원이 없습니다.</strong>
+            </div>
+          ) : filter === "duplicate" ? (
+            <div className="admin-duplicate-groups">
+              {paginatedDuplicateGroups.map((group) => {
+                const groupIndex = duplicateGroups.findIndex((item) => item.id === group.id) + 1;
+                const uniqueNames = [...new Set(group.accounts.map((account) => account.name.trim()))];
+                const expanded = expandedGroups.has(group.id) || searchParams.get("group") === group.id;
+                return (
+                  <section className="admin-duplicate-group" data-duplicate-group-id={group.id} key={group.id}>
+                    <header>
+                      <button
+                        type="button"
+                        aria-expanded={expanded}
+                        aria-controls={`duplicate-group-${groupIndex}`}
+                        onClick={() => setExpandedGroups((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                          return next;
+                        })}
+                      >
+                        <span>중복 {String(groupIndex).padStart(2, "0")}</span>
+                        <strong>{uniqueNames[0]}{uniqueNames.length > 1 ? ` 외 다른 이름 ${uniqueNames.length - 1}개` : ""}</strong>
+                        <small>관련 계정 {group.accounts.length}개 · 추가 계정 {group.accounts.length - 1}개</small>
+                        {group.differentNames && <b>이름 상이</b>}
+                        <i aria-hidden="true">{expanded ? "−" : "+"}</i>
+                      </button>
+                      <div>
+                        <button type="button" onClick={() => openComparison(group)}>정보 비교</button>
+                        <button className="admin-merge-open-button" type="button" onClick={() => void openMerge(group.id)}>계정 병합</button>
+                      </div>
+                    </header>
+                    {expanded && (
+                      <div className="admin-duplicate-group-accounts" id={`duplicate-group-${groupIndex}`}>
+                        {group.accounts.map((account) => (
+                          <article key={account.id}>
+                            <div className="admin-duplicate-account-head">
+                              <div><strong>{account.name}</strong><span>{account.username}</span></div>
+                              <div>
+                                <b>{account.isFirst ? "최초 가입" : "추가 가입"}</b>
+                                <span className={`admin-status member-${account.status}`}>{statusLabel[account.status as MemberStatus] ?? account.status}</span>
+                              </div>
+                            </div>
+                            <dl>
+                              <div><dt>연락처</dt><dd>{account.phone || "-"}</dd></div>
+                              <div><dt>생년월일</dt><dd>{account.birthDate || "-"}</dd></div>
+                              <div><dt>직분·소속</dt><dd>{account.position || "-"}</dd></div>
+                              <div><dt>가입일</dt><dd>{formatDate(account.createdAt)}</dd></div>
+                              <div><dt>최근 로그인</dt><dd>{formatDate(account.lastLoginAt ?? null)}</dd></div>
+                            </dl>
+                            <p>{duplicateReasonLabel(account.matchedFields)}</p>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div className="admin-table-wrap">
@@ -341,7 +600,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                             <button
                               className="admin-duplicate-badge"
                               type="button"
-                              onClick={() => setDuplicateDetails(member)}
+                              onClick={() => member.duplicateGroupId && openDuplicateGroup(member.duplicateGroupId)}
                               aria-label={`${member.name} 중복 가입 상세 보기`}
                             >
                               중복 가입
@@ -412,7 +671,29 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                     <strong>중복 가입 가능성</strong>
                     <span>{duplicateReasonLabel(editing.duplicateCheck.matchedFields)}</span>
                   </div>
-                  <button type="button" onClick={() => setDuplicateDetails(editing)}>일치 회원 확인</button>
+                  <button type="button" onClick={() => { if (editing.duplicateGroupId) { setEditing(null); openDuplicateGroup(editing.duplicateGroupId); } }}>중복 그룹 보기</button>
+                </section>
+              )}
+              {editing.loginAliases.length > 1 && (
+                <section className="admin-member-alias-panel">
+                  <header>
+                    <strong>로그인 아이디 {editing.loginAliases.length}개</strong>
+                    <span>어느 아이디로 로그인해도 같은 대표 회원으로 연결됩니다.</span>
+                  </header>
+                  <ul>
+                    {editing.loginAliases.map((alias) => (
+                      <li key={alias.username}>
+                        <span><strong>{alias.username}</strong>{alias.sourceMemberId === editing.id && <small>대표</small>}</span>
+                        <button
+                          type="button"
+                          disabled={saving || alias.sourceMemberId === editing.id}
+                          onClick={() => void toggleAlias(editing, alias.username, !alias.enabled)}
+                        >
+                          {alias.enabled ? "비활성화" : "활성화"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               )}
               <div className="admin-field-row">
@@ -470,16 +751,80 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
         </div>
       )}
 
-      {duplicateDetails?.duplicateCheck && (
-        <div className="admin-confirm-backdrop" role="dialog" aria-modal="true" aria-label="중복 가입 상세">
-          <section className="admin-duplicate-dialog">
-            <span>DUPLICATE REVIEW</span>
-            <h2>{duplicateDetails.name} 회원의 중복 가입 가능성</h2>
-            <p>자동 판정은 참고 정보입니다. 가족 공용 연락처나 동명이 생년월일일 수 있으므로 기존 회원을 직접 확인해 주세요.</p>
-            <DuplicateMatchList check={duplicateDetails.duplicateCheck} />
-            <div>
-              <button type="button" onClick={() => setDuplicateDetails(null)}>닫기</button>
+      {compareGroup && (
+        <div className="admin-confirm-backdrop" role="dialog" aria-modal="true" aria-label="중복 계정 정보 비교">
+          <section className="admin-duplicate-dialog admin-duplicate-compare-dialog" ref={compareDialogRef}>
+            <span>ACCOUNT COMPARISON</span>
+            <h2>중복 계정 정보 비교</h2>
+            <p>서로 다른 값은 ‘상이’로 표시합니다. 자동 판정은 참고 정보이며 최종 판단은 관리자가 합니다.</p>
+            <div className="admin-duplicate-compare-table" role="table" aria-label="중복 계정 비교표">
+              {compareGroup.accounts.map((account) => (
+                <article role="row" key={account.id}>
+                  <header><strong>{account.name}</strong><span>{account.username}</span></header>
+                  {([['name', '이름'], ['phone', '연락처'], ['birthDate', '생년월일'], ['position', '직분·소속']] as const).map(([field, label]) => (
+                    <div className={hasDifferentValues(compareGroup, field) ? "is-different" : ""} role="cell" key={field}>
+                      <span>{label}{hasDifferentValues(compareGroup, field) && <b>상이</b>}</span>
+                      <strong>{String(account[field] ?? "") || "-"}</strong>
+                    </div>
+                  ))}
+                  <div role="cell"><span>가입 구분</span><strong>{account.isFirst ? "최초 가입" : "추가 가입"}</strong></div>
+                  <div role="cell"><span>상태</span><strong>{statusLabel[account.status as MemberStatus] ?? account.status}</strong></div>
+                </article>
+              ))}
             </div>
+            <div><button type="button" onClick={() => closeDialog("compare")}>닫기</button></div>
+          </section>
+        </div>
+      )}
+
+      {mergePreview && mergeDraft && (
+        <div className="admin-confirm-backdrop admin-member-merge-backdrop" role="dialog" aria-modal="true" aria-label="회원 계정 병합 확인">
+          <section className="admin-member-merge-dialog" ref={mergeDialogRef}>
+            <header>
+              <div><span>SAFE ACCOUNT MERGE</span><h2>회원 계정 병합 확인</h2></div>
+              <button type="button" onClick={() => closeDialog("merge")} aria-label="병합 화면 닫기">×</button>
+            </header>
+            <p>원본 계정과 로그인 정보는 보존됩니다. 병합 즉시 기존 세션은 모두 종료되며 다시 로그인해야 합니다.</p>
+            {mergePreview.blockedReasons.length > 0 && (
+              <div className="admin-merge-blocked" role="alert">
+                <strong>일반 병합을 진행할 수 없습니다.</strong>
+                {mergePreview.blockedReasons.map((reason) => <span key={reason}>{reason}</span>)}
+              </div>
+            )}
+            <section>
+              <h3>병합 대상 계정 {mergePreview.accounts.length}개</h3>
+              <div className="admin-merge-account-list">
+                {mergePreview.accounts.map((account) => (
+                  <article key={account.id}>
+                    <div><strong>{account.name}</strong><span>{account.username}</span></div>
+                    <p>{duplicateReasonLabel(account.matchedFields)} · {statusLabel[account.status as MemberStatus] ?? account.status}</p>
+                    <small>사업장 신청 {account.relatedRecords.businessApplications}건 · 아카이브 권한 {account.relatedRecords.archiveAccess}건</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+            <section className="admin-merge-choices">
+              <h3>병합 후 대표 정보</h3>
+              <label><span>내부 대표 회원</span><select value={mergeDraft.representativeMemberId} onChange={(event) => setMergeDraft({ ...mergeDraft, representativeMemberId: event.target.value })}>{mergePreview.accounts.filter((account) => !mergePreview.accounts.some((item) => item.status === "approved") || account.status === "approved").map((account) => <option value={account.id} key={account.id}>{account.name} · {account.username}{account.id === mergePreview.recommendedRepresentativeId ? " (추천)" : ""}</option>)}</select></label>
+              {([['name', '공개 이름'], ['phone', '연락처'], ['birthDate', '생년월일'], ['position', '직분·소속']] as const).map(([field, label]) => (
+                <label key={field}><span>{label}</span><select value={mergeDraft[field]} onChange={(event) => setMergeDraft({ ...mergeDraft, [field]: event.target.value })}>{[...new Set(mergePreview.accounts.map((account) => String(account[field] ?? "").trim()))].map((value) => <option value={value} key={`${field}-${value}`}>{value || "미입력"}</option>)}</select></label>
+              ))}
+            </section>
+            <section className="admin-merge-result-summary">
+              <h3>병합 전후</h3>
+              <dl>
+                <div><dt>로그인 아이디</dt><dd>{mergePreview.accounts.length}개 모두 유지</dd></div>
+                <div><dt>비밀번호</dt><dd>각 아이디의 기존 비밀번호 유지, 다음 변경 시 전체 통일</dd></div>
+                <div><dt>회원 상태·권한</dt><dd>선택한 대표 회원 기준 · 권한 자동 합산 없음</dd></div>
+                <div><dt>관련 기록</dt><dd>사업장 신청 {mergePreview.recordSummary.businessApplications}건 추적 · 기존 아카이브 권한 원본 보존</dd></div>
+                <div><dt>세션</dt><dd>모든 기존 로그인 세션 즉시 폐기</dd></div>
+              </dl>
+            </section>
+            <label className="admin-merge-confirm-check"><input type="checkbox" checked={mergeDraft.confirmed} onChange={(event) => setMergeDraft({ ...mergeDraft, confirmed: event.target.checked })} /><span>대표 정보와 로그인 아이디, 상태·권한 유지 기준을 확인했습니다.</span></label>
+            <footer>
+              <button type="button" disabled={mergeLoading} onClick={() => closeDialog("merge")}>취소</button>
+              <button className="admin-confirm-merge-button" type="button" disabled={mergeLoading || !mergeDraft.confirmed || mergePreview.blockedReasons.length > 0} onClick={() => void executeMerge()}>{mergeLoading ? "병합 처리 중…" : "확인 후 계정 병합"}</button>
+            </footer>
           </section>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -122,16 +122,26 @@ try {
     .filter((index) => productionIndexes.has(index.name))
     .filter((index) => JSON.stringify(index) !== JSON.stringify(productionIndexes.get(index.name)))
     .map((index) => index.name);
-  const migrationSql = await readFile(
-    path.resolve("migrations/netlify/0001_runtime_schema_baseline.sql"),
-    "utf8",
-  );
+  const migrationDirectory = path.resolve("migrations/netlify");
+  const migrationSql = (await Promise.all(
+    (await readdir(migrationDirectory))
+      .filter((name) => /^\d+.*\.sql$/.test(name))
+      .sort()
+      .map((name) => readFile(path.join(migrationDirectory, name), "utf8")),
+  )).join("\n");
   const destructiveStatements = migrationSql
     .split(/;\s*(?:\r?\n|$)/)
     .map((statement) => statement.trim())
     .filter((statement) => /^(?:ALTER|DROP|DELETE|UPDATE|INSERT|REPLACE)\b/i.test(statement))
     .map((statement) => statement.match(/^\w+/)?.[0]?.toUpperCase());
-  const allowedNewTables = new Set(["admin_audit_logs", "schema_migrations"]);
+  const allowedNewTables = new Set([
+    "admin_audit_logs",
+    "member_merge_groups",
+    "member_merge_accounts",
+    "member_login_aliases",
+    "member_auth_state",
+    "schema_migrations",
+  ]);
   const nonAdditiveMissingTables = missingTables.filter((name) => !allowedNewTables.has(name));
   const incompatibleChangedTables = changedTables.filter((name) => {
     const detail = changedTableDetails[name];

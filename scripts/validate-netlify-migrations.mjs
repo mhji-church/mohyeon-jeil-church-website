@@ -16,7 +16,7 @@ async function withTemporaryDatabase(name, setup) {
       "SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name",
     );
     const names = new Set(tables.rows.map((row) => String(row.name)));
-    for (const required of ["content_posts", "members", "archive_videos", "admin_audit_logs", "schema_migrations"]) {
+    for (const required of ["content_posts", "members", "archive_videos", "admin_audit_logs", "member_merge_groups", "member_merge_accounts", "member_login_aliases", "member_auth_state", "schema_migrations"]) {
       if (!names.has(required)) throw new Error(`${name}: missing table ${required}`);
     }
   } finally {

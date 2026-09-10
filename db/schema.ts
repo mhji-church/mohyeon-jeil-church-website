@@ -43,6 +43,48 @@ export const memberLoginAttempts = sqliteTable("member_login_attempts", {
   updatedAt: integer("updated_at").notNull().default(0),
 });
 
+export const memberMergeGroups = sqliteTable("member_merge_groups", {
+  id: text("id").primaryKey(),
+  representativeMemberId: text("representative_member_id").notNull(),
+  status: text("status").notNull().default("active"),
+  resolvedProfileJson: text("resolved_profile_json").notNull().default("{}"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  revertedBy: text("reverted_by"),
+  revertedAt: text("reverted_at"),
+});
+
+export const memberMergeAccounts = sqliteTable(
+  "member_merge_accounts",
+  {
+    mergeId: text("merge_id").notNull(),
+    memberId: text("member_id").notNull().unique(),
+    isRepresentative: integer("is_representative", { mode: "boolean" }).notNull().default(false),
+    originalMemberJson: text("original_member_json").notNull(),
+    originalAccessJson: text("original_access_json").notNull().default("[]"),
+    relatedRecordCountsJson: text("related_record_counts_json").notNull().default("{}"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [primaryKey({ columns: [table.mergeId, table.memberId] })],
+);
+
+export const memberLoginAliases = sqliteTable("member_login_aliases", {
+  username: text("username").primaryKey(),
+  sourceMemberId: text("source_member_id").notNull().unique(),
+  representativeMemberId: text("representative_member_id").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const memberAuthState = sqliteTable("member_auth_state", {
+  memberId: text("member_id").primaryKey(),
+  sessionVersion: integer("session_version").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const businessApplications = sqliteTable("business_applications", {
   id: text("id").primaryKey(),
   memberId: text("member_id").notNull(),

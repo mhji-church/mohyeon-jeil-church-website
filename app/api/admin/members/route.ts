@@ -29,10 +29,10 @@ export async function GET(request: Request) {
     if (new URL(request.url).searchParams.get("summary") === "pending") {
       return Response.json({ pendingCount: await countPendingMembers() });
     }
-    const members = await listAdminMembers();
+    const collection = await listAdminMembers();
     return Response.json({
-      members,
-      duplicateCount: members.filter((member) => member.duplicateCheck).length,
+      ...collection,
+      duplicateCount: collection.duplicateSummary.groupCount,
     });
   } catch (error) {
     return apiError("admin.members.list", error, "회원 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", 503);

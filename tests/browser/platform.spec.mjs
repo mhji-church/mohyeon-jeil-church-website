@@ -740,13 +740,25 @@ test("admin member duplicates stay clear and require a fresh server confirmation
       matchedFields: ["phone", "birthDate"],
     }],
   };
+  const reverseDuplicateCheck = {
+    matchedFields: ["phone", "birthDate"],
+    fingerprint: duplicateCheck.fingerprint,
+    matches: [{
+      id: "duplicate-pending",
+      name: "중복 의심회원",
+      username: "duplicate-user",
+      status: "pending",
+      createdAt: "2026-09-10T00:00:00.000Z",
+      matchedFields: ["phone", "birthDate"],
+    }],
+  };
   let approved = false;
   const members = Array.from({ length: 12 }, (_, index) => ({
-    id: index === 0 ? "duplicate-pending" : `unique-member-${index}`,
-    name: index === 0 ? "중복 의심회원" : `일반 가상회원 ${index}`,
-    username: index === 0 ? "duplicate-user" : `unique-user-${index}`,
-    phone: index === 0 ? "010-1234-5678" : `010-9000-${String(1000 + index)}`,
-    birthDate: index === 0 ? "1980-05-05" : "",
+    id: index === 0 ? "duplicate-pending" : index === 1 ? "existing-member" : `unique-member-${index}`,
+    name: index === 0 ? "중복 의심회원" : index === 1 ? "기존 가상회원" : `일반 가상회원 ${index}`,
+    username: index === 0 ? "duplicate-user" : index === 1 ? "existing-user" : `unique-user-${index}`,
+    phone: index <= 1 ? "010-1234-5678" : `010-9000-${String(1000 + index)}`,
+    birthDate: index <= 1 ? "1980-05-05" : "",
     position: "집사",
     status: index === 0 && !approved ? "pending" : "approved",
     forcePasswordChange: false,
@@ -755,16 +767,43 @@ test("admin member duplicates stay clear and require a fresh server confirmation
     lastLoginAt: null,
     createdAt: `2026-09-${String(10 - Math.min(index, 9)).padStart(2, "0")}T00:00:00.000Z`,
     updatedAt: "2026-09-10T00:00:00.000Z",
-    duplicateCheck: index === 0 ? duplicateCheck : null,
+    duplicateCheck: index === 0 ? duplicateCheck : index === 1 ? reverseDuplicateCheck : null,
+    duplicateGroupId: index <= 1 ? "duplicate:duplicate-pending:existing-member" : null,
+    loginAliases: [{ username: index === 0 ? "duplicate-user" : index === 1 ? "existing-user" : `unique-user-${index}`, sourceMemberId: index === 0 ? "duplicate-pending" : index === 1 ? "existing-member" : `unique-member-${index}`, enabled: true, createdAt: "2026-09-10T00:00:00.000Z" }],
   }));
+  const duplicateGroup = {
+    id: "duplicate:duplicate-pending:existing-member",
+    fingerprint: duplicateCheck.fingerprint,
+    matchedFields: ["phone", "birthDate"],
+    differentNames: true,
+    hasPending: true,
+    latestAdditionalAt: "2026-09-10T00:00:00.000Z",
+    accounts: [
+      { ...members[1], matchedFields: ["phone", "birthDate"], isFirst: true },
+      { ...members[0], matchedFields: ["phone", "birthDate"], isFirst: false },
+    ],
+  };
+  const mergePreview = {
+    groupId: duplicateGroup.id,
+    fingerprint: duplicateGroup.fingerprint,
+    accounts: duplicateGroup.accounts.map((account) => ({ ...account, access: [], relatedRecords: { businessApplications: 0, archiveAccess: 0 }, aliasEnabled: true })),
+    recommendedRepresentativeId: "existing-member",
+    recommendedProfile: { name: "중복 의심회원", phone: "010-1234-5678", birthDate: "1980-05-05", position: "집사" },
+    resolvedStatus: "approved",
+    blockedReasons: [],
+    recordSummary: { businessApplications: 0, archiveAccess: 0 },
+  };
   await page.route("**/api/admin/members**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname.endsWith("/merge") && request.method() === "POST") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ preview: mergePreview }) });
+    }
     if (request.method() === "GET") {
       if (url.searchParams.get("summary") === "pending") {
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ pendingCount: approved ? 0 : 1 }) });
       }
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members, duplicateCount: 1 }) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ members, duplicateGroups: [duplicateGroup], duplicateSummary: { groupCount: 1, accountCount: 2, additionalCount: 1 } }) });
     }
     if (request.method() === "PATCH") {
       const payload = request.postDataJSON();
@@ -790,21 +829,30 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   await page.goto("/admin/members");
   await expect(page).toHaveURL(/\/admin\/members$/);
   await expect(page.getByRole("button", { name: /중복 가입자 1명/ })).toBeVisible();
-  const duplicateBadge = page.locator(".admin-duplicate-badge");
+  const duplicateBadge = page.locator(".admin-duplicate-badge").first();
   await expect(duplicateBadge).toHaveText("중복 가입");
   await page.screenshot({ path: "test-results/admin-members-duplicates-list-desktop-1440.png" });
   await duplicateBadge.click();
-  const detailDialog = page.getByRole("dialog", { name: "중복 가입 상세" });
+  await expect(page).toHaveURL(/status=duplicate/);
+  const groupPanel = page.locator(".admin-duplicate-group");
+  await expect(groupPanel).toContainText("관련 계정 2개 · 추가 계정 1개");
+  await expect(groupPanel).toContainText("이름 상이");
+  await expect(groupPanel).toContainText("최초 가입");
+  await expect(groupPanel).toContainText("추가 가입");
+  await groupPanel.getByRole("button", { name: "정보 비교" }).click();
+  const detailDialog = page.getByRole("dialog", { name: "중복 계정 정보 비교" });
   await expect(detailDialog).toContainText("기존 가상회원");
-  await expect(detailDialog).toContainText("existing-user");
-  await expect(detailDialog).toContainText("승인");
-  await expect(detailDialog).toContainText("2026.08.20");
-  await expect(detailDialog).toContainText("휴대폰·생년월일 일치");
+  await expect(detailDialog).toContainText("상이");
   await page.screenshot({ path: "test-results/admin-members-duplicates-desktop-1440.png" });
   await detailDialog.getByRole("button", { name: "닫기" }).click();
+  await groupPanel.getByRole("button", { name: "계정 병합" }).click();
+  const mergeDialog = page.getByRole("dialog", { name: "회원 계정 병합 확인" });
+  await expect(mergeDialog).toContainText("2개 모두 유지");
+  await expect(mergeDialog).toContainText("선택한 대표 회원 기준");
+  await mergeDialog.getByRole("button", { name: "병합 화면 닫기" }).click();
 
-  await page.getByRole("button", { name: "중복 가입", exact: true }).click();
-  await expect(page.locator(".admin-members-table tbody tr")).toHaveCount(1);
+  await page.getByRole("button", { name: "전체", exact: true }).click();
+  await expect(page.locator(".admin-members-table tbody tr")).toHaveCount(10);
   await page.locator(".admin-members-table tbody tr").getByRole("button", { name: "승인", exact: true }).click();
   const approvalDialog = page.getByRole("alertdialog", { name: "중복 가입 승인 확인" });
   await expect(approvalDialog).toContainText("기존 가상회원");
@@ -817,13 +865,21 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   members[0].status = "pending";
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(page.locator(".admin-duplicate-badge")).toBeVisible();
-  await page.locator(".admin-duplicate-badge").scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: /중복 가입 1/ }).click();
+  await expect(page.locator(".admin-duplicate-group")).toBeVisible();
   await page.screenshot({ path: "test-results/admin-members-duplicates-list-mobile-390.png" });
-  await page.locator(".admin-duplicate-badge").click();
-  await expect(page.getByRole("dialog", { name: "중복 가입 상세" })).toBeVisible();
+  await page.locator(".admin-duplicate-group").getByRole("button", { name: "계정 병합" }).click();
+  await expect(page.getByRole("dialog", { name: "회원 계정 병합 확인" })).toBeVisible();
+  await expect.poll(() => page.locator(".admin-member-merge-dialog").evaluate((dialog) => dialog.scrollTop)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.screenshot({ path: "test-results/admin-members-duplicates-mobile-390.png" });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect(page.getByRole("button", { name: "확인 후 계정 병합" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "병합 화면 닫기" }).click();
+  await page.setViewportSize({ width: 820, height: 900 });
+  await expect(page.locator(".admin-duplicate-group")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
 

@@ -1,8 +1,18 @@
 import { normalizeMobilePhone } from "./phone";
 import {
+  buildMemberDuplicateGroups,
   findMemberDuplicateCheck,
+  summarizeMemberDuplicateGroups,
   type MemberDuplicateCheck,
+  type MemberDuplicateGroup,
+  type MemberDuplicateSummary,
 } from "./member-duplicates";
+import {
+  getMemberLoginAlias,
+  getMergedMemberIds,
+  listMemberLoginAliases,
+  resolveRepresentativeMemberId,
+} from "./member-merges";
 import { ensureNetlifySchema, getNetlifyDb } from "./netlify-db";
 import { adminAuditStatement } from "./admin-audit";
 import {
@@ -40,7 +50,17 @@ export type MemberSignupInput = {
   position: string;
 };
 
-export type AdminMember = Member & { duplicateCheck: MemberDuplicateCheck | null };
+export type AdminMember = Member & {
+  duplicateCheck: MemberDuplicateCheck | null;
+  duplicateGroupId: string | null;
+  loginAliases: Array<{ username: string; sourceMemberId: string; enabled: boolean; createdAt: string }>;
+};
+
+export type AdminMemberCollection = {
+  members: AdminMember[];
+  duplicateGroups: MemberDuplicateGroup[];
+  duplicateSummary: MemberDuplicateSummary;
+};
 
 const PASSWORD_HASH_ITERATIONS = 100_000;
 const LOGIN_FAILURE_LIMIT = 5;
@@ -181,9 +201,22 @@ export async function createMember(input: MemberSignupInput) {
 
 export async function authenticateMember(username: string, password: string) {
   await ensureMemberStore();
+  const normalizedUsername = normalizeUsername(username);
+  const alias = await getMemberLoginAlias(normalizedUsername);
+  if (alias) {
+    if (Number(alias.enabled) !== 1) return null;
+    const valid = await verifyPassword(password, String(alias.password_hash), String(alias.password_salt));
+    if (!valid) return null;
+    const representativeRow = await getD1()
+      .prepare("SELECT * FROM members WHERE id = ?")
+      .bind(String(alias.representative_member_id))
+      .first<Record<string, unknown>>();
+    if (!representativeRow) return null;
+    return { member: mapMember(representativeRow), passwordHash: String(alias.password_hash) };
+  }
   const row = await getD1()
     .prepare("SELECT * FROM members WHERE username = ?")
-    .bind(normalizeUsername(username))
+    .bind(normalizedUsername)
     .first<Record<string, unknown>>();
   if (!row) return null;
   const valid = await verifyPassword(
@@ -199,7 +232,19 @@ export async function authenticateMember(username: string, password: string) {
 }
 
 export async function createMemberLoginRateKey(username: string, ipAddress: string) {
-  const material = `${normalizeUsername(username)}\n${ipAddress.trim() || "unknown"}`;
+  await ensureMemberStore();
+  const normalizedUsername = normalizeUsername(username);
+  const alias = await getMemberLoginAlias(normalizedUsername);
+  const memberRow = alias ? null : await getD1()
+    .prepare("SELECT id FROM members WHERE username = ?")
+    .bind(normalizedUsername)
+    .first<{ id: string }>();
+  const identity = alias?.representative_member_id
+    ? `member:${String(alias.representative_member_id)}`
+    : memberRow?.id
+      ? `member:${await resolveRepresentativeMemberId(String(memberRow.id))}`
+      : `login:${normalizedUsername}`;
+  const material = `${identity}\n${ipAddress.trim() || "unknown"}`;
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(material),
@@ -268,19 +313,21 @@ export async function clearMemberLoginFailures(rateKey: string) {
 
 export async function recordMemberLogin(id: string) {
   await ensureMemberStore();
+  const representativeId = await resolveRepresentativeMemberId(id);
   await getD1()
     .prepare(
       "UPDATE members SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     )
-    .bind(id)
+    .bind(representativeId)
     .run();
 }
 
 export async function getMember(id: string) {
   await ensureMemberStore();
+  const representativeId = await resolveRepresentativeMemberId(id);
   const row = await getD1()
     .prepare("SELECT * FROM members WHERE id = ?")
-    .bind(id)
+    .bind(representativeId)
     .first<Record<string, unknown>>();
   return row ? mapMember(row) : null;
 }
@@ -289,7 +336,14 @@ export async function listMembers() {
   await ensureMemberStore();
   const result = await getD1()
     .prepare(
-      `SELECT * FROM members
+      `SELECT members.* FROM members
+       WHERE NOT EXISTS (
+         SELECT 1 FROM member_merge_accounts account
+         JOIN member_merge_groups merge_group ON merge_group.id = account.merge_id
+         WHERE account.member_id = members.id
+           AND merge_group.status = 'active'
+           AND account.is_representative = 0
+       )
        ORDER BY created_at DESC`,
     )
     .all<Record<string, unknown>>();
@@ -299,7 +353,13 @@ export async function listMembers() {
 export async function countPendingMembers() {
   await ensureMemberStore();
   const row = await getD1()
-    .prepare("SELECT COUNT(*) AS count FROM members WHERE status = 'pending'")
+    .prepare(`SELECT COUNT(*) AS count FROM members
+      WHERE status = 'pending' AND NOT EXISTS (
+        SELECT 1 FROM member_merge_accounts account
+        JOIN member_merge_groups merge_group ON merge_group.id = account.merge_id
+        WHERE account.member_id = members.id
+          AND merge_group.status = 'active' AND account.is_representative = 0
+      )`)
     .first<{ count: number | string }>();
   return Number(row?.count ?? 0);
 }
@@ -307,7 +367,13 @@ export async function countPendingMembers() {
 export async function countApprovedMembers() {
   await ensureMemberStore();
   const row = await getD1()
-    .prepare("SELECT COUNT(*) AS count FROM members WHERE status = 'approved'")
+    .prepare(`SELECT COUNT(*) AS count FROM members
+      WHERE status = 'approved' AND NOT EXISTS (
+        SELECT 1 FROM member_merge_accounts account
+        JOIN member_merge_groups merge_group ON merge_group.id = account.merge_id
+        WHERE account.member_id = members.id
+          AND merge_group.status = 'active' AND account.is_representative = 0
+      )`)
     .first<{ count: number | string }>();
   return Number(row?.count ?? 0);
 }
@@ -319,7 +385,13 @@ export async function getAdminMemberSummary() {
       `SELECT
          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
          SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_count
-       FROM members`,
+       FROM members
+       WHERE NOT EXISTS (
+         SELECT 1 FROM member_merge_accounts account
+         JOIN member_merge_groups merge_group ON merge_group.id = account.merge_id
+         WHERE account.member_id = members.id
+           AND merge_group.status = 'active' AND account.is_representative = 0
+       )`,
     )
     .first<{ pending_count: number | string | null; approved_count: number | string | null }>();
   return {
@@ -334,7 +406,8 @@ export async function updateMember(
   adminUsername: string,
 ) {
   await ensureMemberStore();
-  const current = await getMember(id);
+  const representativeId = await resolveRepresentativeMemberId(id);
+  const current = await getMember(representativeId);
   if (!current) throw new Error("회원을 찾을 수 없습니다.");
   const status = input.status ?? current.status;
   const phone = normalizeMobilePhone(input.phone ?? current.phone);
@@ -365,7 +438,7 @@ export async function updateMember(
       status,
       approvedAt,
       approvedBy,
-      id,
+      representativeId,
     ),
     adminAuditStatement({
       actorId: adminUsername,
@@ -382,7 +455,8 @@ export async function updateMemberProfile(
   input: Pick<Member, "name" | "phone" | "birthDate" | "position">,
 ) {
   await ensureMemberStore();
-  const current = await getMember(id);
+  const representativeId = await resolveRepresentativeMemberId(id);
+  const current = await getMember(representativeId);
   if (!current) throw new Error("회원 정보를 찾을 수 없습니다.");
 
   const name = input.name.trim();
@@ -409,31 +483,46 @@ export async function updateMemberProfile(
        name = ?, phone = ?, birth_date = ?, position = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
-    .bind(name, phone, birthDate, position, id)
+    .bind(name, phone, birthDate, position, representativeId)
     .run();
 }
 
 export async function resetMemberPassword(id: string, adminUsername?: string) {
   await ensureMemberStore();
-  const member = await getMember(id);
+  const representativeId = await resolveRepresentativeMemberId(id);
+  const member = await getMember(representativeId);
   if (!member) throw new Error("회원을 찾을 수 없습니다.");
   const temporaryPassword = createTemporaryPassword();
   const { hash, salt } = await hashPassword(temporaryPassword);
   const db = getD1();
-  const statement = db.prepare(
+  const memberIds = await getMergedMemberIds(representativeId);
+  const statements = [db.prepare(
       `UPDATE members SET password_hash = ?, password_salt = ?,
-       force_password_change = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    ).bind(hash, salt, id);
+       force_password_change = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id IN (${memberIds.map(() => "?").join(",")})`,
+    ).bind(hash, salt, ...memberIds),
+    db.prepare(
+      `UPDATE member_login_aliases SET password_hash = ?, password_salt = ?,
+       updated_at = CURRENT_TIMESTAMP WHERE representative_member_id = ?`,
+    ).bind(hash, salt, representativeId),
+    db.prepare(
+      `INSERT INTO member_auth_state (member_id, session_version, updated_at)
+       VALUES (?, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(member_id) DO UPDATE SET
+         session_version = member_auth_state.session_version + 1,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(representativeId),
+  ];
   if (adminUsername) {
-    await db.batch([statement, adminAuditStatement({
+    statements.push(adminAuditStatement({
       actorId: adminUsername,
       action: "member.password_reset",
       targetType: "member",
-      targetId: id,
-    })]);
-  } else {
-    await statement.run();
+      targetId: representativeId,
+      metadata: { aliasCount: memberIds.length },
+    }));
   }
+  await db.batch(statements);
   return temporaryPassword;
 }
 
@@ -443,37 +532,103 @@ export async function changeMemberPassword(id: string, password: string) {
   }
   await ensureMemberStore();
   const { hash, salt } = await hashPassword(password);
-  await getD1()
-    .prepare(
+  const representativeId = await resolveRepresentativeMemberId(id);
+  const memberIds = await getMergedMemberIds(representativeId);
+  const db = getD1();
+  await db.batch([
+    db.prepare(
       `UPDATE members SET password_hash = ?, password_salt = ?,
-       force_password_change = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+       force_password_change = 0, updated_at = CURRENT_TIMESTAMP
+       WHERE id IN (${memberIds.map(() => "?").join(",")})`,
     )
-    .bind(hash, salt, id)
-    .run();
+    .bind(hash, salt, ...memberIds),
+    db.prepare(
+      `UPDATE member_login_aliases SET password_hash = ?, password_salt = ?,
+       updated_at = CURRENT_TIMESTAMP WHERE representative_member_id = ?`,
+    ).bind(hash, salt, representativeId),
+    db.prepare(
+      `INSERT INTO member_auth_state (member_id, session_version, updated_at)
+       VALUES (?, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(member_id) DO UPDATE SET
+         session_version = member_auth_state.session_version + 1,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(representativeId),
+    adminAuditStatement({
+      actorId: representativeId,
+      action: "member.password_change",
+      targetType: "member",
+      targetId: representativeId,
+      metadata: { aliasCount: memberIds.length },
+    }),
+  ]);
+}
+
+export async function verifyMemberPasswordForRepresentative(memberId: string, password: string) {
+  await ensureMemberStore();
+  const representativeId = await resolveRepresentativeMemberId(memberId);
+  const aliases = await getD1().prepare(
+    `SELECT password_hash, password_salt FROM member_login_aliases
+     WHERE representative_member_id = ? AND enabled = 1`,
+  ).bind(representativeId).all<{ password_hash: string; password_salt: string }>();
+  if (aliases.results.length) {
+    for (const alias of aliases.results) {
+      if (await verifyPassword(password, String(alias.password_hash), String(alias.password_salt))) return true;
+    }
+    return false;
+  }
+  const member = await getD1().prepare(
+    "SELECT password_hash, password_salt FROM members WHERE id = ?",
+  ).bind(representativeId).first<{ password_hash: string; password_salt: string }>();
+  return member
+    ? verifyPassword(password, String(member.password_hash), String(member.password_salt))
+    : false;
 }
 
 export async function deleteMember(id: string, adminUsername?: string) {
   await ensureMemberStore();
+  const representativeId = await resolveRepresentativeMemberId(id);
+  if ((await getMergedMemberIds(representativeId)).length > 1) {
+    throw new Error("병합된 회원은 원본 보존을 위해 삭제할 수 없습니다.");
+  }
   const db = getD1();
   const statements = [
-    db.prepare("DELETE FROM member_app_access WHERE member_id = ?").bind(id),
-    db.prepare("DELETE FROM members WHERE id = ?").bind(id),
+    db.prepare("DELETE FROM member_app_access WHERE member_id = ?").bind(representativeId),
+    db.prepare("DELETE FROM members WHERE id = ?").bind(representativeId),
   ];
   if (adminUsername) statements.push(adminAuditStatement({
     actorId: adminUsername,
     action: "member.delete",
     targetType: "member",
-    targetId: id,
+    targetId: representativeId,
   }));
   await db.batch(statements);
 }
 
-export async function listAdminMembers() {
+export async function listAdminMembers(): Promise<AdminMemberCollection> {
   const members = await listMembers();
-  return members.map((member): AdminMember => ({
-    ...member,
-    duplicateCheck: findMemberDuplicateCheck(member, members),
+  const duplicateGroups = buildMemberDuplicateGroups(members);
+  const groupByMemberId = new Map(
+    duplicateGroups.flatMap((group) => group.accounts.map((account) => [account.id, group] as const)),
+  );
+  const adminMembers = await Promise.all(members.map(async (member): Promise<AdminMember> => {
+    const aliases = await listMemberLoginAliases(member.id);
+    return {
+      ...member,
+      duplicateCheck: findMemberDuplicateCheck(member, members),
+      duplicateGroupId: groupByMemberId.get(member.id)?.id ?? null,
+      loginAliases: aliases.length ? aliases : [{
+        username: member.username,
+        sourceMemberId: member.id,
+        enabled: member.status !== "suspended",
+        createdAt: member.createdAt,
+      }],
+    };
   }));
+  return {
+    members: adminMembers,
+    duplicateGroups,
+    duplicateSummary: summarizeMemberDuplicateGroups(duplicateGroups),
+  };
 }
 
 export async function getMemberDuplicateCheck(

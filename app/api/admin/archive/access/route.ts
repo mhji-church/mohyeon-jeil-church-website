@@ -21,6 +21,12 @@ export async function GET() {
       FROM members
       LEFT JOIN member_app_access archive_access ON archive_access.member_id = members.id AND archive_access.app_code = ?
       LEFT JOIN member_app_access song_access ON song_access.member_id = members.id AND song_access.app_code = ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM member_merge_accounts account
+        JOIN member_merge_groups merge_group ON merge_group.id = account.merge_id
+        WHERE account.member_id = members.id
+          AND merge_group.status = 'active' AND account.is_representative = 0
+      )
       ORDER BY members.created_at DESC`).bind(ARCHIVE_APP_CODE, ARCHIVE_SONG_STATS_APP_CODE).all<Record<string, unknown>>();
     return Response.json({ members: result.results.map((row) => ({
       id: String(row.id),

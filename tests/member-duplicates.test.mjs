@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildMemberDuplicateGroups,
   findMemberDuplicateCheck,
   normalizeDuplicateBirthDate,
   normalizeDuplicatePhone,
+  summarizeMemberDuplicateGroups,
 } from "../lib/member-duplicates.ts";
 
 function member(id, overrides = {}) {
@@ -66,4 +68,27 @@ test("duplicate flags recalculate when member information changes", () => {
 
   const restored = { ...changed, phone: "010-9999-8888" };
   assert.equal(findMemberDuplicateCheck(restored, [existing, restored]), null);
+});
+
+test("connected duplicate groups count people, related accounts, and additional accounts separately", () => {
+  const members = [
+    member("1", { name: "가상사람1", phone: "010-1111-1111", birthDate: "1970-01-01" }),
+    member("2", { name: "가상사람1", phone: "+82 10 1111 1111", birthDate: "1970-02-02", status: "pending" }),
+    member("3", { name: "가상사람2", phone: "010-2222-2201", birthDate: "1980-03-03" }),
+    member("4", { name: "가상사람2", phone: "010-2222-2202", birthDate: "1980-03-03" }),
+    member("5", { name: "가상이름A", phone: "010-3333-3333", birthDate: "1990-05-05" }),
+    member("6", { name: "가상이름B", phone: "010-3333-3333", birthDate: "1991-06-06" }),
+    member("7", { name: "가상이름C", phone: "010-7777-7777", birthDate: "1991-06-06" }),
+  ];
+  const groups = buildMemberDuplicateGroups(members);
+  assert.deepEqual(summarizeMemberDuplicateGroups(groups), {
+    groupCount: 3,
+    accountCount: 7,
+    additionalCount: 4,
+  });
+  const threeAccountGroup = groups.find((group) => group.accounts.length === 3);
+  assert.ok(threeAccountGroup);
+  assert.equal(threeAccountGroup.differentNames, true);
+  assert.deepEqual(new Set(threeAccountGroup.accounts.map((account) => account.id)), new Set(["5", "6", "7"]));
+  assert.equal(new Set(groups.flatMap((group) => group.accounts.map((account) => account.id))).size, 7);
 });

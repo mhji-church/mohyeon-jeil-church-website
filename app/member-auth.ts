@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMember } from "../lib/members";
+import { getMemberSessionVersion } from "../lib/member-merges";
 
 const COOKIE_NAME = "mhji_member_session";
 const SESSION_SECONDS = 14 * 24 * 60 * 60;
@@ -18,8 +19,9 @@ function sessionSecret() {
 }
 
 export async function createMemberSessionCookie(memberId: string) {
+  const authState = await getMemberSessionVersion(memberId);
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
-  const payload = `${memberId}.${expiresAt}`;
+  const payload = `${authState.representativeId}.${authState.version}.${expiresAt}`;
   const signature = await sign(payload);
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, `${payload}.${signature}`, {
@@ -55,16 +57,24 @@ export async function getMemberSessionFromToken(
   if (!secret) return null;
   if (!token) return null;
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [memberId, expiresAtValue, suppliedSignature] = parts;
-  const payload = `${memberId}.${expiresAtValue}`;
+  if (parts.length !== 3 && parts.length !== 4) return null;
+  const isLegacy = parts.length === 3;
+  const [memberId, versionValue, expiresAtValue, suppliedSignature] = isLegacy
+    ? [parts[0], "0", parts[1], parts[2]]
+    : parts;
+  const payload = isLegacy
+    ? `${memberId}.${expiresAtValue}`
+    : `${memberId}.${versionValue}.${expiresAtValue}`;
   const expectedSignature = await sign(payload);
   if (!constantTimeEqual(suppliedSignature, expectedSignature)) return null;
   const expiresAt = Number(expiresAtValue);
   if (!Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
     return null;
   }
-  const member = await getMember(memberId);
+  const authState = await getMemberSessionVersion(memberId);
+  if (isLegacy && authState.managed) return null;
+  if (!isLegacy && Number(versionValue) !== authState.version) return null;
+  const member = await getMember(authState.representativeId);
   if (!member || member.status === "suspended") return null;
   return member;
 }

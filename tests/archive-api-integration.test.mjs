@@ -31,6 +31,7 @@ let serverStderr = "";
 let serverCommand = "";
 let adminCookie;
 let websiteAdminCookie;
+let forceTemporaryPassword;
 const memberIds = {};
 
 function getFreePort() {
@@ -204,6 +205,7 @@ before(async () => {
     body: JSON.stringify({ id: memberIds["force-user"], action: "reset-password" }),
   });
   assert.equal(reset.status, 200);
+  forceTemporaryPassword = (await reset.json()).temporaryPassword;
 
   const legacyArchiveLogin = await request("/api/archive/admin/session", {
     method: "POST",
@@ -408,6 +410,188 @@ test("accessible member signup preserves legacy accounts and safely creates name
   assert.doesNotMatch(approvedLoginText, /duplicateCheck|duplicateCount|중복 가입/);
 });
 
+test("member merges preserve aliases, unify sessions, rotate passwords, and roll back atomically", async () => {
+  const beforePayload = await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json();
+  const beforeSummary = beforePayload.duplicateSummary;
+  const fixtures = [
+    { username: "merge-g1-a", password: "merge-pass-a1", name: "가상일번", phone: "010-7101-1001", birthDate: "1971-01-01" },
+    { username: "merge-g1-b", password: "merge-pass-b1", name: "가상일번", phone: "010-7101-1001", birthDate: "1972-02-02" },
+    { username: "merge-g2-a", password: "merge-pass-a2", name: "가상이번", phone: "010-7202-2001", birthDate: "1982-03-03" },
+    { username: "merge-g2-b", password: "merge-pass-b2", name: "가상이번", phone: "010-7202-2002", birthDate: "1982-03-03" },
+    { username: "merge-g3-a", password: "merge-pass-a3", name: "가상이름A", phone: "010-7303-3003", birthDate: "1990-04-04" },
+    { username: "merge-g3-b", password: "merge-pass-b3", name: "가상이름B", phone: "010 7303 3003", birthDate: "1991-05-05" },
+    { username: "merge-g3-c", password: "merge-pass-c3", name: "가상이름C", phone: "010-7303-3999", birthDate: "1991-05-05" },
+  ];
+  for (const fixture of fixtures) {
+    const response = await signupMember({ ...fixture, position: fixture.username.endsWith("c") ? "집사 / 남전도회" : "집사" });
+    assert.equal(response.status, 201, `${fixture.username}: ${await response.clone().text()}`);
+  }
+
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const listed = await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json();
+    const byUsername = new Map(listed.members.map((member) => [member.username, member]));
+    for (const fixture of fixtures) assert.ok(byUsername.get(fixture.username));
+    const ids = Object.fromEntries(fixtures.map((fixture) => [fixture.username, byUsername.get(fixture.username).id]));
+    await client.batch([
+      { sql: "UPDATE members SET status = 'approved', created_at = '2026-01-01 00:00:00' WHERE id = ?", args: [ids["merge-g3-a"]] },
+      { sql: "UPDATE members SET status = 'approved', created_at = '2026-01-02 00:00:00' WHERE id = ?", args: [ids["merge-g3-b"]] },
+      { sql: "UPDATE members SET status = 'approved', created_at = '2026-01-03 00:00:00' WHERE id = ?", args: [ids["merge-g3-c"]] },
+      { sql: "UPDATE members SET status = 'approved' WHERE id IN (?, ?)", args: [ids["merge-g2-a"], ids["merge-g2-b"]] },
+      { sql: "UPDATE members SET status = 'suspended' WHERE id = ?", args: [ids["merge-g1-b"]] },
+      { sql: "UPDATE members SET phone = '+82 10 7101 1001' WHERE id = ?", args: [ids["merge-g1-b"]] },
+      { sql: `INSERT INTO business_applications
+        (id, member_id, applicant_name, applicant_phone, business_name, category, owner_name, address, description)
+        VALUES ('merge-business-record', ?, '가상 신청자', '010-7303-3003', '가상 사업장', '기타', '가상 대표', '가상 주소', '가상 설명')`, args: [ids["merge-g3-a"]] },
+    ], "write");
+
+    const grouped = await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json();
+    assert.deepEqual(grouped.duplicateSummary, {
+      groupCount: beforeSummary.groupCount + 3,
+      accountCount: beforeSummary.accountCount + 7,
+      additionalCount: beforeSummary.additionalCount + 4,
+    });
+    const group3 = grouped.duplicateGroups.find((group) => group.accounts.some((account) => account.username === "merge-g3-a"));
+    assert.ok(group3);
+    assert.equal(group3.accounts.length, 3);
+    assert.equal(group3.differentNames, true);
+    assert.equal(new Set(grouped.duplicateGroups.flatMap((group) => group.accounts.map((account) => account.id))).size, grouped.duplicateSummary.accountCount);
+
+    assert.equal((await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "preview", groupId: group3.id }) })).status, 403);
+    assert.equal((await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", cookie: websiteAdminCookie }, body: JSON.stringify({ action: "preview", groupId: group3.id }) })).status, 403);
+    assert.equal((await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: "https://malicious.invalid", cookie: websiteAdminCookie }, body: JSON.stringify({ action: "preview", groupId: group3.id }) })).status, 403);
+    const previewResponse = await request("/api/admin/members/merge", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie },
+      body: JSON.stringify({ action: "preview", groupId: group3.id }),
+    });
+    assert.equal(previewResponse.status, 200);
+    const preview = (await previewResponse.json()).preview;
+    assert.equal(preview.recommendedRepresentativeId, ids["merge-g3-a"]);
+    assert.equal(preview.recommendedProfile.name, "가상이름C");
+    assert.equal(preview.recordSummary.businessApplications, 1);
+    assert.deepEqual(preview.blockedReasons, []);
+
+    const preMergeLogins = [];
+    for (const fixture of fixtures.slice(4)) {
+      const response = await loginMember(fixture.username, fixture.password, `198.51.100.${40 + preMergeLogins.length}`);
+      assert.equal(response.status, 200);
+      preMergeLogins.push((response.headers.get("set-cookie") ?? "").split(";")[0]);
+    }
+    assert.equal((await loginMember("merge-g3-a", "merge-pass-b3", "198.51.100.60")).status, 401);
+
+    const mergePayload = {
+      action: "merge",
+      groupId: group3.id,
+      fingerprint: preview.fingerprint,
+      representativeMemberId: preview.recommendedRepresentativeId,
+      profile: preview.recommendedProfile,
+    };
+    const mergeResponse = await request("/api/admin/members/merge", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie },
+      body: JSON.stringify(mergePayload),
+    });
+    assert.equal(mergeResponse.status, 201);
+    const merged = await mergeResponse.json();
+    assert.equal(merged.representativeMemberId, ids["merge-g3-a"]);
+    assert.equal(merged.aliasCount, 3);
+    assert.equal((await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify(mergePayload) })).status, 409);
+
+    for (const oldCookie of preMergeLogins) {
+      const session = await request("/api/session", { headers: { cookie: oldCookie } });
+      assert.equal((await session.json()).authenticated, false);
+    }
+    const aliasCookies = new Map();
+    for (const fixture of fixtures.slice(4)) {
+      const response = await loginMember(fixture.username, fixture.password, `198.51.100.${70 + aliasCookies.size}`);
+      assert.equal(response.status, 200);
+      const cookie = (response.headers.get("set-cookie") ?? "").split(";")[0];
+      aliasCookies.set(fixture.username, cookie);
+      const token = cookie.split("=")[1];
+      assert.equal(token.split(".")[0], ids["merge-g3-a"]);
+      assert.equal(token.split(".").length, 4);
+      const profile = await (await request("/api/members/profile", { headers: { cookie } })).json();
+      assert.equal(profile.member.name, "가상이름C");
+      assert.equal(profile.member.username, "merge-g3-a");
+    }
+    assert.equal((await loginMember("merge-g3-a", "merge-pass-c3", "198.51.100.80")).status, 401);
+    assert.equal((await loginMember("missing-merge-user", "merge-pass-a3", "198.51.100.81")).status, 401);
+
+    const passwordChange = await request("/api/members/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: aliasCookies.get("merge-g3-b") },
+      body: JSON.stringify({ action: "password", currentPassword: "merge-pass-b3", password: "merged-new-password" }),
+    });
+    assert.equal(passwordChange.status, 200);
+    for (const fixture of fixtures.slice(4)) assert.equal((await loginMember(fixture.username, fixture.password, `198.51.100.${90 + fixtures.indexOf(fixture)}`)).status, 401);
+    for (const fixture of fixtures.slice(4)) assert.equal((await loginMember(fixture.username, "merged-new-password", `198.51.100.${100 + fixtures.indexOf(fixture)}`)).status, 200);
+
+    const reset = await request("/api/admin/members", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: websiteAdminCookie },
+      body: JSON.stringify({ id: ids["merge-g3-a"], action: "reset-password" }),
+    });
+    assert.equal(reset.status, 200);
+    const temporaryPassword = (await reset.json()).temporaryPassword;
+    assert.ok(temporaryPassword);
+    assert.equal((await loginMember("merge-g3-a", "merged-new-password", "198.51.100.110")).status, 401);
+    for (const fixture of fixtures.slice(4)) assert.equal((await loginMember(fixture.username, temporaryPassword, `198.51.100.${120 + fixtures.indexOf(fixture)}`)).status, 200);
+
+    const disableAlias = await request("/api/admin/members/merge", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie },
+      body: JSON.stringify({ action: "alias", representativeMemberId: ids["merge-g3-a"], username: "merge-g3-b", enabled: false }),
+    });
+    assert.equal(disableAlias.status, 200);
+    assert.equal((await loginMember("merge-g3-b", temporaryPassword, "198.51.100.130")).status, 401);
+    assert.equal((await loginMember("merge-g3-a", temporaryPassword, "198.51.100.131")).status, 200);
+
+    const preserved = await client.execute({ sql: "SELECT member_id FROM business_applications WHERE id = 'merge-business-record'", args: [] });
+    assert.equal(String(preserved.rows[0].member_id), ids["merge-g3-a"]);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS count FROM member_merge_accounts WHERE merge_id = ?", args: [merged.mergeId] })).rows[0].count), 3);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS count FROM member_login_aliases WHERE representative_member_id = ?", args: [ids["merge-g3-a"]] })).rows[0].count), 3);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS count FROM member_app_access WHERE member_id = ?", args: [ids["merge-g3-a"]] })).rows[0].count), 0);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS count FROM admin_audit_logs WHERE action IN ('member.merge', 'member.password_change', 'member.password_reset') AND target_id IN (?, ?)", args: [merged.mergeId, ids["merge-g3-a"]] })).rows[0].count), 3);
+
+    const afterMergeList = await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json();
+    assert.equal(afterMergeList.members.filter((member) => ["merge-g3-a", "merge-g3-b", "merge-g3-c"].includes(member.username)).length, 1);
+    assert.equal(afterMergeList.members.find((member) => member.username === "merge-g3-a").loginAliases.length, 3);
+
+    const group2 = afterMergeList.duplicateGroups.find((group) => group.accounts.some((account) => account.username === "merge-g2-a"));
+    const group2Preview = (await (await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify({ action: "preview", groupId: group2.id }) })).json()).preview;
+    await client.execute({ sql: `INSERT INTO member_login_aliases
+      (username, source_member_id, representative_member_id, password_hash, password_salt)
+      SELECT username, id, id, password_hash, password_salt FROM members WHERE id = ?`, args: [ids["merge-g2-a"]] });
+    const mergeGroupsBeforeFailure = Number((await client.execute("SELECT COUNT(*) AS count FROM member_merge_groups")).rows[0].count);
+    const failedMerge = await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify({ action: "merge", groupId: group2.id, fingerprint: group2Preview.fingerprint, representativeMemberId: group2Preview.recommendedRepresentativeId, profile: group2Preview.recommendedProfile }) });
+    assert.equal(failedMerge.status, 409);
+    assert.equal(Number((await client.execute("SELECT COUNT(*) AS count FROM member_merge_groups")).rows[0].count), mergeGroupsBeforeFailure);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS count FROM member_merge_accounts WHERE member_id IN (?, ?)", args: [ids["merge-g2-a"], ids["merge-g2-b"]] })).rows[0].count), 0);
+    await client.execute({ sql: "DELETE FROM member_login_aliases WHERE source_member_id = ?", args: [ids["merge-g2-a"]] });
+    await client.execute({ sql: "INSERT INTO member_app_access (member_id, app_code, access_level) VALUES (?, 'worship_archive', 'full')", args: [ids["merge-g2-a"]] });
+    const blockedPreview = (await (await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify({ action: "preview", groupId: group2.id }) })).json()).preview;
+    assert.match(blockedPreview.blockedReasons.join(" "), /특별 권한/);
+
+    const group1 = (await (await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } })).json()).duplicateGroups.find((group) => group.accounts.some((account) => account.username === "merge-g1-a"));
+    const group1Preview = (await (await request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify({ action: "preview", groupId: group1.id }) })).json()).preview;
+    const group1Payload = { action: "merge", groupId: group1.id, fingerprint: group1Preview.fingerprint, representativeMemberId: group1Preview.recommendedRepresentativeId, profile: group1Preview.recommendedProfile };
+    const concurrent = await Promise.all([1, 2].map(() => request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify(group1Payload) })));
+    assert.deepEqual(concurrent.map((response) => response.status).sort(), [201, 409]);
+    assert.equal((await loginMember("merge-g1-b", "merge-pass-b1", "198.51.100.140")).status, 401);
+
+    const sharedRateIp = "198.51.100.199";
+    for (const username of ["merge-g3-a", "merge-g3-b", "merge-g3-c", "merge-g3-a"]) {
+      assert.equal((await loginMember(username, "wrong-merged-password", sharedRateIp)).status, 401);
+    }
+    const sharedBlock = await loginMember("merge-g3-c", "wrong-merged-password", sharedRateIp);
+    assert.equal(sharedBlock.status, 429);
+    assert.ok(Number(sharedBlock.headers.get("retry-after")) > 0);
+  } finally {
+    await client.close();
+  }
+});
+
 test("member login throttling survives requests without exposing raw identifiers", async () => {
   const forwardedFor = "203.0.113.77";
   for (let attempt = 1; attempt <= 4; attempt += 1) {
@@ -485,7 +669,11 @@ test("playback enforces member approval, password state, and archive level", asy
   assert.match(worshipPlayback.headers.get("cache-control") ?? "", /private, no-store/);
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["worship-user"]) } })).status, 403);
   assert.equal((await request("/api/archive/videos/attendance-video/playback", { headers: { cookie: memberCookie(memberIds["full-user"]) } })).status, 200);
-  assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["force-user"]) } })).status, 403);
+  assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["force-user"]) } })).status, 401);
+  const forceLogin = await loginMember("force-user", forceTemporaryPassword, "198.51.100.150");
+  assert.equal(forceLogin.status, 200);
+  const forceCookie = (forceLogin.headers.get("set-cookie") ?? "").split(";")[0];
+  assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: forceCookie } })).status, 403);
   assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["pending-user"]) } })).status, 403);
   assert.equal((await request("/api/archive/videos/worship-video/playback", { headers: { cookie: memberCookie(memberIds["suspended-user"]) } })).status, 401);
 

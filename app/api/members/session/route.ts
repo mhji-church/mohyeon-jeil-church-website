@@ -46,7 +46,14 @@ export async function POST(request: Request) {
       );
     }
     if (result.member.status === "suspended") {
-      return Response.json({ error: "이용이 중지된 계정입니다. 교회 관리자에게 문의해 주세요." }, { status: 403 });
+      const blockedFor = await recordMemberLoginFailure(rateKey);
+      return Response.json(
+        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
+        {
+          status: blockedFor > 0 ? 429 : 401,
+          headers: blockedFor > 0 ? { "retry-after": String(blockedFor) } : undefined,
+        },
+      );
     }
     await clearMemberLoginFailures(rateKey);
     await createMemberSessionCookie(result.member.id);

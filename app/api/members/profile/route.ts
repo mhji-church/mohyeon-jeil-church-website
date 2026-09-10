@@ -1,7 +1,7 @@
 import {
-  authenticateMember,
   changeMemberPassword,
   updateMemberProfile,
+  verifyMemberPasswordForRepresentative,
 } from "../../../../lib/members";
 import { getMemberSession } from "../../../member-auth";
 import { apiError } from "../../../../lib/api-response";
@@ -60,8 +60,7 @@ export async function PATCH(request: Request) {
       const currentPassword =
         typeof payload.currentPassword === "string" ? payload.currentPassword : "";
       const password = typeof payload.password === "string" ? payload.password : "";
-      const authenticated = await authenticateMember(member.username, currentPassword);
-      if (!authenticated || authenticated.member.id !== member.id) {
+      if (!(await verifyMemberPasswordForRepresentative(member.id, currentPassword))) {
         return Response.json(
           { error: "현재 비밀번호가 올바르지 않습니다." },
           { status: 400 },
