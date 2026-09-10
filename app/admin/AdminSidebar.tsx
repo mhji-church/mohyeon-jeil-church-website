@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity" | "archive";
 
@@ -35,6 +35,15 @@ export default function AdminSidebar({
   canManageArchive,
 }: Props) {
   const [pendingMemberCount, setPendingMemberCount] = useState(initialPendingMemberCount);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const activeLabel = active === "archive"
+    ? "아카이브 관리"
+    : menuItems.find((item) => item.key === active)?.label ?? "관리자";
+
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const refreshPendingCount = useCallback(async () => {
     if (!canManageWebsite) return;
     try {
@@ -65,15 +74,94 @@ export default function AdminSidebar({
     };
   }, [canManageWebsite, refreshPendingCount]);
 
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 760px)");
+    const update = () => {
+      setIsMobile(query.matches);
+      if (!query.matches) setMobileMenuOpen(false);
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const firstLink = sidebarRef.current?.querySelector<HTMLElement>("nav a");
+    firstLink?.focus();
+    const handleMenuKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        window.setTimeout(() => menuButtonRef.current?.focus(), 0);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = [...(sidebarRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ?? [])];
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleMenuKeys);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleMenuKeys);
+    };
+  }, [mobileMenuOpen]);
+
   return (
-    <aside className="admin-sidebar">
+    <>
+    <header className="admin-mobile-bar">
+      <Link href="/admin" aria-label="관리자 홈" onClick={closeMobileMenu}>
+        <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
+        <span>관리자</span>
+      </Link>
+      <strong>{activeLabel}</strong>
+      <button
+        ref={menuButtonRef}
+        type="button"
+        aria-expanded={mobileMenuOpen}
+        aria-controls="admin-mobile-navigation"
+        aria-label={mobileMenuOpen ? "관리 메뉴 닫기" : "관리 메뉴 열기"}
+        onClick={() => setMobileMenuOpen((open) => !open)}
+      >
+        <i aria-hidden="true" />
+        <i aria-hidden="true" />
+        <i aria-hidden="true" />
+      </button>
+    </header>
+    <button
+      className={`admin-mobile-menu-backdrop${mobileMenuOpen ? " is-open" : ""}`}
+      type="button"
+      tabIndex={mobileMenuOpen ? 0 : -1}
+      aria-label="관리 메뉴 닫기"
+      onClick={() => {
+        closeMobileMenu();
+        window.setTimeout(() => menuButtonRef.current?.focus(), 0);
+      }}
+    />
+    <aside
+      className={`admin-sidebar${mobileMenuOpen ? " is-mobile-open" : ""}`}
+      id="admin-mobile-navigation"
+      ref={sidebarRef}
+      aria-hidden={isMobile && !mobileMenuOpen ? true : undefined}
+      inert={isMobile && !mobileMenuOpen ? true : undefined}
+    >
       <Link className="admin-brand" href="/admin" aria-label="관리자 홈">
         <img src="/assets/logo-horizontal.png" alt="모현제일교회" />
         <span>WEBSITE ADMIN</span>
       </Link>
       <nav aria-label="관리 메뉴">
         {canManageWebsite && menuItems.map((item, index) => (
-          <Link className={active === item.key ? "is-active" : ""} href={item.href} key={item.key}>
+          <Link className={active === item.key ? "is-active" : ""} href={item.href} key={item.key} onClick={closeMobileMenu}>
             <i>{String(index + 1).padStart(2, "0")}</i>
             <span>{item.label}</span>
             {item.key === "members" && pendingMemberCount !== null && pendingMemberCount > 0 && (
@@ -87,6 +175,7 @@ export default function AdminSidebar({
           <a
             className={active === "archive" ? "is-active" : ""}
             href="/archive/admin"
+            onClick={closeMobileMenu}
           >
             <i>{String(canManageWebsite ? menuItems.length + 1 : 1).padStart(2, "0")}</i>
             <span>아카이브 관리</span>
@@ -102,5 +191,6 @@ export default function AdminSidebar({
         <a href={signOutPath}>로그아웃</a>
       </div>
     </aside>
+    </>
   );
 }

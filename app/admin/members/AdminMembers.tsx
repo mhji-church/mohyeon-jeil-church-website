@@ -109,6 +109,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const [mergeDraft, setMergeDraft] = useState<MergeDraft | null>(null);
   const [mergeLoading, setMergeLoading] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [duplicateApproval, setDuplicateApproval] = useState<PendingDuplicateApproval | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AdminMember | null>(null);
   const [confirmPasswordReset, setConfirmPasswordReset] = useState<AdminMember | null>(null);
@@ -123,7 +124,9 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const listStartRef = useRef<HTMLElement>(null);
   const mergeDialogRef = useRef<HTMLElement>(null);
   const compareDialogRef = useRef<HTMLElement>(null);
+  const memberEditorRef = useRef<HTMLFormElement>(null);
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
+  const memberEditorReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const loadMembers = useCallback(async (preserveNotice = false) => {
     setLoading(true);
@@ -223,6 +226,11 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     setExpandedGroups((current) => {
       const next = new Set(current);
       if (expanded) next.delete(groupId); else next.add(groupId);
+      return next;
+    });
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (expanded) next.add(groupId); else next.delete(groupId);
       return next;
     });
     if (expanded && searchParams.get("group") === groupId) {
@@ -397,6 +405,48 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     window.requestAnimationFrame(() => dialogReturnFocusRef.current?.focus());
   }, []);
 
+  const openMemberEditor = (member: AdminMember) => {
+    memberEditorReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    setEditing(member);
+  };
+
+  const closeMemberEditor = useCallback(() => setEditing(null), []);
+
+  useEffect(() => {
+    if (!editing) return;
+    const editor = memberEditorRef.current;
+    if (!editor) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => [...editor.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex='-1'])")];
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMemberEditor();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    editor.addEventListener("keydown", onKeyDown);
+    return () => {
+      editor.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.requestAnimationFrame(() => memberEditorReturnFocusRef.current?.focus());
+    };
+  }, [closeMemberEditor, editing]);
+
   useEffect(() => {
     const dialog = mergePreview ? mergeDialogRef.current : compareGroup ? compareDialogRef.current : null;
     if (!dialog) return;
@@ -554,7 +604,9 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
               {paginatedDuplicateGroups.map((group) => {
                 const groupIndex = duplicateGroups.findIndex((item) => item.id === group.id) + 1;
                 const uniqueNames = [...new Set(group.accounts.map((account) => account.name.trim()))];
-                const expanded = expandedGroups.has(group.id) || searchParams.get("group") === group.id;
+                const expanded = expandedGroups.has(group.id)
+                  || (!collapsedGroups.has(group.id) && group.hasPending)
+                  || searchParams.get("group") === group.id;
                 return (
                   <section className="admin-duplicate-group" data-duplicate-group-id={group.id} key={group.id}>
                     <header>
@@ -623,7 +675,10 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                     <tr key={member.id}>
                       <td>
                         <div className="admin-member-name-line">
-                          <strong>{member.name}</strong>
+                          <button className="admin-member-open" type="button" onClick={() => openMemberEditor(member)}>
+                            <strong>{member.name}</strong>
+                          </button>
+                          {member.position && <span className="admin-member-position-mobile">{member.position}</span>}
                           {member.duplicateCheck && (
                             <button
                               className="admin-duplicate-badge"
@@ -658,7 +713,10 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                               중지
                             </button>
                           )}
-                          <button type="button" onClick={() => setEditing(member)}>정보</button>
+                          <button className="admin-member-manage-button" type="button" onClick={() => openMemberEditor(member)}>
+                            <span className="admin-manage-label-desktop">정보</span>
+                            <span className="admin-manage-label-mobile">관리</span>
+                          </button>
                           <button
                             className="admin-temporary-password-button"
                             type="button"
@@ -684,13 +742,13 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
 
       {editing && (
         <div className="admin-editor-backdrop" role="dialog" aria-modal="true">
-          <form className="admin-editor admin-member-editor" onSubmit={saveMember}>
+          <form className="admin-editor admin-member-editor" ref={memberEditorRef} onSubmit={saveMember}>
             <header>
               <div>
                 <span>EDIT MEMBER</span>
                 <h2>{editing.name} 회원 정보</h2>
               </div>
-              <button type="button" onClick={() => setEditing(null)} aria-label="닫기">×</button>
+              <button type="button" onClick={closeMemberEditor} aria-label="닫기">×</button>
             </header>
             <div className="admin-editor-body">
               {editing.duplicateCheck && (

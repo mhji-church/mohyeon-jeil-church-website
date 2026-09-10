@@ -385,6 +385,8 @@ export default function AdminDashboard({
   const [confirmDelete, setConfirmDelete] = useState<ContentPost | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const listStartRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLFormElement>(null);
+  const editorReturnFocusRef = useRef<HTMLElement | null>(null);
   const handledInitialEdit = useRef(false);
   const [cleanDraft, setCleanDraft] = useState(
     JSON.stringify(draftPayload(emptyPost(initialType), initialCreate && initialType === "news" ? "| " : "")),
@@ -512,6 +514,7 @@ export default function AdminDashboard({
   }, [changePage, currentPage, loading, requestedPage]);
 
   const startCreate = () => {
+    editorReturnFocusRef.current = document.activeElement as HTMLElement | null;
     let next = emptyPost(activeType);
     let restoredNewsText = activeType === "news" ? "| " : "";
     try {
@@ -541,6 +544,7 @@ export default function AdminDashboard({
   };
 
   const startEdit = (post: ContentPost) => {
+    editorReturnFocusRef.current = document.activeElement as HTMLElement | null;
     setEditingId(post.id);
     const nextForm = {
       type: post.type,
@@ -649,6 +653,41 @@ export default function AdminDashboard({
     params.delete("new");
     router.replace(`${pathname}${params.size ? `?${params}` : ""}`);
   };
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => [...editor.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex='-1'])")];
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        const closeButton = editor.querySelector<HTMLButtonElement>("header button[aria-label='닫기']");
+        closeButton?.click();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    editor.addEventListener("keydown", onKeyDown);
+    return () => {
+      editor.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.requestAnimationFrame(() => editorReturnFocusRef.current?.focus());
+    };
+  }, [editorOpen]);
 
   const clonePreviousPost = () => {
     const previous = visiblePosts[0];
@@ -825,7 +864,13 @@ export default function AdminDashboard({
           </div>
           <div>
             {(activeType === "bulletin" || activeType === "news") && visiblePosts.length > 0 && (
-              <button type="button" onClick={clonePreviousPost}>지난 게시물 복제</button>
+              <>
+                <button className="admin-clone-action" type="button" onClick={clonePreviousPost}>지난 게시물 복제</button>
+                <details className="admin-more-actions">
+                  <summary>더보기</summary>
+                  <button type="button" onClick={clonePreviousPost}>지난 게시물 복제</button>
+                </details>
+              </>
             )}
             <button type="button" onClick={startCreate}>+ 새 {typeMeta[activeType].label} 등록</button>
           </div>
@@ -875,7 +920,9 @@ export default function AdminDashboard({
                         )}
                       </td>
                       <td>
-                        <strong>{post.title}</strong>
+                        <button className="admin-content-title-button" type="button" onClick={() => startEdit(post)}>
+                          <strong>{post.title}</strong>
+                        </button>
                         <small>{post.excerpt || typeMeta[post.type].description}</small>
                       </td>
                       <td><time>{post.date}</time></td>
@@ -887,7 +934,10 @@ export default function AdminDashboard({
                       <td>{post.images.length}장</td>
                       <td>
                         <div className="admin-row-actions">
-                          <button type="button" onClick={() => startEdit(post)}>수정</button>
+                          <button className="admin-content-manage-button" type="button" onClick={() => startEdit(post)}>
+                            <span className="admin-manage-label-desktop">수정</span>
+                            <span className="admin-manage-label-mobile">관리</span>
+                          </button>
                           <button type="button" onClick={() => setConfirmDelete(post)}>삭제</button>
                         </div>
                       </td>
@@ -903,7 +953,7 @@ export default function AdminDashboard({
 
       {editorOpen && (
         <div className="admin-editor-backdrop" role="dialog" aria-modal="true">
-          <form className="admin-editor" onSubmit={savePost}>
+          <form className="admin-editor" ref={editorRef} onSubmit={savePost}>
             <header>
               <div>
                 <span>{editingId ? "EDIT CONTENT" : "NEW CONTENT"}</span>
@@ -1213,6 +1263,18 @@ export default function AdminDashboard({
               </div>
             </div>
             <footer>
+              {editingId && (
+                <button
+                  className="admin-editor-cancel admin-editor-delete"
+                  type="button"
+                  onClick={() => {
+                    const currentPost = posts.find((post) => post.id === editingId);
+                    if (currentPost) setConfirmDelete(currentPost);
+                  }}
+                >
+                  삭제
+                </button>
+              )}
               <button className="admin-editor-cancel" type="button" onClick={() => setPreviewOpen(true)}>
                 미리보기
               </button>

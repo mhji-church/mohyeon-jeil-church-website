@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import SiteLayoutChrome from "./components/SiteLayoutChrome";
 import "./globals.css";
+import "./admin-mobile.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mhji.kr"),

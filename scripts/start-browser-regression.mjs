@@ -22,6 +22,12 @@ await client.execute({
   sql: "INSERT INTO members (id, username, password_hash, password_salt, name, phone, position, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   args: ["browser-member", "test-member", base64url(hash), base64url(salt), "브라우저테스트", "01000000000", "집사 / 미디어팀", "approved"],
 });
+for (let index = 1; index <= 12; index += 1) {
+  await client.execute({
+    sql: "INSERT INTO members (id, username, password_hash, password_salt, name, phone, position, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    args: [`browser-admin-member-${index}`, `browser-user-${index}`, base64url(hash), base64url(salt), `가상 회원 ${index}`, `0109000${String(index).padStart(4, "0")}`, index % 2 ? "집사 / 남전도회" : "권사", index <= 2 ? "pending" : index === 12 ? "suspended" : "approved", `2026-09-${String(13 - index).padStart(2, "0")}T00:00:00.000Z`],
+  });
+}
 await client.execute({
   sql: "INSERT INTO member_app_access (member_id, app_code, access_level, granted_by) VALUES (?, 'worship_archive', 'full', 'browser-fixture')",
   args: ["browser-member"],
@@ -65,6 +71,17 @@ for (const [id, title, image] of [
     args: [id, title, galleryBody, JSON.stringify([image])],
   });
 }
+for (let index = 1; index <= 10; index += 1) {
+  const date = `2026.07.${String(index).padStart(2, "0")}`;
+  await client.execute({
+    sql: "INSERT INTO content_posts (id, type, title, date, excerpt, content, images, status) VALUES (?, 'business', ?, ?, ?, ?, ?, 'published')",
+    args: [`browser-business-${index}`, `가상 성도사업장 ${index}`, date, "모바일 관리자 목록 확인용 소개", JSON.stringify({ owner: `가상 대표 ${index}`, address: "용인시", phone: "010-0000-0000", website: "" }), JSON.stringify(["/assets/icon-512.png"])],
+  });
+  await client.execute({
+    sql: "INSERT INTO admin_audit_logs (id, actor_id, action, target_type, target_id, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    args: [`browser-audit-${index}`, "browser-admin", index % 2 ? "content.update" : "archive.access.update", index % 2 ? "content" : "member", `virtual-${index}`, JSON.stringify({ source: "browser-fixture", result: "success" }), `2026-09-${String(11 - index).padStart(2, "0")}T10:30:00.000Z`],
+  });
+}
 await client.close();
 
 Object.assign(process.env, {
@@ -81,8 +98,19 @@ Object.assign(process.env, {
 });
 const server = await createServer({ server: { host: "127.0.0.1", port: 4178 } });
 await server.listen();
+const serveOnly = process.argv.includes("--serve-only");
+if (serveOnly) {
+  console.log("Browser fixture server: http://127.0.0.1:4178");
+  await new Promise((resolve) => {
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.once(signal, resolve);
+  });
+  server.ws.close();
+  server.httpServer?.closeAllConnections?.();
+  await server.close();
+  process.exit(0);
+}
 const playwrightCli = path.resolve("node_modules", "@playwright", "test", "cli.js");
-const runner = spawn(process.execPath, [playwrightCli, "test", ...process.argv.slice(2)], {
+const runner = spawn(process.execPath, [playwrightCli, "test", ...process.argv.slice(2).filter((argument) => argument !== "--serve-only")], {
   cwd: process.cwd(),
   env: process.env,
   stdio: "inherit",

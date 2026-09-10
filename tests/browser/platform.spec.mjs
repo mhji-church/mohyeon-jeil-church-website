@@ -577,7 +577,7 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await expect(page).toHaveURL(/\/admin\/login/);
   await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
     Object.keys(form).some((key) => key.startsWith("__reactProps")),
-  )).toBe(true);
+  ), { timeout: 15_000 }).toBe(true);
   await page.getByLabel("아이디").fill("browser-archive-admin");
   await page.getByLabel("비밀번호").fill("browser-archive-password");
   await page.getByRole("button", { name: "관리자 로그인" }).click();
@@ -592,6 +592,9 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+    if (viewport.width <= 760) {
+      await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
+    }
     await expect(archiveLink).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   }
@@ -620,12 +623,22 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
   expect(page.context().pages()).toHaveLength(1);
   const returnToArchiveLink = page.locator('.admin-sidebar nav a[href="/archive/admin"]');
+  const reopenWebsiteMenu = async () => {
+    const button = page.getByRole("button", { name: "관리 메뉴 열기" });
+    await expect.poll(() => button.evaluate((element) =>
+      Object.keys(element).some((key) => key.startsWith("__reactProps")),
+    )).toBe(true);
+    await button.click();
+    await expect(page.locator(".admin-sidebar")).toHaveClass(/is-mobile-open/);
+  };
+  await reopenWebsiteMenu();
   await returnToArchiveLink.click();
   await expect(page).toHaveURL(/\/archive\/admin$/);
   await expect(page.getByRole("heading", { name: "영상 관리", exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+  await reopenWebsiteMenu();
   await returnToArchiveLink.click();
   await expect(page).toHaveURL(/\/archive\/admin$/);
 
@@ -821,7 +834,7 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   await page.goto("/admin/login?return_to=%2Fadmin%2Fmembers");
   await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
     Object.keys(form).some((key) => key.startsWith("__reactProps")),
-  )).toBe(true);
+  ), { timeout: 15_000 }).toBe(true);
   await page.getByLabel("아이디").fill("browser-admin");
   await page.getByLabel("비밀번호").fill("browser-admin-password");
   await page.getByRole("button", { name: "관리자 로그인" }).click();
@@ -1014,20 +1027,146 @@ test("website administrator keeps the full dashboard without archive management"
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await expect(page.getByRole("heading", { name: "운영 현황" })).toBeVisible();
+    if (viewport.width <= 760) {
+      await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
+    }
     for (const label of websiteMenuLabels) {
       await expect(websiteNavigation.getByRole("link", { name: new RegExp(label) })).toBeVisible();
     }
     await expect(page.locator('.admin-sidebar nav a[href="/archive/admin"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    if (viewport.width <= 760) {
+      await page.getByRole("button", { name: "관리 메뉴 닫기" }).first().click();
+    }
   }
 
   expect((await page.request.get("/api/admin/members")).status()).toBe(200);
   expect((await page.request.get("/api/admin/archive/videos")).status()).toBe(403);
   await page.goto("/archive/admin");
   await expect(page).toHaveURL(/\/admin$/);
+  await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
   await page.getByRole("link", { name: "로그아웃" }).click();
   await page.goto("/archive/admin");
   await expect(page).toHaveURL(/\/admin\/login\?return_to=/);
+  expect(errors).toEqual([]);
+});
+
+test("website admin mobile navigation and lists stay compact without changing desktop tables", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/login?return_to=%2Fadmin%2Fmembers");
+  await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 15_000 }).toBe(true);
+  await page.getByLabel("아이디").fill("browser-admin");
+  await page.getByLabel("비밀번호").fill("browser-admin-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  await page.goto("/admin/members");
+  await expect(page.getByText("가상 회원 1", { exact: true })).toBeVisible();
+  const mobileBar = page.locator(".admin-mobile-bar");
+  await expect(mobileBar).toBeVisible();
+  expect(await mobileBar.evaluate((bar) => bar.getBoundingClientRect().height)).toBeGreaterThanOrEqual(56);
+  const menuButton = page.getByRole("button", { name: "관리 메뉴 열기" });
+  await menuButton.click();
+  await expect(page.locator(".admin-sidebar")).toHaveClass(/is-mobile-open/);
+  await page.waitForTimeout(250);
+  await expect(page.locator(".admin-sidebar nav").getByRole("link", { name: "활동 기록" })).toBeVisible();
+  await expect(page.locator(".admin-account").getByRole("link", { name: /홈페이지로 돌아가기/ })).toBeVisible();
+  await page.screenshot({ path: "test-results/admin-mobile-menu-390.png" });
+  await page.keyboard.press("Escape");
+  await expect(menuButton).toBeFocused();
+  await menuButton.click();
+  await page.locator(".admin-sidebar nav").getByRole("link", { name: "회원 관리" }).click();
+  await expect(page).toHaveURL(/\/admin\/members$/);
+  await expect(page.locator(".admin-sidebar")).toHaveAttribute("aria-hidden", "true");
+
+  const memberRows = page.locator(".admin-members-table tbody tr");
+  const memberMetrics = await memberRows.evaluateAll((rows) => ({
+    heights: rows.slice(0, 4).map((row) => row.getBoundingClientRect().height),
+    visible: rows.filter((row) => { const rect = row.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; }).length,
+  }));
+  expect(memberMetrics.heights.every((height) => height >= 76 && height <= 90)).toBe(true);
+  expect(memberMetrics.visible).toBeGreaterThanOrEqual(4);
+  const memberSearch = page.getByRole("searchbox", { name: "회원 검색" });
+  await memberSearch.fill("가상");
+  const firstMemberButton = page.getByRole("button", { name: "가상 회원 1", exact: true });
+  await firstMemberButton.click();
+  const memberEditor = page.locator(".admin-member-editor");
+  await expect(memberEditor).toBeVisible();
+  const memberSheetMetrics = await memberEditor.evaluate((editor) => {
+    const rect = editor.getBoundingClientRect();
+    return { bottom: rect.bottom, viewport: innerHeight, scrollable: (editor.querySelector(".admin-editor-body")?.scrollHeight ?? 0) >= (editor.querySelector(".admin-editor-body")?.clientHeight ?? 0) };
+  });
+  expect(memberSheetMetrics.bottom).toBeLessThanOrEqual(memberSheetMetrics.viewport);
+  expect(memberSheetMetrics.scrollable).toBe(true);
+  await memberEditor.getByRole("button", { name: "닫기" }).click();
+  await expect(firstMemberButton).toBeFocused();
+  await expect(memberSearch).toHaveValue("가상");
+  await page.screenshot({ path: "test-results/admin-mobile-members-390.png" });
+
+  const enlargedTextStyle = await page.addStyleTag({ content: "html { font-size: 125%; }" });
+  const enlargedMemberMetrics = await memberRows.first().evaluate((row) => ({
+    height: row.getBoundingClientRect().height,
+    clipped: row.scrollHeight > row.clientHeight,
+  }));
+  expect(enlargedMemberMetrics.height).toBeGreaterThanOrEqual(82);
+  expect(enlargedMemberMetrics.clipped).toBe(false);
+  await enlargedTextStyle.evaluate((style) => style.remove());
+
+  for (const section of ["bulletin", "news", "gallery", "business"]) {
+    await page.goto(`/admin/content?section=${section}`);
+    const rows = page.locator(".admin-content-table tbody tr");
+    await expect(rows.first()).toBeVisible();
+    const metrics = await rows.evaluateAll((items) => ({
+      heights: items.slice(0, 3).map((row) => row.getBoundingClientRect().height),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
+    expect(metrics.heights.every((height) => height >= 88 && height <= 104)).toBe(true);
+    expect(metrics.overflow).toBe(0);
+    await expect(rows.first().getByRole("button", { name: "관리" })).toBeVisible();
+  }
+  await page.screenshot({ path: "test-results/admin-mobile-content-390.png" });
+
+  await page.goto("/admin/activity");
+  const activityRows = page.locator(".admin-activity-table tbody tr");
+  await expect(activityRows.first()).toBeVisible();
+  expect(await activityRows.first().evaluate((row) => row.getBoundingClientRect().height)).toBeLessThanOrEqual(90);
+  await expect(page.getByText("예배 아카이브 권한 변경", { exact: true }).first()).toBeVisible();
+  const detailButton = activityRows.first().getByRole("button", { name: "상세" });
+  await detailButton.click();
+  const detailDialog = page.getByRole("dialog", { name: "활동 기록 상세" });
+  await expect(detailDialog).toContainText("작업 코드");
+  await expect(detailDialog.getByRole("button", { name: "활동 기록 상세 닫기" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(detailDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(detailButton).toBeFocused();
+  await page.screenshot({ path: "test-results/admin-mobile-activity-390.png" });
+
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/admin/members");
+  await expect(page.getByText("가상 회원 1", { exact: true })).toBeVisible();
+  expect(await page.locator(".admin-members-table tbody tr").evaluateAll((rows) => rows.filter((row) => { const rect = row.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; }).length)).toBeGreaterThanOrEqual(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/admin-mobile-members-320.png" });
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  await page.reload();
+  await expect(page.locator(".admin-mobile-bar")).toBeVisible();
+  await page.setViewportSize({ width: 820, height: 900 });
+  await page.reload();
+  await expect(page.locator(".admin-mobile-bar")).toBeHidden();
+  await expect(page.getByRole("button", { name: "가상 회원 1", exact: true })).toBeVisible();
+  await page.screenshot({ path: "test-results/admin-tablet-members-820.png" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "가상 회원 1", exact: true })).toBeVisible();
+  expect(await page.locator(".admin-members-table").evaluate((table) => getComputedStyle(table).display)).toBe("table");
+  expect(await page.locator(".admin-members-table tbody tr").first().evaluate((row) => getComputedStyle(row).display)).toBe("table-row");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/admin-desktop-members-1440.png" });
   expect(errors).toEqual([]);
 });
 
