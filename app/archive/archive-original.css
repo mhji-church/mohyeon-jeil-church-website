@@ -492,6 +492,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .recent-section .media-meta, .archive-original-root .list-media-grid .media-meta { min-width: 0; padding-top: 0; }
   .archive-original-root .recent-section .media-meta h3, .archive-original-root .list-media-grid .media-meta h3 { margin: 5px 0 6px; font-size: 15px; line-height: 1.4; }
   .archive-original-root .recent-section .media-card--worship, .archive-original-root .list-media-grid .media-card--worship { grid-template-columns: 36% minmax(0, 1fr); align-items: center; column-gap: 10px; }
+  .archive-original-root .recent-section .media-card--worship { grid-template-columns: 42% minmax(0, 1fr); column-gap: 14px; }
   .archive-original-root .recent-section .media-card--worship .media-meta, .archive-original-root .list-media-grid .media-card--worship .media-meta { display: flex; min-width: 0; flex-direction: column; justify-content: center; }
   .archive-original-root .recent-section .media-card--worship .media-date, .archive-original-root .list-media-grid .media-card--worship .media-date { order: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .archive-original-root .recent-section .media-card--worship .media-date.is-title-duplicate, .archive-original-root .list-media-grid .media-card--worship .media-date.is-title-duplicate { display: none; }

@@ -207,8 +207,13 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   }));
   const otherTitle = "2026년 9월 9일 수요예배";
   const otherVideos = [{ ...videos[0], id: "mobile-title-other", date: "2026-09-09", serviceType: "수요예배", title: otherTitle }];
+  const homeVideos = [
+    videos[0],
+    { ...videos[0], id: "mobile-title-attendance", type: "attendance", serviceType: "출석 기록", title: "출석 교인", preacher: "" },
+  ];
   await page.route("**/api/archive/videos?*", (route) => {
-    const selectedVideos = new URL(route.request().url()).searchParams.get("group") === "other" ? otherVideos : videos;
+    const group = new URL(route.request().url()).searchParams.get("group");
+    const selectedVideos = group === "other" ? otherVideos : group === "sunday" ? videos : homeVideos;
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos: selectedVideos, total: selectedVideos.length, page: 1, pageSize: 8 }) });
   });
   await page.route("**/api/archive/videos/mobile-title-*/thumbnail", (route) => route.fulfill({
@@ -264,6 +269,30 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   await page.setViewportSize({ width: 820, height: 1000 });
   await expect(otherCard.locator("h3")).not.toHaveCSS("white-space", "nowrap");
   await expect(otherCard.locator(".media-date")).toBeVisible();
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 720 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/archive");
+    await expect(page.locator(".recent-section .media-card")).toHaveCount(2);
+    await expect(page.locator(".recent-section .media-card--worship .media-thumb")).toBeVisible();
+    await expect(page.locator(".recent-section .media-card:not(.media-card--worship) .media-thumb")).toBeVisible();
+    const dimensions = await page.locator(".recent-section").evaluate((section) => {
+      const worship = section.querySelector(".media-card--worship .media-thumb")?.getBoundingClientRect();
+      const attendance = section.querySelector(".media-card:not(.media-card--worship) .media-thumb")?.getBoundingClientRect();
+      const worshipMeta = section.querySelector(".media-card--worship .media-meta")?.getBoundingClientRect();
+      return {
+        worship: { width: worship?.width ?? 0, height: worship?.height ?? 0 },
+        attendance: { width: attendance?.width ?? 0, height: attendance?.height ?? 0 },
+        textWidth: worshipMeta?.width ?? 0,
+      };
+    });
+    expect(Math.abs(dimensions.worship.width - dimensions.attendance.width)).toBeLessThan(0.5);
+    expect(Math.abs(dimensions.worship.height - dimensions.attendance.height)).toBeLessThan(0.5);
+    expect(dimensions.worship.width / dimensions.worship.height).toBeCloseTo(16 / 9, 2);
+    expect(dimensions.textWidth).toBeGreaterThan(100);
+    await expect(page.locator(".recent-section .media-card--worship h3")).toHaveCSS("white-space", "nowrap");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
 });
 
 test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {
