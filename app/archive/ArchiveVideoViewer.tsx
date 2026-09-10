@@ -75,7 +75,7 @@ export default function ArchiveVideoViewer({
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", key);
       if (lockBodyScroll) document.body.style.overflow = previousOverflow;
-      window.setTimeout(() => returnFocusElement?.focus(), 0);
+      window.setTimeout(() => returnFocusElement?.focus({ preventScroll: true }), 0);
     };
   }, [lockBodyScroll, playing.video.id, returnFocusRef]);
 

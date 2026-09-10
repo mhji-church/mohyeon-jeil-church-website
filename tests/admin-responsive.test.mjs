@@ -130,7 +130,8 @@ test("archive worship contents are saved from direct admin input without time of
   assert.match(viewer, /viewer-sermon-title/);
   assert.ok(viewer.includes("{index + 1}."));
   assert.match(portal, /<p>설교 · \{video\.preacher \|\| "모현제일교회"\}<\/p>/);
-  assert.match(portal, /<h1 aria-label=\{featured\.title\} title=\{featured\.title\}>\{featured\.title\}<\/h1>/);
+  assert.match(portal, /<h1 aria-label=\{featured\.title\} title=\{featured\.title\}><button className="featured-title-button"/);
+  assert.match(portal, /className="media-title-button"[^>]*onClick=\{\(event\) => void play\(video, event\.currentTarget\)\}/);
   assert.doesNotMatch(portal, /찬양 \$\{publicSongs|sermonSummary/);
   assert.match(styles, /\.viewer-song-number\s*\{/);
   assert.match(styles, /\.viewer-sermon-title\s*\{[^}]*white-space: nowrap/);

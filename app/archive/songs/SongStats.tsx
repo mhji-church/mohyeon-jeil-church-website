@@ -38,8 +38,10 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
   const [videoError, setVideoError] = useState("");
   const [staleOrder, setStaleOrder] = useState(() => searchParams.get("staleOrder") ?? "oldest");
   const historyCloseButton = useRef<HTMLButtonElement>(null);
+  const historyModal = useRef<HTMLElement>(null);
   const historyLaunchButton = useRef<HTMLElement | null>(null);
   const videoLaunchButton = useRef<HTMLElement | null>(null);
+  const historyScrollTop = useRef<number | null>(null);
   const playingRef = useRef<ArchivePlayingVideo | null>(null);
   const songCache = useRef(new Map<string, Ranking>());
   const videoCache = useRef(new Map<string, ArchivePlayingVideo>());
@@ -65,6 +67,14 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
       window.requestAnimationFrame(() => window.scrollTo(0, state.archiveSongPageScrollY as number));
     }
   }, []);
+  const restoreHistoryAfterVideo = useCallback(() => {
+    const scrollTop = historyScrollTop.current;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (scrollTop != null && historyModal.current) historyModal.current.scrollTop = scrollTop;
+      videoLaunchButton.current?.focus({ preventScroll: true });
+      historyScrollTop.current = null;
+    }));
+  }, []);
 
   useEffect(() => { const timer = setTimeout(() => void load(), 180); return () => clearTimeout(timer); }, [load]);
   useEffect(() => { playingRef.current = playing; }, [playing]);
@@ -83,10 +93,11 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
       const cachedSong = songCache.current.get(songId);
       if (cachedSong) setSelected(cachedSong);
       setPlaying(videoId ? videoCache.current.get(videoId) ?? null : null);
+      if (!videoId && playingRef.current) restoreHistoryAfterVideo();
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [restorePageState]);
+  }, [restoreHistoryAfterVideo, restorePageState]);
   useEffect(() => {
     if (!selected) return;
     const previousOverflow = document.body.style.overflow;
@@ -142,6 +153,7 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
 
   async function openVideo(item: History, target: HTMLElement) {
     videoLaunchButton.current = target;
+    historyScrollTop.current = historyModal.current?.scrollTop ?? null;
     setOpeningVideoId(item.videoId);
     setVideoError("");
     try {
@@ -165,7 +177,10 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
   function closeVideo() {
     const state = modalState();
     if (playing && state.archiveSongVideoId === playing.video.id) window.history.back();
-    else setPlaying(null);
+    else {
+      setPlaying(null);
+      restoreHistoryAfterVideo();
+    }
   }
 
   return <ArchiveShell active="songs" account={<Link aria-label={`${viewerName} 계정 메뉴`} className="header-action-link user-link" href={viewerKind === "admin" ? "/archive/admin" : "/member"}><ArchiveIcon name="user" size={17} /><span>{viewerName}</span></Link>}>
@@ -187,7 +202,7 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
         <section className="song-ranking-card stale"><div className="song-ranking-title"><h2>오랫동안 부르지 않은 찬양</h2><select aria-label="오래된 찬양 정렬" value={staleOrder} onChange={(event) => setStaleOrder(event.target.value)}><option value="oldest">오래된 순</option><option value="recent">최근 순</option></select></div><div className="song-table-wrap"><table><thead><tr><th>찬양 제목</th><th>전체 사용</th><th>마지막 사용일</th><th>경과 일수</th></tr></thead><tbody>{staleSongs.map((song) => <tr key={song.id}><td>{song.displayTitle}</td><td>{song.totalCount}</td><td>{song.lastUsed}</td><td>{song.daysSince}일</td></tr>)}</tbody></table></div></section></>}
       {loading && <div className="archive-empty">찬양 통계를 불러오고 있습니다.</div>}
     </section>
-    {selected && <div className="song-history-backdrop" role="dialog" aria-modal={playing ? undefined : true} aria-hidden={playing ? true : undefined} inert={playing ? true : undefined} aria-label={`${selected.displayTitle} 사용 이력`} onMouseDown={(event) => event.target === event.currentTarget && closeHistory()}><section className="song-history-modal"><header><div><small>찬양 사용 이력</small><h2>{selected.displayTitle}</h2></div><button ref={historyCloseButton} type="button" onClick={closeHistory} aria-label="닫기">×</button></header>{videoError && <div className="archive-notice" role="alert">{videoError}</div>}<div className="song-history-list">{history.map((item) => <article key={`${item.videoId}-${item.order}`}><time>{item.date}</time><div><strong>{item.serviceType}</strong><span>{item.videoTitle}</span></div><b>{item.order}번째 찬양</b><button className="song-history-video-button" type="button" disabled={openingVideoId === item.videoId} onClick={(event) => void openVideo(item, event.currentTarget)}>{openingVideoId === item.videoId ? "여는 중…" : "영상 보기"}</button></article>)}{historyLoading ? <p role="status">사용 이력을 불러오고 있습니다.</p> : !history.length && <p>선택한 조건의 사용 이력이 없습니다.</p>}</div></section></div>}
+    {selected && <div className="song-history-backdrop" role="dialog" aria-modal={playing ? undefined : true} aria-hidden={playing ? true : undefined} inert={playing ? true : undefined} aria-label={`${selected.displayTitle} 사용 이력`} onMouseDown={(event) => event.target === event.currentTarget && closeHistory()}><section className="song-history-modal" ref={historyModal}><header><div><small>찬양 사용 이력</small><h2>{selected.displayTitle}</h2></div><button ref={historyCloseButton} type="button" onClick={closeHistory} aria-label="닫기">×</button></header>{videoError && <div className="archive-notice" role="alert">{videoError}</div>}<div className="song-history-list">{history.map((item) => <article key={`${item.videoId}-${item.order}`}><time>{item.date.replaceAll("-", ".")}</time><div className="song-history-copy"><strong>{item.serviceType}</strong><span>{item.videoTitle}</span></div><div className="song-history-actions"><b>{item.order}번째 찬양</b><button className="song-history-video-button" type="button" disabled={openingVideoId === item.videoId} onClick={(event) => void openVideo(item, event.currentTarget)}>{openingVideoId === item.videoId ? "여는 중…" : "영상 보기"}</button></div></article>)}{historyLoading ? <p role="status">사용 이력을 불러오고 있습니다.</p> : !history.length && <p>선택한 조건의 사용 이력이 없습니다.</p>}</div></section></div>}
     {playing && <ArchiveVideoViewer playing={playing} onClose={closeVideo} returnFocusRef={videoLaunchButton} lockBodyScroll={false} layered />}
   </ArchiveShell>;
 }

@@ -99,6 +99,14 @@ test("mobile hero keeps the full desktop composition across all five slides", as
       expect(imageState.naturalRatio).toBeCloseTo(16 / 9, 2);
       expect(imageState.boxRatio).toBeCloseTo(16 / 9, 2);
       expect(imageState.objectFit).toBe("cover");
+      await expect(image).toHaveCSS("animation-name", "heroDriftMobile");
+      if (index === 0) {
+        const initialScale = await image.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a);
+        await page.waitForTimeout(700);
+        const laterScale = await image.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a);
+        expect(laterScale).toBeGreaterThan(initialScale + 0.001);
+        expect(laterScale).toBeLessThan(1.026);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       await hero.screenshot({ path: `test-results/hero-mobile-${viewport.width}-${index + 1}.png` });
       if (index < 4) {
@@ -108,6 +116,11 @@ test("mobile hero keeps the full desktop composition across all five slides", as
       }
     }
   }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".hero-slide.is-active img")).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   expect(errors).toEqual([]);
 });
 
@@ -265,6 +278,12 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
     contentType: "image/svg+xml",
     body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#312f3d"/></svg>',
   }));
+  await page.route("**/api/archive/videos/mobile-title-*/playback", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/").at(-2);
+    const video = [...videos, ...otherVideos, ...getHomeVideos()].find((item) => item.id === id) ?? videos[0];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ video, embedUrl: `https://www.youtube-nocookie.com/embed/${id}`, note: "" }) });
+  });
+  await page.route("https://www.youtube-nocookie.com/embed/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>로컬 영상 플레이어</title>" }));
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/member/login?return_to=%2Farchive%2Fsunday");
@@ -295,9 +314,21 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   });
   expect(placement.headingLeft).toBeGreaterThanOrEqual(placement.thumbnailRight);
   expect(placement.preacherTop).toBeGreaterThanOrEqual(placement.headingBottom);
-  expect(await example.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  expect(await long.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await example.locator(".media-title-button").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await long.locator(".media-title-button").evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const exampleTitleButton = cards.nth(0).locator(".media-title-button");
+  await exampleTitleButton.focus();
+  await exampleTitleButton.press("Enter");
+  await expect(page.locator(".viewer-backdrop")).toHaveCount(1);
+  await expect(page.locator(".viewer-backdrop")).toBeVisible();
+  await page.locator(".viewer-backdrop").getByRole("button", { name: "닫기" }).click();
+  await expect(exampleTitleButton).toBeFocused();
+  const longTitleButton = cards.nth(1).locator(".media-title-button");
+  await longTitleButton.press("Space");
+  await expect(page.locator(".viewer-backdrop")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(longTitleButton).toBeFocused();
 
   await page.setViewportSize({ width: 320, height: 720 });
   await expect(example).toHaveCSS("white-space", "nowrap");
@@ -313,6 +344,11 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   await page.setViewportSize({ width: 820, height: 1000 });
   await expect(otherCard.locator("h3")).not.toHaveCSS("white-space", "nowrap");
   await expect(otherCard.locator(".media-date")).toBeVisible();
+  const tabletTitleButton = otherCard.locator(".media-title-button");
+  await tabletTitleButton.click();
+  await expect(page.locator(".viewer-backdrop")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(tabletTitleButton).toBeFocused();
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 720 }]) {
     await page.setViewportSize(viewport);
@@ -349,8 +385,23 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
       const textWidth = context.measureText(text).width + Number.parseFloat(style.letterSpacing || "0") * Math.max(0, text.length - 1);
       return textWidth <= element.clientWidth + 0.5;
     })).toBe(true);
+    if (viewport.width === 390) {
+      const featuredTitleButton = page.locator(".featured-copy .featured-title-button");
+      await featuredTitleButton.click();
+      await expect(page.locator(".viewer-backdrop")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(featuredTitleButton).toBeFocused();
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   }
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/archive/sunday");
+  const desktopTitleButton = page.locator(".list-media-grid .media-card .media-title-button").first();
+  await desktopTitleButton.click();
+  await expect(page.locator(".viewer-backdrop")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(desktopTitleButton).toBeFocused();
 
   homeFeaturedTitle = longTitle;
   await page.setViewportSize({ width: 390, height: 844 });
@@ -426,7 +477,7 @@ test("song history keeps its state while the shared video viewer opens above it"
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await page.getByLabel("오래된 찬양 정렬").selectOption("recent");
 
-  for (const viewport of [{ width: 1440, height: 700 }, { width: 390, height: 640 }]) {
+  for (const viewport of [{ width: 1440, height: 700 }, { width: 390, height: 640 }, { width: 320, height: 640 }]) {
     await page.setViewportSize(viewport);
     const songButton = page.getByRole("button", { name: "브라우저 찬양" });
     await songButton.click();
@@ -434,6 +485,25 @@ test("song history keeps its state while the shared video viewer opens above it"
     const historyModal = page.locator(".song-history-modal");
     await expect(historyDialog).toBeVisible();
     await expect(page).toHaveURL(/\/archive\/songs\?/);
+    if (viewport.width <= 390) {
+      const firstHistoryItem = page.locator(".song-history-list article").first();
+      const mobileLayout = await firstHistoryItem.evaluate((article) => {
+        const date = article.querySelector("time")?.getBoundingClientRect();
+        const service = article.querySelector(".song-history-copy strong")?.getBoundingClientRect();
+        const title = article.querySelector(".song-history-copy span")?.getBoundingClientRect();
+        const actions = article.querySelector(".song-history-actions")?.getBoundingClientRect();
+        const button = article.querySelector(".song-history-video-button")?.getBoundingClientRect();
+        return { dateText: article.querySelector("time")?.textContent, date, service, title, actions, button, overflow: article.scrollWidth - article.clientWidth };
+      });
+      expect(mobileLayout.dateText).toBe("2026.08.18");
+      expect(Math.abs((mobileLayout.date?.top ?? 0) - (mobileLayout.service?.top ?? 0))).toBeLessThan(3);
+      expect(mobileLayout.title?.top ?? 0).toBeGreaterThanOrEqual((mobileLayout.date?.bottom ?? 0) - 1);
+      expect(mobileLayout.actions?.top ?? 0).toBeGreaterThanOrEqual((mobileLayout.title?.bottom ?? 0) - 1);
+      expect(mobileLayout.button?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(mobileLayout.button?.right ?? 0).toBeGreaterThan(mobileLayout.actions?.left ?? 0);
+      expect(mobileLayout.overflow).toBeLessThanOrEqual(0);
+      await historyModal.screenshot({ path: `test-results/song-history-mobile-${viewport.width}.png` });
+    }
     await historyModal.evaluate((element) => { element.scrollTop = Math.floor(element.scrollHeight / 2); });
 
     const videoButtons = page.getByRole("button", { name: "영상 보기" });
@@ -455,7 +525,7 @@ test("song history keeps its state while the shared video viewer opens above it"
       else await viewer.click({ position: { x: 4, y: 4 } });
       await expect(viewer).not.toBeVisible();
       await expect(historyDialog).toBeVisible();
-      expect(await historyModal.evaluate((element, before) => Math.abs(element.scrollTop - before), scrollBefore)).toBeLessThan(3);
+      await expect.poll(() => historyModal.evaluate((element, before) => Math.abs(element.scrollTop - before), scrollBefore)).toBeLessThan(3);
       await expect(trigger).toBeFocused();
       await expect(page.locator(".viewer-player iframe")).toHaveCount(0);
       expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");

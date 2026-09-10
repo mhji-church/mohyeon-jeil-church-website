@@ -5343,10 +5343,10 @@ svg {
 
 @keyframes heroDriftMobile {
   from {
-    transform: scale(1.008);
+    transform: scale(1);
   }
   to {
-    transform: scale(1);
+    transform: scale(1.025);
   }
 }
 
@@ -7835,7 +7835,9 @@ footer {
   .hero-slide img {
     object-fit: cover;
     object-position: var(--hero-mobile-position, center);
+    transform-origin: var(--hero-mobile-position, center);
     transform: scale(1);
+    will-change: transform;
   }
 
   .hero-slide.is-active img {
