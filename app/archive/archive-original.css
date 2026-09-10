@@ -501,7 +501,7 @@ body:has(.archive-original-root[data-theme="dark"]) { background: #32323f; }
   .archive-original-root .attendance-title-desktop { display: none; }
   .archive-original-root .attendance-title-mobile { display: block; overflow: hidden; font-size: clamp(12px, 3.45vw, 14px); letter-spacing: -.035em; text-overflow: clip; white-space: nowrap; }
   .archive-original-root .recent-section .media-duration, .archive-original-root .list-media-grid .media-duration { display: none; }
-  .archive-original-root .featured-copy h1 { margin: 8px 0 6px; font-size: 25px; }
+  .archive-original-root .featured-copy h1 { max-width: 100%; margin: 8px 0 6px; overflow: hidden; font-size: 18px; letter-spacing: -.065em; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
   .archive-original-root .featured-note { display: none; }
   .archive-original-root .featured-action { min-height: 44px; margin-top: 10px; }
   .archive-original-root .recent-section { margin-top: 16px; }

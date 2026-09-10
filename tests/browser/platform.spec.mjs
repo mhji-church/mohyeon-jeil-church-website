@@ -207,13 +207,14 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   }));
   const otherTitle = "2026년 9월 9일 수요예배";
   const otherVideos = [{ ...videos[0], id: "mobile-title-other", date: "2026-09-09", serviceType: "수요예배", title: otherTitle }];
-  const homeVideos = [
-    videos[0],
+  let homeFeaturedTitle = exampleTitle;
+  const getHomeVideos = () => [
+    { ...videos[0], title: homeFeaturedTitle },
     { ...videos[0], id: "mobile-title-attendance", type: "attendance", serviceType: "출석 기록", title: "출석 교인", preacher: "" },
   ];
   await page.route("**/api/archive/videos?*", (route) => {
     const group = new URL(route.request().url()).searchParams.get("group");
-    const selectedVideos = group === "other" ? otherVideos : group === "sunday" ? videos : homeVideos;
+    const selectedVideos = group === "other" ? otherVideos : group === "sunday" ? videos : getHomeVideos();
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ videos: selectedVideos, total: selectedVideos.length, page: 1, pageSize: 8 }) });
   });
   await page.route("**/api/archive/videos/mobile-title-*/thumbnail", (route) => route.fulfill({
@@ -291,8 +292,40 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
     expect(dimensions.worship.width / dimensions.worship.height).toBeCloseTo(16 / 9, 2);
     expect(dimensions.textWidth).toBeGreaterThan(100);
     await expect(page.locator(".recent-section .media-card--worship h3")).toHaveCSS("white-space", "nowrap");
+    const featuredHeading = page.locator(".featured-copy h1");
+    await expect(featuredHeading).toHaveAttribute("aria-label", exampleTitle);
+    await expect(featuredHeading).toHaveAttribute("title", exampleTitle);
+    await expect(featuredHeading).toHaveCSS("white-space", "nowrap");
+    expect(Number.parseFloat(await featuredHeading.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(18);
+    expect(await featuredHeading.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) return false;
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const text = element.textContent ?? "";
+      const textWidth = context.measureText(text).width + Number.parseFloat(style.letterSpacing || "0") * Math.max(0, text.length - 1);
+      return textWidth <= element.clientWidth + 0.5;
+    })).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   }
+
+  homeFeaturedTitle = longTitle;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/archive?featured=long-title-test");
+  const longFeaturedHeading = page.locator(".featured-copy h1");
+  await expect(longFeaturedHeading).toHaveText(longTitle);
+  await expect(longFeaturedHeading).toHaveAttribute("aria-label", longTitle);
+  await expect(longFeaturedHeading).toHaveAttribute("title", longTitle);
+  await expect(longFeaturedHeading).toHaveCSS("text-overflow", "ellipsis");
+  expect(await longFeaturedHeading.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const context = document.createElement("canvas").getContext("2d");
+    if (!context) return false;
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const text = element.textContent ?? "";
+    const textWidth = context.measureText(text).width + Number.parseFloat(style.letterSpacing || "0") * Math.max(0, text.length - 1);
+    return textWidth > element.clientWidth + 0.5;
+  })).toBe(true);
 });
 
 test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {
