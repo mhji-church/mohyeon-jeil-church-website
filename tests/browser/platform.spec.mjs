@@ -839,6 +839,7 @@ test("admin member duplicates stay clear and require a fresh server confirmation
         display: getComputedStyle(element).display,
         alignItems: getComputedStyle(element).alignItems,
         whiteSpace: getComputedStyle(element).whiteSpace,
+        viewportWidth: window.innerWidth,
         lineHeights: styles,
         centers: rects.map((rect) => rect ? rect.top + rect.height / 2 : null),
         fits: element.scrollWidth <= element.clientWidth,
@@ -849,7 +850,8 @@ test("admin member duplicates stay clear and require a fresh server confirmation
     expect(metrics.lineHeights).toEqual(["14px", "14px", "14px"]);
     expect(metrics.whiteSpace).toBe("nowrap");
     expect(metrics.fits).toBe(true);
-    expect(Math.abs((metrics.centers[0] ?? 0) - (metrics.centers[1] ?? 0))).toBeLessThanOrEqual(0.5);
+    const expectedOffset = metrics.viewportWidth > 680 ? 1 : 0;
+    expect(Math.abs(((metrics.centers[1] ?? 0) - (metrics.centers[0] ?? 0)) - expectedOffset)).toBeLessThanOrEqual(0.5);
   };
   await expect(duplicateSummary).toBeVisible();
   await expectDuplicateSummaryAligned();
@@ -863,16 +865,57 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   await expect(groupPanel).toContainText("이름 상이");
   await expect(groupPanel).toContainText("최초 가입");
   await expect(groupPanel).toContainText("추가 가입");
-  await groupPanel.getByRole("button", { name: "정보 비교" }).click();
+  const groupToggle = groupPanel.locator(".admin-duplicate-toggle");
+  const compareButton = groupPanel.getByRole("button", { name: "정보 비교" });
+  const mergeButton = groupPanel.getByRole("button", { name: "계정 병합" });
+  for (const button of [groupToggle, compareButton, mergeButton]) {
+    const metrics = await button.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return { cursor: style.cursor, width: rect.width, height: rect.height };
+    });
+    expect(metrics.cursor).toBe("pointer");
+    expect(metrics.width).toBeGreaterThanOrEqual(44);
+    expect(metrics.height).toBeGreaterThanOrEqual(44);
+  }
+  await groupToggle.focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  expect(await groupToggle.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  await groupToggle.press("Enter");
+  await expect(groupToggle).toHaveAttribute("aria-expanded", "false");
+  await groupToggle.press("Space");
+  await expect(groupToggle).toHaveAttribute("aria-expanded", "true");
+  await groupToggle.hover();
+  const toggleHoverColor = await groupToggle.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await page.mouse.down();
+  expect(await groupToggle.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(toggleHoverColor);
+  await page.mouse.up();
+  await expect(groupToggle).toHaveAttribute("aria-expanded", "false");
+  await groupToggle.press("Space");
+  await expect(groupToggle).toHaveAttribute("aria-expanded", "true");
+  await compareButton.hover();
+  await expect.poll(() => compareButton.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgb(255, 255, 255)");
+  await compareButton.click();
   const detailDialog = page.getByRole("dialog", { name: "중복 계정 정보 비교" });
   await expect(detailDialog).toContainText("기존 가상회원");
   await expect(detailDialog).toContainText("상이");
   await page.screenshot({ path: "test-results/admin-members-duplicates-desktop-1440.png" });
   await detailDialog.getByRole("button", { name: "닫기" }).click();
-  await groupPanel.getByRole("button", { name: "계정 병합" }).click();
+  await mergeButton.click();
   const mergeDialog = page.getByRole("dialog", { name: "회원 계정 병합 확인" });
+  await expect(mergeDialog).toContainText("2개 계정을 ‘중복 의심회원’ 회원으로 병합합니다.");
+  await expect(mergeDialog).toContainText("휴대폰·생년월일 일치");
+  await expect(mergeDialog).toContainText("기준 계정");
+  await expect(mergeDialog).toContainText("선택 필요");
   await expect(mergeDialog).toContainText("2개 모두 유지");
-  await expect(mergeDialog).toContainText("선택한 대표 회원 기준");
+  await expect(mergeDialog).toContainText("각 아이디별로 유지");
+  await expect(mergeDialog).toContainText("기준 계정 정보 유지");
+  await expect(mergeDialog.getByRole("button", { name: "계정 2개 병합" })).toBeDisabled();
+  await expect(mergeDialog.getByLabel("공개 이름")).toBeVisible();
+  await expect(mergeDialog.locator(".admin-merge-readonly-field")).toHaveCount(3);
+  await expect(mergeDialog.locator(".admin-merge-login-chips span")).toHaveCount(2);
+  await page.screenshot({ path: "test-results/admin-members-merge-dialog-desktop-1440.png" });
   await mergeDialog.getByRole("button", { name: "병합 화면 닫기" }).click();
 
   await page.getByRole("button", { name: "전체", exact: true }).click();
@@ -895,19 +938,66 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   await expect(page.locator(".admin-duplicate-group")).toBeVisible();
   await page.screenshot({ path: "test-results/admin-members-duplicates-list-mobile-390.png" });
   await page.locator(".admin-duplicate-group").getByRole("button", { name: "계정 병합" }).click();
-  await expect(page.getByRole("dialog", { name: "회원 계정 병합 확인" })).toBeVisible();
-  await expect.poll(() => page.locator(".admin-member-merge-dialog").evaluate((dialog) => dialog.scrollTop)).toBe(0);
+  const mobileMergeDialog = page.getByRole("dialog", { name: "회원 계정 병합 확인" });
+  const mergeBody = mobileMergeDialog.locator(".admin-member-merge-body");
+  await expect(mobileMergeDialog).toBeVisible();
+  await expect.poll(() => mergeBody.evaluate((body) => body.scrollTop)).toBe(0);
+  const mobileLayout = await mergeBody.evaluate((body) => {
+    const children = [...body.children].map((child) => child.getBoundingClientRect());
+    return {
+      fits: body.scrollWidth <= body.clientWidth,
+      aligned: children.every((rect) => Math.abs(rect.left - children[0].left) <= 1),
+      fullWidth: children.every((rect) => Math.abs(rect.width - children[0].width) <= 1),
+    };
+  });
+  expect(mobileLayout).toEqual({ fits: true, aligned: true, fullWidth: true });
+  const mobileChrome = await mobileMergeDialog.locator(".admin-member-merge-dialog").evaluate((dialog) => {
+    const dialogRect = dialog.getBoundingClientRect();
+    const headerRect = dialog.querySelector(":scope > header")?.getBoundingClientRect();
+    const bodyRect = dialog.querySelector(":scope > .admin-member-merge-body")?.getBoundingClientRect();
+    const footerRect = dialog.querySelector(":scope > footer")?.getBoundingClientRect();
+    return {
+      dialogTop: dialogRect.top,
+      dialogBottom: dialogRect.bottom,
+      headerTop: headerRect?.top ?? -1,
+      headerBottom: headerRect?.bottom ?? -1,
+      headerHeight: headerRect?.height ?? 0,
+      bodyTop: bodyRect?.top ?? -1,
+      bodyBottom: bodyRect?.bottom ?? -1,
+      footerTop: footerRect?.top ?? -1,
+      footerBottom: footerRect?.bottom ?? -1,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(mobileChrome.dialogTop).toBeGreaterThanOrEqual(0);
+  expect(mobileChrome.headerTop).toBeGreaterThanOrEqual(0);
+  expect(mobileChrome.headerHeight).toBeGreaterThanOrEqual(68);
+  expect(mobileChrome.bodyTop).toBeGreaterThanOrEqual(mobileChrome.headerBottom - 1);
+  expect(mobileChrome.footerTop).toBeGreaterThanOrEqual(mobileChrome.bodyBottom - 1);
+  expect(mobileChrome.dialogBottom).toBeLessThanOrEqual(mobileChrome.viewportHeight);
+  expect(mobileChrome.footerBottom).toBeLessThanOrEqual(mobileChrome.viewportHeight);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.screenshot({ path: "test-results/admin-members-duplicates-mobile-390.png" });
+  await mergeBody.evaluate((body) => { body.scrollTop = body.scrollHeight; });
+  await expect(mobileMergeDialog.getByRole("button", { name: "병합 화면 닫기" })).toBeInViewport();
+  await expect(mobileMergeDialog.getByRole("button", { name: "계정 2개 병합" })).toBeInViewport();
+  await mobileMergeDialog.getByRole("checkbox").check();
+  await expect(mobileMergeDialog.getByRole("button", { name: "계정 2개 병합" })).toBeEnabled();
   await page.setViewportSize({ width: 320, height: 720 });
-  await expect(page.getByRole("button", { name: "확인 후 계정 병합" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "계정 2개 병합" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await page.getByRole("button", { name: "병합 화면 닫기" }).click();
+  await mobileMergeDialog.getByRole("button", { name: "취소" }).click();
+  await expect(mobileMergeDialog).not.toBeVisible();
   await page.setViewportSize({ width: 820, height: 900 });
   await expect(duplicateSummary).toBeVisible();
   await expectDuplicateSummaryAligned();
   await expect(page.locator(".admin-duplicate-group")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.locator(".admin-duplicate-group").getByRole("button", { name: "계정 병합" }).click();
+  await expect(page.getByRole("dialog", { name: "회원 계정 병합 확인" })).toBeVisible();
+  expect(await page.locator(".admin-member-merge-dialog").evaluate((dialog) => dialog.getBoundingClientRect().width <= 800)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "병합 화면 닫기" }).click();
   expect(errors).toEqual([]);
 });
 

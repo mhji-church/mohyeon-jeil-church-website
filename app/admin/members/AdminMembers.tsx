@@ -44,6 +44,8 @@ type MergeDraft = {
   confirmed: boolean;
 };
 
+type MergeProfileField = "name" | "phone" | "birthDate" | "position";
+
 function duplicateReasonLabel(fields: MemberDuplicateField[]) {
   if (fields.includes("phone") && fields.includes("birthDate")) return "휴대폰·생년월일 일치";
   return fields.includes("phone") ? "휴대폰 일치" : "생년월일 일치";
@@ -76,6 +78,17 @@ function formatDate(value: string | null) {
 
 function hasDifferentValues(group: MemberDuplicateGroup, field: "name" | "phone" | "birthDate" | "position") {
   return new Set(group.accounts.map((account) => String(account[field] ?? "").trim())).size > 1;
+}
+
+function getMergeFieldChoices(preview: MemberMergePreview, field: MergeProfileField) {
+  const choices = new Map<string, string[]>();
+  preview.accounts.forEach((account) => {
+    const value = String(account[field] ?? "").trim();
+    const sources = choices.get(value) ?? [];
+    sources.push(`${account.username} · ${formatDate(account.createdAt)}`);
+    choices.set(value, sources);
+  });
+  return [...choices].map(([value, sources]) => ({ value, sources }));
 }
 
 export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount, canManageArchive }: Props) {
@@ -170,6 +183,10 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
   const currentPage = Math.min(Math.max(Number.isInteger(requestedPage) ? requestedPage : 1, 1), totalPages);
   const paginatedMembers = visibleMembers.slice((currentPage - 1) * 10, currentPage * 10);
   const paginatedDuplicateGroups = visibleDuplicateGroups.slice((currentPage - 1) * 10, currentPage * 10);
+  const selectedRepresentative = mergePreview?.accounts.find((account) => account.id === mergeDraft?.representativeMemberId) ?? null;
+  const mergeMatchFields = mergePreview
+    ? [...new Set(mergePreview.accounts.flatMap((account) => account.matchedFields))]
+    : [];
 
   const changePage = useCallback((page: number, replace = false) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -200,6 +217,19 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-duplicate-group-id="${CSS.escape(groupId)}"]`)?.scrollIntoView({ block: "start" });
     });
+  };
+
+  const toggleDuplicateGroup = (groupId: string, expanded: boolean) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (expanded) next.delete(groupId); else next.add(groupId);
+      return next;
+    });
+    if (expanded && searchParams.get("group") === groupId) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("group");
+      router.replace(`${pathname}${params.size ? `?${params}` : ""}`, { scroll: false });
+    }
   };
 
   useEffect(() => {
@@ -529,24 +559,22 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                   <section className="admin-duplicate-group" data-duplicate-group-id={group.id} key={group.id}>
                     <header>
                       <button
+                        className="admin-duplicate-toggle"
                         type="button"
                         aria-expanded={expanded}
                         aria-controls={`duplicate-group-${groupIndex}`}
-                        onClick={() => setExpandedGroups((current) => {
-                          const next = new Set(current);
-                          if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
-                          return next;
-                        })}
+                        aria-label={`${uniqueNames[0]} 중복 계정 ${expanded ? "접기" : "펼치기"}`}
+                        onClick={() => toggleDuplicateGroup(group.id, expanded)}
                       >
                         <span>중복 {String(groupIndex).padStart(2, "0")}</span>
                         <strong>{uniqueNames[0]}{uniqueNames.length > 1 ? ` 외 다른 이름 ${uniqueNames.length - 1}개` : ""}</strong>
                         <small>관련 계정 {group.accounts.length}개 · 추가 계정 {group.accounts.length - 1}개</small>
                         {group.differentNames && <b>이름 상이</b>}
-                        <i aria-hidden="true">{expanded ? "−" : "+"}</i>
+                        <i className="admin-duplicate-toggle-icon" aria-hidden="true">{expanded ? "−" : "+"}</i>
                       </button>
                       <div>
                         <button type="button" onClick={() => openComparison(group)}>정보 비교</button>
-                        <button className="admin-merge-open-button" type="button" onClick={() => void openMerge(group.id)}>계정 병합</button>
+                        <button className="admin-merge-open-button" type="button" disabled={mergeLoading} onClick={() => void openMerge(group.id)}>계정 병합</button>
                       </div>
                     </header>
                     {expanded && (
@@ -779,51 +807,75 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
 
       {mergePreview && mergeDraft && (
         <div className="admin-confirm-backdrop admin-member-merge-backdrop" role="dialog" aria-modal="true" aria-label="회원 계정 병합 확인">
-          <section className="admin-member-merge-dialog" ref={mergeDialogRef}>
+          <section className="admin-member-merge-dialog" ref={mergeDialogRef} aria-busy={mergeLoading}>
             <header>
               <div><span>SAFE ACCOUNT MERGE</span><h2>회원 계정 병합 확인</h2></div>
               <button type="button" onClick={() => closeDialog("merge")} aria-label="병합 화면 닫기">×</button>
             </header>
-            <p>원본 계정과 로그인 정보는 보존됩니다. 병합 즉시 기존 세션은 모두 종료되며 다시 로그인해야 합니다.</p>
-            {mergePreview.blockedReasons.length > 0 && (
-              <div className="admin-merge-blocked" role="alert">
-                <strong>일반 병합을 진행할 수 없습니다.</strong>
-                {mergePreview.blockedReasons.map((reason) => <span key={reason}>{reason}</span>)}
-              </div>
-            )}
-            <section>
-              <h3>병합 대상 계정 {mergePreview.accounts.length}개</h3>
-              <div className="admin-merge-account-list">
-                {mergePreview.accounts.map((account) => (
-                  <article key={account.id}>
-                    <div><strong>{account.name}</strong><span>{account.username}</span></div>
-                    <p>{duplicateReasonLabel(account.matchedFields)} · {statusLabel[account.status as MemberStatus] ?? account.status}</p>
-                    <small>사업장 신청 {account.relatedRecords.businessApplications}건 · 아카이브 권한 {account.relatedRecords.archiveAccess}건</small>
-                  </article>
-                ))}
-              </div>
-            </section>
-            <section className="admin-merge-choices">
-              <h3>병합 후 대표 정보</h3>
-              <label><span>내부 대표 회원</span><select value={mergeDraft.representativeMemberId} onChange={(event) => setMergeDraft({ ...mergeDraft, representativeMemberId: event.target.value })}>{mergePreview.accounts.filter((account) => !mergePreview.accounts.some((item) => item.status === "approved") || account.status === "approved").map((account) => <option value={account.id} key={account.id}>{account.name} · {account.username}{account.id === mergePreview.recommendedRepresentativeId ? " (추천)" : ""}</option>)}</select></label>
-              {([['name', '공개 이름'], ['phone', '연락처'], ['birthDate', '생년월일'], ['position', '직분·소속']] as const).map(([field, label]) => (
-                <label key={field}><span>{label}</span><select value={mergeDraft[field]} onChange={(event) => setMergeDraft({ ...mergeDraft, [field]: event.target.value })}>{[...new Set(mergePreview.accounts.map((account) => String(account[field] ?? "").trim()))].map((value) => <option value={value} key={`${field}-${value}`}>{value || "미입력"}</option>)}</select></label>
-              ))}
-            </section>
-            <section className="admin-merge-result-summary">
-              <h3>병합 전후</h3>
-              <dl>
-                <div><dt>로그인 아이디</dt><dd>{mergePreview.accounts.length}개 모두 유지</dd></div>
-                <div><dt>비밀번호</dt><dd>각 아이디의 기존 비밀번호 유지, 다음 변경 시 전체 통일</dd></div>
-                <div><dt>회원 상태·권한</dt><dd>선택한 대표 회원 기준 · 권한 자동 합산 없음</dd></div>
-                <div><dt>관련 기록</dt><dd>사업장 신청 {mergePreview.recordSummary.businessApplications}건 추적 · 기존 아카이브 권한 원본 보존</dd></div>
-                <div><dt>세션</dt><dd>모든 기존 로그인 세션 즉시 폐기</dd></div>
-              </dl>
-            </section>
-            <label className="admin-merge-confirm-check"><input type="checkbox" checked={mergeDraft.confirmed} onChange={(event) => setMergeDraft({ ...mergeDraft, confirmed: event.target.checked })} /><span>대표 정보와 로그인 아이디, 상태·권한 유지 기준을 확인했습니다.</span></label>
+            <div className="admin-member-merge-body">
+              <section className="admin-merge-hero-summary">
+                <strong>{mergePreview.accounts.length}개 계정을 ‘{mergeDraft.name || selectedRepresentative?.name || "선택 회원"}’ 회원으로 병합합니다.</strong>
+                <span>{mergeMatchFields.length ? duplicateReasonLabel(mergeMatchFields) : "중복 정보 일치"}</span>
+              </section>
+              <p className="admin-merge-preservation-note">원본 계정과 로그인 정보는 보존됩니다. 병합 즉시 기존 세션은 모두 종료되며 다시 로그인해야 합니다.</p>
+              {mergePreview.blockedReasons.length > 0 && (
+                <div className="admin-merge-blocked" role="alert">
+                  <strong>일반 병합을 진행할 수 없습니다.</strong>
+                  {mergePreview.blockedReasons.map((reason) => <span key={reason}>{reason}</span>)}
+                </div>
+              )}
+              <section>
+                <h3>병합 대상 계정</h3>
+                <p className="admin-merge-section-note">기준 계정의 회원 상태와 권한을 병합 후에도 유지합니다.</p>
+                <div className="admin-merge-account-list">
+                  {mergePreview.accounts.map((account) => (
+                    <article className={account.id === mergeDraft.representativeMemberId ? "is-representative" : ""} key={account.id}>
+                      <header>
+                        <div><strong>{account.name}</strong><span>{account.username}</span></div>
+                        <div className="admin-merge-account-badges">
+                          <b>{account.isFirst ? "최초 가입" : "추가 가입"}</b>
+                          {account.id === mergeDraft.representativeMemberId && <b className="is-representative">기준 계정</b>}
+                        </div>
+                      </header>
+                      <dl>
+                        <div><dt>가입일</dt><dd>{formatDate(account.createdAt)}</dd></div>
+                        <div><dt>상태</dt><dd>{statusLabel[account.status as MemberStatus] ?? account.status}</dd></div>
+                        <div><dt>연락처</dt><dd>{account.phone || "-"}</dd></div>
+                        <div><dt>생년월일</dt><dd>{account.birthDate || "-"}</dd></div>
+                      </dl>
+                      <p>{duplicateReasonLabel(account.matchedFields)}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              <section className="admin-merge-choices">
+                <h3>최종 회원 정보</h3>
+                <label className="admin-merge-representative-choice"><span>기준 계정</span><select value={mergeDraft.representativeMemberId} onChange={(event) => setMergeDraft({ ...mergeDraft, representativeMemberId: event.target.value })}>{mergePreview.accounts.filter((account) => !mergePreview.accounts.some((item) => item.status === "approved") || account.status === "approved").map((account) => <option value={account.id} key={account.id}>{account.name} · {account.username}{account.id === mergePreview.recommendedRepresentativeId ? " (추천)" : ""}</option>)}</select><small>선택한 계정의 회원 상태와 권한을 유지합니다.</small></label>
+                {([['name', '공개 이름'], ['phone', '연락처'], ['birthDate', '생년월일'], ['position', '직분·소속']] as const).map(([field, label]) => {
+                  const choices = getMergeFieldChoices(mergePreview, field);
+                  return choices.length === 1 ? (
+                    <div className="admin-merge-readonly-field" key={field}><span>{label}</span><strong>{choices[0].value || "미입력"}</strong><small>{choices[0].sources.join(", ")}</small></div>
+                  ) : (
+                    <label className="admin-merge-profile-choice" key={field}><span>{label}<b>선택 필요</b></span><select value={mergeDraft[field]} onChange={(event) => setMergeDraft({ ...mergeDraft, [field]: event.target.value })}>{choices.map((choice) => <option value={choice.value} key={`${field}-${choice.value}`}>{choice.value || "미입력"} — {choice.sources.join(", ")}</option>)}</select></label>
+                  );
+                })}
+              </section>
+              <section className="admin-merge-result-summary">
+                <h3>병합 결과</h3>
+                <dl>
+                  <div><dt>로그인 아이디</dt><dd>{mergePreview.accounts.length}개 모두 유지</dd></div>
+                  <div><dt>기존 비밀번호</dt><dd>각 아이디별로 유지</dd></div>
+                  <div><dt>회원 상태·권한</dt><dd>기준 계정 정보 유지</dd></div>
+                  <div><dt>관련 기록</dt><dd>기존 기록 통합</dd></div>
+                  <div><dt>기존 세션</dt><dd>병합 즉시 로그아웃</dd></div>
+                </dl>
+                <div className="admin-merge-login-chips" aria-label="유지되는 로그인 아이디">{mergePreview.accounts.map((account) => <span key={account.id}>{account.username}</span>)}</div>
+              </section>
+              <label className="admin-merge-confirm-check"><input type="checkbox" checked={mergeDraft.confirmed} onChange={(event) => setMergeDraft({ ...mergeDraft, confirmed: event.target.checked })} /><span>{mergePreview.accounts.length}개 계정을 {mergeDraft.name || selectedRepresentative?.name || "선택"} 회원으로 병합하는 것을 확인했습니다.</span></label>
+            </div>
             <footer>
               <button type="button" disabled={mergeLoading} onClick={() => closeDialog("merge")}>취소</button>
-              <button className="admin-confirm-merge-button" type="button" disabled={mergeLoading || !mergeDraft.confirmed || mergePreview.blockedReasons.length > 0} onClick={() => void executeMerge()}>{mergeLoading ? "병합 처리 중…" : "확인 후 계정 병합"}</button>
+              <button className="admin-confirm-merge-button" type="button" disabled={mergeLoading || !mergeDraft.confirmed || mergePreview.blockedReasons.length > 0} onClick={() => void executeMerge()}>{mergeLoading ? "병합 처리 중…" : `계정 ${mergePreview.accounts.length}개 병합`}</button>
             </footer>
           </section>
         </div>
