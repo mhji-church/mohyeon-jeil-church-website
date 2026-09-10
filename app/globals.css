@@ -5343,7 +5343,7 @@ svg {
 
 @keyframes heroDriftMobile {
   from {
-    transform: scale(1.025);
+    transform: scale(1.008);
   }
   to {
     transform: scale(1);
@@ -7661,7 +7661,7 @@ footer {
   }
 
   .hero {
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 9;
     height: auto;
     min-height: 0;
     margin-top: 68px;
@@ -7858,7 +7858,7 @@ footer {
   }
 
   .hero-copy {
-    bottom: 72px;
+    bottom: 68px;
     width: 88%;
   }
 
@@ -7886,7 +7886,7 @@ footer {
   }
 
   .hero-controller {
-    bottom: 20px;
+    bottom: 12px;
     grid-template-columns: auto 90px auto;
     gap: 11px;
   }

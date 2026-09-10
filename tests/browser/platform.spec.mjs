@@ -68,6 +68,49 @@ for (const viewport of viewports) {
   });
 }
 
+test("mobile hero keeps the full desktop composition across all five slides", async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors = watchErrors(page);
+  await page.addInitScript(() => window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1"));
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 720 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const hero = page.locator(".hero");
+    await expect(hero).toBeVisible();
+    const heroSize = await hero.evaluate((element) => element.getBoundingClientRect().toJSON());
+    expect(heroSize.width / heroSize.height).toBeCloseTo(16 / 9, 2);
+
+    for (let index = 0; index < 5; index += 1) {
+      const activeSlide = page.locator(".hero-slide.is-active");
+      await expect(activeSlide).toHaveCount(1);
+      const image = activeSlide.locator("img");
+      await expect(image).toBeVisible();
+      const imageState = await image.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          currentSrc: element.currentSrc,
+          naturalRatio: element.naturalWidth / element.naturalHeight,
+          boxRatio: bounds.width / bounds.height,
+          objectFit: style.objectFit,
+        };
+      });
+      expect(imageState.currentSrc).toMatch(/hero-(?:drone|sign|worship|flowers|winter)-4k\.webp$/);
+      expect(imageState.naturalRatio).toBeCloseTo(16 / 9, 2);
+      expect(imageState.boxRatio).toBeCloseTo(16 / 9, 2);
+      expect(imageState.objectFit).toBe("cover");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      await hero.screenshot({ path: `test-results/hero-mobile-${viewport.width}-${index + 1}.png` });
+      if (index < 4) {
+        await page.getByRole("button", { name: "다음 사진" }).click();
+        await expect(page.locator(".hero-counter strong")).toHaveText(String(index + 2).padStart(2, "0"));
+        await page.waitForTimeout(900);
+      }
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
 test("public content, mobile menu, and pagination remain usable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = watchErrors(page);
