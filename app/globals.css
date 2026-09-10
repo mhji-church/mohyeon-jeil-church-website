@@ -10499,6 +10499,8 @@ textarea { font-family: var(--font-pretendard); }
 }
 
 .admin-duplicate-summary {
+  display: inline-flex;
+  align-items: center;
   min-height: 32px !important;
   padding: 0 11px;
   border: 1px solid rgba(171, 82, 75, .28);
@@ -10507,9 +10509,16 @@ textarea { font-family: var(--font-pretendard); }
   color: #9b4e48 !important;
   font-size: 12px !important;
   font-weight: 700 !important;
+  line-height: 14px !important;
   white-space: nowrap;
 }
 
+.admin-duplicate-summary strong,
+.admin-duplicate-summary > span {
+  display: inline-flex;
+  align-items: center;
+  line-height: 14px !important;
+}
 .admin-duplicate-summary strong { color: #7f342f; font-weight: 800; }
 .admin-duplicate-summary[aria-pressed="true"] { border-color: #9b4e48; box-shadow: 0 0 0 2px rgba(155, 78, 72, .13); }
 .admin-member-filters button.is-duplicate-filter:not(.is-active) { color: #9b4e48; }
@@ -10562,7 +10571,7 @@ textarea { font-family: var(--font-pretendard); }
 .admin-confirm-backdrop section button.admin-confirm-duplicate-button { border-color: #302f3c; background: #302f3c; color: white; }
 .admin-duplicate-approval-backdrop { z-index: 130; }
 
-.admin-duplicate-summary { display: inline-flex; align-items: center; gap: 5px; }
+.admin-duplicate-summary { gap: 5px; }
 .admin-duplicate-summary > span { color: #8a6865 !important; font-size: 11px !important; font-weight: 650 !important; }
 .admin-duplicate-groups { display: grid; gap: 14px; padding: 18px; }
 .admin-duplicate-group { scroll-margin-top: 18px; overflow: hidden; border: 1px solid rgba(48, 47, 60, .12); border-radius: 9px; background: #fff; }
@@ -10658,8 +10667,8 @@ textarea { font-family: var(--font-pretendard); }
   .admin-duplicate-match-list article > b { grid-column: 1; grid-row: auto; justify-self: start; }
   .admin-confirm-backdrop .admin-duplicate-dialog > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
   .admin-confirm-backdrop .admin-duplicate-dialog > div:last-child > button:only-child { grid-column: 1 / -1; }
-  .admin-duplicate-summary { max-width: 100%; flex-wrap: wrap; border-radius: 9px; padding: 7px 10px; }
-  .admin-duplicate-summary > span { width: 100%; }
+  .admin-duplicate-summary { max-width: 100%; flex-wrap: nowrap; border-radius: 9px; padding: 7px 10px; }
+  .admin-duplicate-summary > span { width: auto; }
   .admin-duplicate-groups { gap: 11px; padding: 0; }
   .admin-duplicate-group > header { align-items: stretch; flex-direction: column; padding: 12px; }
   .admin-duplicate-group > header > button:first-child { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 8px; }

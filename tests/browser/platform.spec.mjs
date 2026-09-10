@@ -828,7 +828,31 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   await expect(page).toHaveURL(/\/admin$/);
   await page.goto("/admin/members");
   await expect(page).toHaveURL(/\/admin\/members$/);
-  await expect(page.getByRole("button", { name: /중복 가입자 1명/ })).toBeVisible();
+  const duplicateSummary = page.getByRole("button", { name: /중복 가입자 1명/ });
+  const expectDuplicateSummaryAligned = async () => {
+    const metrics = await duplicateSummary.evaluate((element) => {
+      const strong = element.querySelector("strong");
+      const detail = element.querySelector(":scope > span");
+      const styles = [element, strong, detail].map((item) => item ? getComputedStyle(item).lineHeight : null);
+      const rects = [strong, detail].map((item) => item?.getBoundingClientRect() ?? null);
+      return {
+        display: getComputedStyle(element).display,
+        alignItems: getComputedStyle(element).alignItems,
+        whiteSpace: getComputedStyle(element).whiteSpace,
+        lineHeights: styles,
+        centers: rects.map((rect) => rect ? rect.top + rect.height / 2 : null),
+        fits: element.scrollWidth <= element.clientWidth,
+      };
+    });
+    expect(["inline-flex", "flex"]).toContain(metrics.display);
+    expect(metrics.alignItems).toBe("center");
+    expect(metrics.lineHeights).toEqual(["14px", "14px", "14px"]);
+    expect(metrics.whiteSpace).toBe("nowrap");
+    expect(metrics.fits).toBe(true);
+    expect(Math.abs((metrics.centers[0] ?? 0) - (metrics.centers[1] ?? 0))).toBeLessThanOrEqual(0.5);
+  };
+  await expect(duplicateSummary).toBeVisible();
+  await expectDuplicateSummaryAligned();
   const duplicateBadge = page.locator(".admin-duplicate-badge").first();
   await expect(duplicateBadge).toHaveText("중복 가입");
   await page.screenshot({ path: "test-results/admin-members-duplicates-list-desktop-1440.png" });
@@ -865,6 +889,8 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   members[0].status = "pending";
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
+  await expect(duplicateSummary).toBeVisible();
+  await expectDuplicateSummaryAligned();
   await page.getByRole("button", { name: /중복 가입 1/ }).click();
   await expect(page.locator(".admin-duplicate-group")).toBeVisible();
   await page.screenshot({ path: "test-results/admin-members-duplicates-list-mobile-390.png" });
@@ -878,6 +904,8 @@ test("admin member duplicates stay clear and require a fresh server confirmation
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.getByRole("button", { name: "병합 화면 닫기" }).click();
   await page.setViewportSize({ width: 820, height: 900 });
+  await expect(duplicateSummary).toBeVisible();
+  await expectDuplicateSummaryAligned();
   await expect(page.locator(".admin-duplicate-group")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(errors).toEqual([]);
