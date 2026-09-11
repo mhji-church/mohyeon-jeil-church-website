@@ -107,11 +107,9 @@ export default function GalleryViewer({
     window.history.pushState({ ...window.history.state, mhjiGalleryPhotoFocus: true }, "", window.location.href);
     photoFocusRef.current = true;
     setPhotoFocus(true);
-    try {
-      await stage.requestFullscreen?.({ navigationUI: "hide" });
-    } catch {
-      // Keep the CSS photo-focus fallback active when native fullscreen is unavailable.
-    }
+    // Mobile browsers may display an unavoidable system notice when the
+    // Fullscreen API is entered. The existing CSS photo-focus view provides
+    // the same immersive layout without obscuring the photo with that notice.
   }, [exitPhotoFocus]);
 
   const registerFullscreenButton = useCallback((button: HTMLButtonElement | null) => {

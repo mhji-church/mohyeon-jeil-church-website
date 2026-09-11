@@ -22,7 +22,7 @@ test("mobile gallery uses full-width cards and keeps the detail body scrollable"
   assert.match(styles, /\.gallery-viewer\.is-photo-focus \.gallery-modal-bottom \{ display: none;/);
   const viewer = read("app/gallery/GalleryViewer.tsx");
   const zoomable = read("app/components/ZoomableImage.tsx");
-  assert.match(viewer, /stage\.requestFullscreen\?\./);
+  assert.doesNotMatch(viewer, /stage\.requestFullscreen\?\./);
   assert.match(viewer, /mhjiGalleryPhotoFocus/);
   assert.match(viewer, /document\.exitFullscreen/);
   assert.match(zoomable, /사진 전체화면 종료/);

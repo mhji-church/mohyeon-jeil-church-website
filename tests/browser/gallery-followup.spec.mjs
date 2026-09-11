@@ -73,6 +73,7 @@ test("mobile gallery header stays reachable and selecting photos does not move t
     const scrollBeforeFocus = await reader.evaluate(el => el.scrollTop);
     await fullscreen.click();
     const stage = dialog.locator(".gallery-stage");
+    expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
     await expect.poll(() => stage.evaluate(element => document.fullscreenElement === element || element.closest(".gallery-viewer")?.classList.contains("is-photo-focus"))).toBe(true);
     await expect(dialog.getByRole("button", { name: "사진 전체화면 종료" })).toHaveAttribute("aria-pressed", "true");
     await expect(dialog.locator(".gallery-photo-focus-count")).toBeVisible();
