@@ -55,24 +55,27 @@ export async function listAdminAudit(options: {
   const filters: string[] = [];
   const args: string[] = [];
   if (query) {
-    filters.push("(actor_id LIKE ? OR action LIKE ? OR target_type LIKE ? OR target_id LIKE ?)");
-    args.push(...Array(4).fill(`%${query}%`));
+    filters.push("(audit.actor_id LIKE ? OR member.name LIKE ? OR audit.action LIKE ? OR audit.target_type LIKE ? OR audit.target_id LIKE ? OR audit.metadata_json LIKE ?)");
+    args.push(...Array(6).fill(`%${query}%`));
   }
   if (action) {
-    filters.push("action = ?");
+    filters.push("audit.action = ?");
     args.push(action);
   }
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const from = `FROM admin_audit_logs AS audit
+    LEFT JOIN members AS member ON audit.action = 'member.login' AND member.id = audit.actor_id`;
   const db = getNetlifyDb();
   const count = await db
-    .prepare(`SELECT COUNT(*) AS count FROM admin_audit_logs ${where}`)
+    .prepare(`SELECT COUNT(*) AS count ${from} ${where}`)
     .bind(...args)
     .first<{ count: number | string }>();
   const rows = await db
     .prepare(
-      `SELECT id, actor_id, action, target_type, target_id, metadata_json, created_at
-       FROM admin_audit_logs ${where}
-       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      `SELECT audit.id, audit.actor_id, member.name AS actor_name, audit.action,
+              audit.target_type, audit.target_id, audit.metadata_json, audit.created_at
+       ${from} ${where}
+       ORDER BY audit.created_at DESC, audit.id DESC LIMIT ? OFFSET ?`,
     )
     .bind(...args, pageSize, (page - 1) * pageSize)
     .all<Record<string, unknown>>();
@@ -83,6 +86,7 @@ export async function listAdminAudit(options: {
     logs: rows.results.map((row) => ({
       id: String(row.id),
       actorId: String(row.actor_id),
+      actorName: row.actor_name ? String(row.actor_name) : null,
       action: String(row.action),
       targetType: String(row.target_type),
       targetId: String(row.target_id),

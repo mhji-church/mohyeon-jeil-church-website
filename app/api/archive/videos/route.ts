@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       sort: sort === "oldest" ? "oldest" : "newest",
       page: Number(params.get("page") || 1),
       pageSize: Number(params.get("pageSize") || 8),
-      analysis: "public",
+      analysis: false,
     });
     const videos = result.videos.map((video) => ({
       id: video.id,
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       note: "",
       createdAt: "",
       updatedAt: "",
-      analysis: video.analysis ?? null,
+      analysis: null,
     }));
     return Response.json({ ...result, videos }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

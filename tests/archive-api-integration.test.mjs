@@ -710,7 +710,12 @@ test("archive administration menu and server access are scoped to the configured
 
   const websiteHome = await request("/admin", { headers: { cookie: websiteAdminCookie } });
   assert.equal(websiteHome.status, 200);
-  assert.doesNotMatch(await websiteHome.text(), /아카이브 관리/);
+  const websiteHomeHtml = await websiteHome.text();
+  assert.doesNotMatch(websiteHomeHtml, /아카이브 관리|활동 기록/);
+  const websiteActivityPage = await request("/admin/activity", { headers: { cookie: websiteAdminCookie }, redirect: "manual" });
+  assert.equal(websiteActivityPage.status, 307);
+  assert.match(websiteActivityPage.headers.get("location") ?? "", /\/admin$/);
+  assert.equal((await request("/api/admin/activity", { headers: { cookie: websiteAdminCookie } })).status, 403);
 
   const archivePortal = await request("/admin", { headers: { cookie: adminCookie } });
   assert.equal(archivePortal.status, 200);
@@ -733,6 +738,7 @@ test("archive administration menu and server access are scoped to the configured
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: websiteAdminCookie } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: legacyArchiveAdminCookie() } })).status, 403);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: adminCookie } })).status, 200);
+  assert.equal((await request("/api/admin/activity")).status, 403);
 
   const logout = await request("/api/admin/session?return_to=/archive", {
     headers: { cookie: adminCookie },
@@ -740,6 +746,45 @@ test("archive administration menu and server access are scoped to the configured
   });
   assert.match(logout.headers.get("set-cookie") ?? "", /mhji_admin_session=;/);
   assert.equal((await request("/api/admin/archive/videos", { headers: { cookie: "mhji_admin_session=" } })).status, 403);
+});
+
+test("successful administrator and member logins show validated IP and device only to the archive administrator", async () => {
+  const adminLogin = await request("/api/admin/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "198.51.100.12",
+      "x-forwarded-for": "203.0.113.99",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15",
+    },
+    body: JSON.stringify({ username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD }),
+  });
+  assert.equal(adminLogin.status, 200);
+  const memberLogin = await request("/api/members/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.24",
+      "user-agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+    },
+    body: JSON.stringify({ username: "worship-user", password: "local-test-password" }),
+  });
+  assert.equal(memberLogin.status, 200);
+
+  const adminLogsResponse = await request("/api/admin/activity?action=admin.login", { headers: { cookie: adminCookie } });
+  assert.equal(adminLogsResponse.status, 200);
+  const adminLogs = (await adminLogsResponse.json()).logs;
+  const matchingAdminLogin = adminLogs.find((log) => log.actorId === TEST_ADMIN_USERNAME && log.metadata.ipAddress === "198.51.100.12");
+  assert.equal(matchingAdminLogin?.metadata.device, "PC · macOS · Safari");
+  assert.deepEqual(Object.keys(matchingAdminLogin.metadata).sort(), ["device", "ipAddress"]);
+
+  const memberLogsResponse = await request("/api/admin/activity?action=member.login", { headers: { cookie: adminCookie } });
+  assert.equal(memberLogsResponse.status, 200);
+  const memberLogs = (await memberLogsResponse.json()).logs;
+  const matchingMemberLogin = memberLogs.find((log) => log.actorId === memberIds["worship-user"] && log.metadata.ipAddress === "203.0.113.24");
+  assert.equal(matchingMemberLogin?.actorName, "예배회원");
+  assert.equal(matchingMemberLogin?.metadata.device, "모바일 · Android · Chrome");
+  assert.equal((await request("/api/admin/activity?action=member.login", { headers: { cookie: websiteAdminCookie } })).status, 403);
 });
 
 test("archive administration requires auth and local CRUD rejects unsafe input", async () => {
@@ -854,7 +899,10 @@ test("archive stores directly entered worship contents and expands search", asyn
   const publicSearch = await request("/api/archive/videos?q=넘지%20못할", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
   assert.equal(publicSearch.status, 200);
   const publicVideo = (await publicSearch.json()).videos.find((video) => video.id === "analysis-fixture-video");
-  assert.equal(publicVideo.analysis.songs.length, 3);
+  assert.equal(publicVideo.analysis, null);
+  const playback = await request("/api/archive/videos/analysis-fixture-video/playback", { headers: { cookie: memberCookie(memberIds["worship-user"]) } });
+  assert.equal(playback.status, 200);
+  assert.equal((await playback.json()).video.analysis.songs.length, 3);
 });
 
 test("song statistics, history, administration, and Excel export share archive access rules", async () => {

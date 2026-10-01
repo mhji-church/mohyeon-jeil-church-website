@@ -160,7 +160,7 @@ export default function AdminSidebar({
         <span>WEBSITE ADMIN</span>
       </Link>
       <nav aria-label="관리 메뉴">
-        {canManageWebsite && menuItems.map((item, index) => (
+        {canManageWebsite && menuItems.filter((item) => item.key !== "activity" || canManageArchive).map((item, index) => (
           <Link className={active === item.key ? "is-active" : ""} href={item.href} key={item.key} onClick={closeMobileMenu}>
             <i>{String(index + 1).padStart(2, "0")}</i>
             <span>{item.label}</span>

@@ -208,9 +208,30 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await page.getByRole("button", { name: "관리자 로그인" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("link", { name: "아카이브 관리" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "활동 기록" })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
+  await expect(page.getByRole("link", { name: "회원 관리" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "활동 기록" })).toHaveCount(0);
+  await page.getByRole("button", { name: "관리 메뉴 닫기" }).first().click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/admin/content?section=news&new=1");
   await expect(page.getByRole("heading", { name: /새 교회소식 등록/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "미리보기" })).toBeVisible();
+  await page.goto("/admin/activity");
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto("/api/admin/session?return_to=%2Fadmin%2Flogin");
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  await page.getByLabel("아이디").fill("browser-archive-admin");
+  await page.getByLabel("비밀번호").fill("browser-archive-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("link", { name: "활동 기록" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
+  await expect(page.getByRole("link", { name: "활동 기록" })).toBeVisible();
+  await page.getByRole("button", { name: "관리 메뉴 닫기" }).first().click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   const activityRequests = [];
   await page.route("**/api/admin/activity?*", async (route) => {
@@ -220,13 +241,18 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
     const start = (requestedPage - 1) * 20;
     const logs = Array.from({ length: Math.max(0, Math.min(20, 21 - start)) }, (_, index) => {
       const number = start + index + 1;
-      return { id: `activity-${number}`, actorId: `테스트 관리자 ${number}`, action: "content.update", targetType: "news", targetId: `news-${number}`, metadata: { title: `테스트 기록 ${number}` }, createdAt: "2026-09-04T10:00:00" };
+      return number === 1
+        ? { id: "activity-login", actorId: "virtual-member-id", actorName: "가상 회원", action: "member.login", targetType: "member", targetId: "virtual-member-id", metadata: { ipAddress: "203.0.113.24", device: "모바일 · Android · Chrome" }, createdAt: "2026-09-04T10:00:00" }
+        : { id: `activity-${number}`, actorId: `테스트 관리자 ${number}`, actorName: null, action: "content.update", targetType: "news", targetId: `news-${number}`, metadata: { title: `테스트 기록 ${number}` }, createdAt: "2026-09-04T10:00:00" };
     });
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ logs, total: 21 }) });
   });
 
   await page.goto("/admin/activity");
   await expect(page.getByRole("heading", { name: "활동 기록", exact: true })).toBeVisible();
+  await expect(page.getByText("회원 · 가상 회원")).toBeVisible();
+  await expect(page.getByText(/IP 주소: 203\.0\.113\.24/)).toBeVisible();
+  await expect(page.getByText(/사용 기기: 모바일 · Android · Chrome/)).toBeVisible();
   const refresh = page.getByRole("button", { name: "목록 새로고침" });
   await expect(refresh).toBeVisible();
   expect(await refresh.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(48, 47, 60)");
@@ -296,6 +322,8 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
   await expect(page).toHaveURL(/\/archive\/sunday$/);
   const cards = page.locator(".list-media-grid .media-card--worship");
   await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0).locator(".media-thumb > img")).toHaveAttribute("loading", "eager");
+  await expect(cards.nth(1).locator(".media-thumb > img")).toHaveAttribute("loading", "eager");
   const example = cards.nth(0).locator("h3");
   const long = cards.nth(1).locator("h3");
   await expect(example).toHaveAttribute("aria-label", exampleTitle);
@@ -356,6 +384,8 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
     await expect(page.locator(".recent-section .media-card")).toHaveCount(2);
     await expect(page.locator(".recent-section .media-card--worship .media-thumb")).toBeVisible();
     await expect(page.locator(".recent-section .media-card:not(.media-card--worship) .media-thumb")).toBeVisible();
+    await expect(page.locator(".featured .media-thumb > img")).toHaveAttribute("fetchpriority", "high");
+    await expect(page.locator('.recent-section .media-thumb > img[loading="eager"]')).toHaveCount(2);
     const dimensions = await page.locator(".recent-section").evaluate((section) => {
       const worship = section.querySelector(".media-card--worship .media-thumb")?.getBoundingClientRect();
       const attendance = section.querySelector(".media-card:not(.media-card--worship) .media-thumb")?.getBoundingClientRect();
@@ -420,6 +450,17 @@ test("archive mobile worship titles stay on one accessible line", async ({ page 
     const textWidth = context.measureText(text).width + Number.parseFloat(style.letterSpacing || "0") * Math.max(0, text.length - 1);
     return textWidth > element.clientWidth + 0.5;
   })).toBe(true);
+
+  for (let index = 3; index <= 5; index += 1) {
+    videos.push({ ...videos[0], id: `mobile-title-priority-${index}`, title: `우선 로딩 확인 ${index}` });
+  }
+  await page.goto("/archive/sunday?thumbnail-priority-test=1");
+  const listImages = page.locator(".list-media-grid .media-thumb > img");
+  await expect(listImages).toHaveCount(5);
+  for (let index = 0; index < 4; index += 1) {
+    await expect(listImages.nth(index)).toHaveAttribute("loading", "eager");
+  }
+  await expect(listImages.nth(4)).toHaveAttribute("loading", "lazy");
 });
 
 test("song history keeps its state while the shared video viewer opens above it", async ({ page }) => {
@@ -1022,7 +1063,7 @@ test("website administrator keeps the full dashboard without archive management"
   await page.getByRole("button", { name: "관리자 로그인" }).click();
   await expect(page).toHaveURL(/\/admin$/);
 
-  const websiteMenuLabels = ["관리자 홈", "주보 관리", "교회소식 관리", "갤러리 관리", "성도사업장 관리", "회원 관리", "활동 기록"];
+  const websiteMenuLabels = ["관리자 홈", "주보 관리", "교회소식 관리", "갤러리 관리", "성도사업장 관리", "회원 관리"];
   const websiteNavigation = page.locator(".admin-sidebar nav");
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
@@ -1034,6 +1075,7 @@ test("website administrator keeps the full dashboard without archive management"
       await expect(websiteNavigation.getByRole("link", { name: new RegExp(label) })).toBeVisible();
     }
     await expect(page.locator('.admin-sidebar nav a[href="/archive/admin"]')).toHaveCount(0);
+    await expect(page.locator('.admin-sidebar nav a[href="/admin/activity"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     if (viewport.width <= 760) {
       await page.getByRole("button", { name: "관리 메뉴 닫기" }).first().click();
@@ -1042,6 +1084,9 @@ test("website administrator keeps the full dashboard without archive management"
 
   expect((await page.request.get("/api/admin/members")).status()).toBe(200);
   expect((await page.request.get("/api/admin/archive/videos")).status()).toBe(403);
+  expect((await page.request.get("/api/admin/activity")).status()).toBe(403);
+  await page.goto("/admin/activity");
+  await expect(page).toHaveURL(/\/admin$/);
   await page.goto("/archive/admin");
   await expect(page).toHaveURL(/\/admin$/);
   await page.getByRole("button", { name: "관리 메뉴 열기" }).click();
@@ -1072,7 +1117,7 @@ test("website admin mobile navigation and lists stay compact without changing de
   await menuButton.click();
   await expect(page.locator(".admin-sidebar")).toHaveClass(/is-mobile-open/);
   await page.waitForTimeout(250);
-  await expect(page.locator(".admin-sidebar nav").getByRole("link", { name: "활동 기록" })).toBeVisible();
+  await expect(page.locator(".admin-sidebar nav").getByRole("link", { name: "활동 기록" })).toHaveCount(0);
   await expect(page.locator(".admin-account").getByRole("link", { name: /홈페이지로 돌아가기/ })).toBeVisible();
   await page.screenshot({ path: "test-results/admin-mobile-menu-390.png" });
   await page.keyboard.press("Escape");
@@ -1129,6 +1174,13 @@ test("website admin mobile navigation and lists stay compact without changing de
   }
   await page.screenshot({ path: "test-results/admin-mobile-content-390.png" });
 
+  await page.goto("/admin/activity");
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto("/api/admin/session?return_to=%2Fadmin%2Flogin");
+  await page.getByLabel("아이디").fill("browser-archive-admin");
+  await page.getByLabel("비밀번호").fill("browser-archive-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
   await page.goto("/admin/activity");
   const activityRows = page.locator(".admin-activity-table tbody tr");
   await expect(activityRows.first()).toBeVisible();

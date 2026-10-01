@@ -1,5 +1,5 @@
 import { getMemberSession } from "@/app/member-auth";
-import { getArchiveAccess, getArchiveSongStatsAccess } from "@/lib/archive";
+import { getArchiveViewerAccess } from "@/lib/archive";
 import { apiError } from "@/lib/api-response";
 import { getMemberDisplayPosition } from "@/lib/member-display";
 
@@ -20,9 +20,9 @@ export async function GET() {
         { headers: { "Cache-Control": "no-store" } },
       );
     }
-    const level = await getArchiveAccess(member.id);
+    const { level, songStatsAllowed } = await getArchiveViewerAccess(member.id);
     return Response.json(
-      { authenticated: true, approvalPending: false, member: { name: member.name, position: getMemberDisplayPosition(member.position) }, level, songStatsAllowed: await getArchiveSongStatsAccess(member.id, level) },
+      { authenticated: true, approvalPending: false, member: { name: member.name, position: getMemberDisplayPosition(member.position) }, level, songStatsAllowed },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

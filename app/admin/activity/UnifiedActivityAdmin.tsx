@@ -7,6 +7,7 @@ import AdminSidebar from "../AdminSidebar";
 type Log = {
   id: string;
   actorId: string;
+  actorName: string | null;
   action: string;
   targetType: string;
   targetId: string;
@@ -16,6 +17,8 @@ type Log = {
 
 const actionGroups = [
   ["", "전체 작업"],
+  ["admin.login", "관리자 로그인"],
+  ["member.login", "회원 로그인"],
   ["content.create", "콘텐츠 생성"],
   ["content.update", "콘텐츠 수정"],
   ["content.delete", "콘텐츠 삭제"],
@@ -25,6 +28,8 @@ const actionGroups = [
 ] as const;
 
 const actionLabels: Record<string, string> = {
+  "admin.login": "관리자 로그인",
+  "member.login": "회원 로그인",
   "content.create": "콘텐츠 생성",
   "content.update": "콘텐츠 수정",
   "content.delete": "콘텐츠 삭제",
@@ -37,6 +42,21 @@ const actionLabels: Record<string, string> = {
 
 function displayAction(action: string) {
   return actionLabels[action] ?? action;
+}
+
+function displayAccount(log: Log) {
+  return log.action === "member.login" ? `회원 · ${log.actorName ?? log.actorId}` : `관리자 · ${log.actorId}`;
+}
+
+function displayTarget(log: Log) {
+  if (log.action === "member.login") return "회원 계정";
+  if (log.action === "admin.login") return "관리자 계정";
+  return `${log.targetType}${log.targetId ? ` · ${log.targetId}` : ""}`;
+}
+
+const metadataLabels: Record<string, string> = { ipAddress: "IP 주소", device: "사용 기기" };
+function displayMetadata(metadata: Log["metadata"]) {
+  return Object.entries(metadata).map(([key, value]) => `${metadataLabels[key] ?? key}: ${value}`).join(" · ") || "—";
 }
 
 export default function UnifiedActivityAdmin(props: {
@@ -119,22 +139,22 @@ export default function UnifiedActivityAdmin(props: {
       <AdminSidebar active="activity" canManageWebsite {...props} />
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar admin-activity-topbar">
-          <div><span>ADMIN ACTIVITY</span><h1>활동 기록</h1><p>관리자 변경 이력을 민감정보 없이 확인합니다.</p></div>
+          <div><span>ADMIN ACTIVITY</span><h1>활동 기록</h1><p>관리 작업과 관리자·회원 로그인 이력을 확인합니다.</p></div>
           <div><button type="button" onClick={() => void load()}>목록 새로고침</button></div>
         </header>
         <section className="admin-list-panel admin-activity-panel">
           <header>
             <div><h2>활동 기록 목록</h2><span>총 {total}개</span></div>
             <div className="admin-activity-toolbar">
-              <label><span className="sr-only">활동 기록 검색</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="관리자·작업·대상 검색" /></label>
+              <label><span className="sr-only">활동 기록 검색</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="계정·작업·IP 검색" /></label>
               <label><span className="sr-only">작업 유형 필터</span><select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }}>
                 {actionGroups.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
               </select></label>
             </div>
           </header>
           {failed ? <div className="admin-empty"><strong>활동 기록을 불러오지 못했습니다.</strong></div> : (
-            <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>관리자</th><th>작업</th><th>대상</th><th>메타데이터</th><th><span className="sr-only">상세</span></th></tr></thead><tbody>
-              {logs.map((log) => <tr key={log.id}><td>{log.createdAt.replace("T", " ")}</td><td>{log.actorId}</td><td><strong>{displayAction(log.action)}</strong><small>{actionLabels[log.action] ? "" : log.action}</small></td><td>{log.targetType}{log.targetId ? ` · ${log.targetId}` : ""}</td><td>{Object.entries(log.metadata).map(([key, value]) => `${key}: ${value}`).join(" · ") || "—"}</td><td><button className="admin-activity-detail-button" type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
+            <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>계정</th><th>작업</th><th>대상</th><th>접속 정보·메타데이터</th><th><span className="sr-only">상세</span></th></tr></thead><tbody>
+              {logs.map((log) => <tr key={log.id}><td>{log.createdAt.replace("T", " ")}</td><td>{displayAccount(log)}</td><td><strong>{displayAction(log.action)}</strong><small>{actionLabels[log.action] ? "" : log.action}</small></td><td>{displayTarget(log)}</td><td>{displayMetadata(log.metadata)}</td><td><button className="admin-activity-detail-button" type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
             </tbody></table>{!logs.length && <div className="admin-empty"><strong>조건에 맞는 활동 기록이 없습니다.</strong></div>}</div>
           )}
           <AdminPagination currentPage={page} totalPages={pages} onPageChange={setPage} />
@@ -150,10 +170,10 @@ export default function UnifiedActivityAdmin(props: {
             <div>
               <dl>
                 <div><dt>시각</dt><dd>{selectedLog.createdAt.replace("T", " ")}</dd></div>
-                <div><dt>관리자</dt><dd>{selectedLog.actorId}</dd></div>
+                <div><dt>계정</dt><dd>{displayAccount(selectedLog)}</dd></div>
                 <div><dt>대상</dt><dd>{selectedLog.targetType}{selectedLog.targetId ? ` · ${selectedLog.targetId}` : ""}</dd></div>
                 <div><dt>작업 코드</dt><dd><code>{selectedLog.action}</code></dd></div>
-                <div><dt>메타데이터</dt><dd>{Object.entries(selectedLog.metadata).map(([key, value]) => <span key={key}><b>{key}</b>{value}</span>)}{!Object.keys(selectedLog.metadata).length && "—"}</dd></div>
+                <div><dt>접속 정보·메타데이터</dt><dd>{Object.entries(selectedLog.metadata).map(([key, value]) => <span key={key}><b>{metadataLabels[key] ?? key}</b>{value}</span>)}{!Object.keys(selectedLog.metadata).length && "—"}</dd></div>
               </dl>
             </div>
             <footer><button type="button" onClick={closeDetail}>닫기</button></footer>

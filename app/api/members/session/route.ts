@@ -11,6 +11,8 @@ import {
   clearMemberSessionCookie,
   createMemberSessionCookie,
 } from "../../../member-auth";
+import { recordLoginAudit } from "../../../../lib/login-audit";
+import { logServerError } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
@@ -58,6 +60,12 @@ export async function POST(request: Request) {
     await clearMemberLoginFailures(rateKey);
     await createMemberSessionCookie(result.member.id);
     await recordMemberLogin(result.member.id);
+    try {
+      await recordLoginAudit(request, "member", result.member.id);
+    } catch (error) {
+      // Preserve successful login if the audit store is temporarily unavailable.
+      logServerError("member.login_audit", error);
+    }
     return Response.json({
       ok: true,
       forcePasswordChange: result.member.forcePasswordChange,

@@ -49,7 +49,7 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
   const params = useMemo(() => { const requestPeriod = period === "current" ? "year" : period; const value = new URLSearchParams({ service, period: requestPeriod, limit }); if (requestPeriod === "year") value.set("year", period === "current" ? String(yearNow) : year); if (period === "custom") { if (start) value.set("start", start); if (end) value.set("end", end); } if (appliedQuery) value.set("q", appliedQuery); return value; }, [appliedQuery, end, limit, period, service, start, year, yearNow]);
   const periodLabel = period === "all" ? "전체 기간" : period === "current" ? `${yearNow}년(올해)` : period === "year" ? `${year}년` : period === "last12" ? "최근 12개월" : `${start || "시작일"} ~ ${end || "종료일"}`;
   const staleSongs = useMemo(() => stats ? [...stats.stale].sort((a, b) => staleOrder === "oldest" ? b.daysSince - a.daysSince : a.daysSince - b.daysSince) : [], [staleOrder, stats]);
-  const load = useCallback(async () => { setLoading(true); setError(""); try { const response = await fetch(`/api/archive/songs/stats?${params}`, { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setStats(data); for (const song of data.rankings ?? []) songCache.current.set(song.id, song); } catch (caught) { setError(caught instanceof Error ? caught.message : "찬양 통계를 불러오지 못했습니다."); } finally { setLoading(false); } }, [params]);
+  const load = useCallback(async (signal: AbortSignal) => { setLoading(true); setError(""); try { const response = await fetch(`/api/archive/songs/stats?${params}`, { cache: "no-store", signal }); const data = await response.json(); if (signal.aborted) return; if (!response.ok) throw new Error(data.error); setStats(data); for (const song of data.rankings ?? []) songCache.current.set(song.id, song); } catch (caught) { if (!signal.aborted) setError(caught instanceof Error ? caught.message : "찬양 통계를 불러오지 못했습니다."); } finally { if (!signal.aborted) setLoading(false); } }, [params]);
   const restorePageState = useCallback((state: ModalHistoryState) => {
     if (state.archiveSongFilters && typeof state.archiveSongFilters === "object") {
       const snapshot = state.archiveSongFilters as Partial<FilterSnapshot>;
@@ -76,7 +76,7 @@ export default function SongStats({ viewerName, viewerKind }: { viewerName: stri
     }));
   }, []);
 
-  useEffect(() => { const timer = setTimeout(() => void load(), 180); return () => clearTimeout(timer); }, [load]);
+  useEffect(() => { const controller = new AbortController(); const timer = window.setTimeout(() => void load(controller.signal), 0); return () => { window.clearTimeout(timer); controller.abort(); }; }, [load]);
   useEffect(() => { playingRef.current = playing; }, [playing]);
   useEffect(() => { const timer = window.setTimeout(() => restorePageState(modalState()), 0); return () => window.clearTimeout(timer); }, [restorePageState]);
   useEffect(() => {

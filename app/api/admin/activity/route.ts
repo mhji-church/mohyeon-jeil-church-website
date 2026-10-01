@@ -4,7 +4,8 @@ import { apiError } from "@/lib/api-response";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
-  if (!(await requireAdminApi())) return Response.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+  const admin = await requireAdminApi();
+  if (!admin?.canManageArchive) return Response.json({ error: "활동 기록 조회 권한이 필요합니다." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
   const params = new URL(request.url).searchParams;
   try {
     return Response.json(await listAdminAudit({

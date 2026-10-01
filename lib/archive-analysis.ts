@@ -71,33 +71,45 @@ function mapAnalysis(row: Row | null, songs: ArchiveAnalysisSong[]): ArchiveVide
 }
 
 export async function getArchiveVideoAnalysis(videoId: string, publicOnly = false) {
-  await ensureNetlifySchema();
-  const db = getNetlifyDb();
-  const row = await db.prepare("SELECT * FROM archive_video_analyses WHERE video_id = ?").bind(videoId).first<Row>();
-  const legacyRows = await db
-    .prepare("SELECT * FROM archive_analysis_songs WHERE video_id = ? ORDER BY sort_order ASC, created_at ASC")
-    .bind(videoId)
-    .all<Row>();
-  const catalogRows = await db
-    .prepare(`SELECT vs.id, vs.sort_order, s.display_title AS title
-      FROM archive_video_songs vs
-      JOIN archive_songs s ON s.id = vs.song_id
-      WHERE vs.video_id = ?
-      ORDER BY vs.sort_order ASC, vs.created_at ASC`)
-    .bind(videoId)
-    .all<Row>();
-  const songs = catalogRows.results.length
-    ? catalogRows.results.map((item) => mapSong({ ...item, category: "opening", confidence: 1, source: "manual", manually_edited: 1, evidence: "찬양곡 데이터베이스" }))
-    : legacyRows.results.map(mapSong);
-  const analysis = mapAnalysis(row, songs);
-  if (!analysis || !publicOnly) return analysis;
-  return analysis.manualVerifiedAt ? analysis : null;
+  const [video] = await attachArchiveAnalyses([{ id: videoId }], publicOnly);
+  return video.analysis;
 }
 
 export async function attachArchiveAnalyses<T extends { id: string }>(videos: T[], publicOnly = false) {
-  const attached: Array<T & { analysis: ArchiveVideoAnalysis | null }> = [];
-  for (const video of videos) attached.push({ ...video, analysis: await getArchiveVideoAnalysis(video.id, publicOnly) });
-  return attached;
+  if (!videos.length) return [] as Array<T & { analysis: ArchiveVideoAnalysis | null }>;
+  await ensureNetlifySchema();
+  const db = getNetlifyDb();
+  const ids = [...new Set(videos.map((video) => video.id))];
+  const inClause = ids.map(() => "?").join(",");
+  const [analyses, legacySongs, catalogSongs] = await Promise.all([
+    db.prepare(`SELECT * FROM archive_video_analyses WHERE video_id IN (${inClause})`).bind(...ids).all<Row>(),
+    db.prepare(`SELECT * FROM archive_analysis_songs WHERE video_id IN (${inClause}) ORDER BY video_id, sort_order ASC, created_at ASC`).bind(...ids).all<Row>(),
+    db.prepare(`SELECT vs.video_id, vs.id, vs.sort_order, s.display_title AS title
+      FROM archive_video_songs vs JOIN archive_songs s ON s.id = vs.song_id
+      WHERE vs.video_id IN (${inClause}) ORDER BY vs.video_id, vs.sort_order ASC, vs.created_at ASC`).bind(...ids).all<Row>(),
+  ]);
+  const rowsById = new Map(analyses.results.map((row) => [String(row.video_id), row]));
+  const groupSongs = (rows: Row[]) => {
+    const grouped = new Map<string, Row[]>();
+    for (const row of rows) {
+      const id = String(row.video_id);
+      const group = grouped.get(id) ?? [];
+      group.push(row);
+      grouped.set(id, group);
+    }
+    return grouped;
+  };
+  const legacyById = groupSongs(legacySongs.results);
+  const catalogById = groupSongs(catalogSongs.results);
+  return videos.map((video) => {
+    const row = rowsById.get(video.id) ?? null;
+    if (!row || (publicOnly && !row.manual_verified_at)) return { ...video, analysis: null };
+    const catalog = catalogById.get(video.id) ?? [];
+    const songs = catalog.length
+      ? catalog.map((item) => mapSong({ ...item, category: "opening", confidence: 1, source: "manual", manually_edited: 1, evidence: "찬양곡 데이터베이스" }))
+      : (legacyById.get(video.id) ?? []).map(mapSong);
+    return { ...video, analysis: mapAnalysis(row, songs) };
+  });
 }
 
 function confidenceFrom(analysis: ArchiveVideoAnalysis) {

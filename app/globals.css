@@ -10250,10 +10250,10 @@ body.modal-open { overflow: hidden; }
   .admin-activity-table td:last-child { border-bottom: 0; }
   .admin-activity-table td::before { color: var(--admin-muted); font-size: 12px; font-weight: 700; }
   .admin-activity-table td:nth-child(1)::before { content: "시각"; }
-  .admin-activity-table td:nth-child(2)::before { content: "관리자"; }
+  .admin-activity-table td:nth-child(2)::before { content: "계정"; }
   .admin-activity-table td:nth-child(3)::before { content: "작업"; }
   .admin-activity-table td:nth-child(4)::before { content: "대상"; }
-  .admin-activity-table td:nth-child(5)::before { content: "메타데이터"; }
+  .admin-activity-table td:nth-child(5)::before { content: "접속 정보"; }
   .admin-activity-panel .admin-empty { border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
   .admin-activity-panel .admin-pagination { margin-top: 10px; border: 1px solid rgba(48, 47, 60, .1); border-radius: 8px; background: #fff; }
 }

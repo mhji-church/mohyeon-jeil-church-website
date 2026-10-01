@@ -124,11 +124,11 @@ export async function listArchiveVideos(options: {
   const page = Math.max(1, requestedPage);
   const direction = options.sort === "oldest" ? "ASC" : "DESC";
   const db = getNetlifyDb();
-  const totalRow = await db.prepare(`SELECT COUNT(*) AS count FROM archive_videos ${clause}`).bind(...args).first<{ count: number }>();
-  const result = await db
-    .prepare(`SELECT * FROM archive_videos ${clause} ORDER BY date ${direction}, CASE service_type WHEN '주일 2부 예배' THEN 0 WHEN '주일 1부 예배' THEN 1 ELSE 2 END, created_at ${direction} LIMIT ? OFFSET ?`)
-    .bind(...args, pageSize, (page - 1) * pageSize)
-    .all<Row>();
+  const [totalRow, result] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) AS count FROM archive_videos ${clause}`).bind(...args).first<{ count: number }>(),
+    db.prepare(`SELECT * FROM archive_videos ${clause} ORDER BY date ${direction}, CASE service_type WHEN '주일 2부 예배' THEN 0 WHEN '주일 1부 예배' THEN 1 ELSE 2 END, created_at ${direction} LIMIT ? OFFSET ?`)
+      .bind(...args, pageSize, (page - 1) * pageSize).all<Row>(),
+  ]);
   const videos = result.results.map(mapVideo);
   const analyzedVideos = options.analysis === false
     ? videos
@@ -155,6 +155,23 @@ export async function getArchiveAccess(memberId: string): Promise<ArchiveAccessL
     .bind(representativeId, ARCHIVE_APP_CODE)
     .first<{ access_level: ArchiveAccessLevel }>();
   return row?.access_level ?? "none";
+}
+
+// Called only with the canonical member ID returned by a verified session.
+// Load both archive permissions in one read for page and API navigation.
+export async function getArchiveViewerAccess(memberId: string) {
+  await ensureNetlifySchema();
+  const rows = await getNetlifyDb()
+    .prepare("SELECT app_code, access_level FROM member_app_access WHERE member_id = ? AND app_code IN (?, ?)")
+    .bind(memberId, ARCHIVE_APP_CODE, ARCHIVE_SONG_STATS_APP_CODE)
+    .all<{ app_code: string; access_level: string }>();
+  const access = new Map(rows.results.map((row) => [row.app_code, row.access_level]));
+  const value = access.get(ARCHIVE_APP_CODE);
+  const level: ArchiveAccessLevel = value === "worship" || value === "full" ? value : "none";
+  return {
+    level,
+    songStatsAllowed: level !== "none" && (access.get(ARCHIVE_SONG_STATS_APP_CODE) ?? "full") === "full",
+  };
 }
 
 export async function getArchiveSongStatsAccess(memberId: string, archiveLevel?: ArchiveAccessLevel) {

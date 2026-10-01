@@ -9,6 +9,8 @@ import {
   isArchiveManagementUsername,
   verifyArchiveAdminCredentials,
 } from "../../../archive-credential-auth";
+import { recordLoginAudit } from "../../../../lib/login-audit";
+import { logServerError } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
@@ -35,6 +37,12 @@ export async function POST(request: Request) {
   const scope = websiteCredentialsValid ? "website" : "archive";
   await createAdminSessionCookie(username.trim(), scope);
   await clearArchiveAdminSessionCookie();
+  try {
+    await recordLoginAudit(request, "admin", username.trim());
+  } catch (error) {
+    // A temporary audit-store failure must not lock out a verified administrator.
+    logServerError("admin.login_audit", error);
+  }
   return Response.json({
     ok: true,
     returnTo: "/admin",

@@ -142,17 +142,21 @@ export async function getArchiveSongStats(options: SongStatsOptions) {
   const db = getNetlifyDb();
   const where = statsWhere(options);
   const limitSql = options.limit == null ? "" : " LIMIT ?";
-  const ranking = await db.prepare(`SELECT s.id, s.display_title, s.base_title, GROUP_CONCAT(DISTINCT n.alias_text) AS aliases,
-      COUNT(DISTINCT vs.video_id) AS total_count,
-      COUNT(DISTINCT CASE WHEN v.service_type = '주일 1부 예배' THEN vs.video_id END) AS sunday1_count,
-      COUNT(DISTINCT CASE WHEN v.service_type = '주일 2부 예배' THEN vs.video_id END) AS sunday2_count,
-      COUNT(DISTINCT CASE WHEN v.service_type = '수요예배' THEN vs.video_id END) AS wednesday_count,
+  const [ranking, summary, stale] = await Promise.all([
+    db.prepare(`SELECT s.id, s.display_title, s.base_title,
+      (SELECT GROUP_CONCAT(DISTINCT n.alias_text) FROM archive_song_names n WHERE n.song_id = s.id) AS aliases,
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN v.service_type = '주일 1부 예배' THEN 1 ELSE 0 END) AS sunday1_count,
+      SUM(CASE WHEN v.service_type = '주일 2부 예배' THEN 1 ELSE 0 END) AS sunday2_count,
+      SUM(CASE WHEN v.service_type = '수요예배' THEN 1 ELSE 0 END) AS wednesday_count,
       MAX(v.date) AS last_used
-    FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id LEFT JOIN archive_song_names n ON n.song_id = s.id
-    WHERE ${where.sql} GROUP BY s.id ORDER BY total_count DESC, last_used DESC, s.display_title ASC${limitSql}`).bind(...where.args, ...(options.limit == null ? [] : [options.limit])).all<Row>();
+    FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id
+    WHERE ${where.sql} GROUP BY s.id ORDER BY total_count DESC, last_used DESC, s.display_title ASC${limitSql}`)
+      .bind(...where.args, ...(options.limit == null ? [] : [options.limit])).all<Row>(),
+    db.prepare(`SELECT COUNT(DISTINCT v.id) AS worship_count, COUNT(DISTINCT vs.song_id) AS song_count, COUNT(*) AS usage_count FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id WHERE ${where.sql}`).bind(...where.args).first<Row>(),
+    db.prepare(`SELECT s.id, s.display_title, COUNT(*) AS total_count, MAX(v.date) AS last_used, CAST(julianday('now') - julianday(MAX(v.date)) AS INTEGER) AS days_since FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id WHERE v.type = 'worship' GROUP BY s.id ORDER BY last_used ASC, s.display_title ASC LIMIT 50`).all<Row>(),
+  ]);
   const rows = ranking.results.map((row, index) => ({ rank: index + 1, id: asString(row.id), displayTitle: asString(row.display_title), baseTitle: asString(row.base_title), aliases: asString(row.aliases).split(",").filter(Boolean), totalCount: Number(row.total_count), sunday1Count: Number(row.sunday1_count), sunday2Count: Number(row.sunday2_count), wednesdayCount: Number(row.wednesday_count), lastUsed: asString(row.last_used) }));
-  const summary = await db.prepare(`SELECT COUNT(DISTINCT v.id) AS worship_count, COUNT(DISTINCT vs.song_id) AS song_count, COUNT(*) AS usage_count FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id WHERE ${where.sql}`).bind(...where.args).first<Row>();
-  const stale = await db.prepare(`SELECT s.id, s.display_title, COUNT(DISTINCT vs.video_id) AS total_count, MAX(v.date) AS last_used, CAST(julianday('now') - julianday(MAX(v.date)) AS INTEGER) AS days_since FROM archive_video_songs vs JOIN archive_videos v ON v.id = vs.video_id JOIN archive_songs s ON s.id = vs.song_id WHERE v.type = 'worship' GROUP BY s.id ORDER BY last_used ASC, s.display_title ASC LIMIT 50`).all<Row>();
   return { summary: { worshipCount: Number(summary?.worship_count ?? 0), songCount: Number(summary?.song_count ?? 0), usageCount: Number(summary?.usage_count ?? 0), topSong: rows[0]?.displayTitle ?? "-" }, rankings: rows, stale: stale.results.map((row) => ({ id: asString(row.id), displayTitle: asString(row.display_title), totalCount: Number(row.total_count), lastUsed: asString(row.last_used), daysSince: Number(row.days_since ?? 0) })) };
 }
 

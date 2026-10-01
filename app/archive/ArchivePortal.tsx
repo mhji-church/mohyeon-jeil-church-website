@@ -55,9 +55,10 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
   const [playing, setPlaying] = useState<ArchivePlayingVideo | null>(null);
   const launchButton = useRef<HTMLElement | null>(null);
   const openedVideo = useRef("");
+  const previousSearch = useRef(search);
 
   useEffect(() => { fetch("/api/archive/settings", { cache: "no-store" }).then((response) => response.json()).then((data) => { if ([4, 8, 12].includes(data.settings?.recentCount)) setRecentCount(data.settings.recentCount); if (data.settings?.defaultSort === "oldest") setSort("oldest"); }).catch(() => undefined); }, []);
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: AbortSignal) => {
     setLoading(true); setNotice("");
     const params = new URLSearchParams({ page: String(page), pageSize: section === "all" ? String(recentCount) : "8", sort });
     if (section === "attendance") params.set("type", "attendance");
@@ -66,14 +67,21 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const query = [search.trim(), service, preacher].filter(Boolean).join(" ");
     if (query) params.set("q", query); if (year) params.set("year", year); if (month) params.set("month", month);
     try {
-      const response = await fetch(`/api/archive/videos?${params}`, { cache: "no-store" });
+      const response = await fetch(`/api/archive/videos?${params}`, { cache: "no-store", signal });
       const data = await response.json();
+      if (signal.aborted) return;
       if (!response.ok) throw new Error();
       setVideos(data.videos ?? []); setTotal(data.total ?? 0);
-    } catch { setVideos([]); setTotal(0); setNotice("예배 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."); }
-    finally { setLoading(false); }
+    } catch { if (!signal.aborted) { setVideos([]); setTotal(0); setNotice("예배 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+    finally { if (!signal.aborted) setLoading(false); }
   }, [month, page, preacher, recentCount, search, section, service, sort, year]);
-  useEffect(() => { const timer = setTimeout(() => void load(), 180); return () => clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const searchChanged = previousSearch.current !== search;
+    previousSearch.current = search;
+    const controller = new AbortController();
+    const timer = setTimeout(() => void load(controller.signal), searchChanged ? 180 : 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [load, search]);
   useEffect(() => { const timer = setTimeout(() => setPage(1), 0); return () => clearTimeout(timer); }, [month, preacher, search, section, service, sort, year]);
   useEffect(() => {
     const requested = searchParams.get("video") ?? "";
@@ -81,7 +89,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const video = videos.find((item) => item.id === requested);
     if (!video || !canPlay(access.level, video.type)) return;
     openedVideo.current = requested;
-    fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" }).then(async (response) => ({ response, data: await response.json() })).then(({ response, data }) => { if (response.ok && data.embedUrl) setPlaying({ video: { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl }); }).catch(() => undefined);
+    fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" }).then(async (response) => ({ response, data: await response.json() })).then(({ response, data }) => { if (response.ok && data.embedUrl) setPlaying({ video: data.video ?? { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl }); }).catch(() => undefined);
   }, [access.authenticated, access.level, searchParams, videos]);
 
   const years = useMemo(() => { const now = new Date().getFullYear(); return Array.from({ length: 10 }, (_, index) => String(now - index)); }, []);
@@ -98,10 +106,10 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const response = await fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok || !data.embedUrl) { setNotice(data.error ?? "재생 정보를 불러오지 못했습니다."); return; }
-    setPlaying({ video: { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl });
+    setPlaying({ video: data.video ?? { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl });
   }
 
-  function renderCard(video: ArchiveVideo, featuredCard = false) {
+  function renderCard(video: ArchiveVideo, featuredCard = false, prioritizeThumbnail = false) {
     const allowed = canPlay(access.level, video.type);
     const secure = video.type === "attendance" && !allowed;
     const worshipObscured = !access.authenticated && video.type === "worship";
@@ -109,8 +117,8 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const duplicateWorshipMetadata = hasDuplicateWorshipMetadata(video);
     return <article key={video.id} className={`media-card${video.type === "worship" ? " media-card--worship" : ""}${featuredCard ? " featured" : ""}`}>
       <button className={`media-thumb${secure ? " attendance-obscured" : ""}${worshipObscured ? " worship-obscured" : ""}`} onClick={(event) => void play(video, event.currentTarget)} type="button" aria-label={`${video.title} ${allowed ? "재생" : "로그인 후 시청"}`}>
-        <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard ? "eager" : "lazy"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.webp"; }} />
-        {worshipObscured && <span className="worship-privacy-mask" aria-hidden="true"><img src={thumbnailSrc} alt="" width="1280" height="720" /></span>}
+        <img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard || prioritizeThumbnail ? "eager" : "lazy"} fetchPriority={featuredCard ? "high" : "auto"} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/archive/images/attendance-private-placeholder.webp"; }} />
+        {worshipObscured && <span className="worship-privacy-mask" aria-hidden="true"><img src={thumbnailSrc} alt="" width="1280" height="720" loading={featuredCard || prioritizeThumbnail ? "eager" : "lazy"} /></span>}
         {!allowed && <span className="locked-overlay"><span className="archive-lock-icon"><ArchiveIcon name="lock" size={18} /></span><strong>{access.approvalPending ? "관리자 승인 후 시청" : access.authenticated ? "열람 권한 필요" : "로그인 후 시청"}</strong></span>}
         {allowed && <span className="play-overlay"><span className="archive-play-icon"><ArchiveIcon name="play" size={22} /></span></span>}
         {video.durationSeconds != null && <span className="media-duration">{formatArchiveDuration(video.durationSeconds)}</span>}
@@ -138,14 +146,14 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
       <div className="category-chips" role="group" aria-label="예배 분류"><button className={!service ? "active" : ""} onClick={() => setService("")} type="button">전체</button><button className={service === "주일 1부" ? "active" : ""} onClick={() => setService("주일 1부")} type="button">주일 1부</button><button className={service === "주일 2부" ? "active" : ""} onClick={() => setService("주일 2부")} type="button">주일 2부</button><button className={service === "수요예배" ? "active" : ""} onClick={() => setService("수요예배")} type="button">기타예배</button></div>
       {notice && <div className="archive-notice" role="status">{notice}</div>}
       {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : featured ? <section className="featured-layout">{renderCard(featured, true)}<div className="featured-copy"><span>{formatDate(featured.date)} · {featured.serviceType}</span><h1 aria-label={featured.title} title={featured.title}><button className="featured-title-button" type="button" onClick={(event) => void play(featured, event.currentTarget)} aria-label={`${featured.title} ${canPlay(access.level, featured.type) ? "재생" : "로그인 후 시청"}`} title={featured.title}>{featured.title}</button></h1><p>설교 · {featured.preacher || "모현제일교회"}&nbsp;&nbsp; | &nbsp;&nbsp;{formatArchiveDuration(featured.durationSeconds)}</p><p className="featured-note">하나님 앞에 드린 예배의 현장을 영상으로 기록했습니다.<br />승인된 회원은 현재 화면에서 바로 시청할 수 있습니다.</p><button className="featured-action" onClick={(event) => void play(featured, event.currentTarget)} type="button">{access.approvalPending ? "관리자 승인 후 영상 보기" : access.authenticated ? "영상 보기" : "로그인하고 영상 보기"}</button></div></section> : <div className="archive-empty">검색 조건에 맞는 예배 영상이 없습니다.</div>}
-      <section className="recent-section"><div className="section-heading"><h2>최근 예배 영상</h2><Link href="/archive/sunday">전체 보기 ›</Link></div><div className="recent-grid">{recent.map((video) => renderCard(video))}</div></section>
+      <section className="recent-section"><div className="section-heading"><h2>최근 예배 영상</h2><Link href="/archive/sunday">전체 보기 ›</Link></div><div className="recent-grid">{recent.map((video, index) => renderCard(video, false, index < 4))}</div></section>
       <Link className="attendance-cta" href="/archive/attendance"><span className="attendance-icon"><ArchiveIcon name="clipboard" size={25} /></span><span><strong>출석 기록</strong><small>예배 출석을 영상으로 기록하고 관리할 수 있습니다.</small></span><b>출석 기록 보기</b></Link>
     </> : <div className="list-page">
       <header className="list-page-head"><h1>{meta[section][0]}</h1><p>{meta[section][1]}</p></header>
       {notice && <div className="archive-notice" role="status">{notice}</div>}
       <div className="archive-filterbar">{searchBox}<select aria-label="연도" value={year} onChange={(event) => setYear(event.target.value)}><option value="">전체 연도</option>{years.map((value) => <option key={value} value={value}>{value}년</option>)}</select><select aria-label="월" value={month} onChange={(event) => setMonth(event.target.value)}><option value="">전체 월</option>{Array.from({ length: 12 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value}월</option>)}</select><select aria-label="예배 종류" value={service} onChange={(event) => setService(event.target.value)}><option value="">전체 예배</option><option>주일 1부 예배</option><option>주일 2부 예배</option><option>수요예배</option><option>특별예배</option></select>{section !== "attendance" && <select aria-label="설교자" value={preacher} onChange={(event) => setPreacher(event.target.value)}><option value="">전체 설교자</option><option>담임목사</option><option>초청강사</option></select>}</div>
       <div className="list-toolbar"><div><h2>목록</h2><span>총 {total}개 · {page}/{totalPages}페이지</span></div><div className="sort-toggle"><button className={sort === "newest" ? "active" : ""} onClick={() => setSort("newest")} type="button">최신순</button><button className={sort === "oldest" ? "active" : ""} onClick={() => setSort("oldest")} type="button">오래된순</button></div></div>
-      {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : videos.length ? <div className="recent-grid list-media-grid">{videos.map((video) => renderCard(video))}</div> : <div className="archive-empty">조건에 맞는 기록이 없습니다.</div>}
+      {loading ? <div className="archive-empty">기록을 불러오고 있습니다.</div> : videos.length ? <div className="recent-grid list-media-grid">{videos.map((video, index) => renderCard(video, false, index < 4))}</div> : <div className="archive-empty">조건에 맞는 기록이 없습니다.</div>}
       {totalPages > 1 && <div className="pager"><span>{Math.min((page - 1) * 8 + 1, total)}-{Math.min(page * 8, total)} / {total}</span><div><button disabled={page === 1} onClick={() => setPage((value) => value - 1)} type="button">‹ 이전</button><button disabled={page === totalPages} onClick={() => setPage((value) => value + 1)} type="button">다음 ›</button></div></div>}
     </div>}
     {playing && <ArchiveVideoViewer playing={playing} onClose={() => setPlaying(null)} returnFocusRef={launchButton} />}

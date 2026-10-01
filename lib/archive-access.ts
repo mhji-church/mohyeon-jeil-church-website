@@ -1,20 +1,20 @@
 import { getArchiveAdminSession } from "@/app/archive-credential-auth";
 import { getMemberSession } from "@/app/member-auth";
 import { redirect } from "next/navigation";
-import { getArchiveAccess, getArchiveSongStatsAccess } from "./archive";
+import { getArchiveViewerAccess } from "./archive";
 import type { ArchiveAccessLevel } from "./archive-shared";
 import { getMemberDisplayPosition } from "./member-display";
 
-export type ArchiveViewer = { kind: "admin" | "member"; id: string; name: string; position?: string; level: ArchiveAccessLevel };
+export type ArchiveViewer = { kind: "admin" | "member"; id: string; name: string; position?: string; level: ArchiveAccessLevel; songStatsAllowed: boolean };
 
 export async function getArchiveWorshipViewer(): Promise<ArchiveViewer | null> {
   const admin = await getArchiveAdminSession();
-  if (admin) return { kind: "admin", id: admin.username, name: "예배 아카이브 관리자", level: "full" };
+  if (admin) return { kind: "admin", id: admin.username, name: "예배 아카이브 관리자", level: "full", songStatsAllowed: true };
   const member = await getMemberSession();
   if (!member || member.status !== "approved" || member.forcePasswordChange) return null;
-  const level = await getArchiveAccess(member.id);
+  const { level, songStatsAllowed } = await getArchiveViewerAccess(member.id);
   if (level !== "worship" && level !== "full") return null;
-  return { kind: "member", id: member.id, name: member.name, position: getMemberDisplayPosition(member.position), level };
+  return { kind: "member", id: member.id, name: member.name, position: getMemberDisplayPosition(member.position), level, songStatsAllowed };
 }
 
 export async function requireArchiveWorshipApi() {
@@ -23,12 +23,11 @@ export async function requireArchiveWorshipApi() {
 
 export async function getArchiveSongViewer(): Promise<ArchiveViewer | null> {
   const viewer = await getArchiveWorshipViewer();
-  if (!viewer || viewer.kind === "admin") return viewer;
-  return await getArchiveSongStatsAccess(viewer.id, viewer.level) ? viewer : null;
+  return viewer?.songStatsAllowed ? viewer : null;
 }
 
 export async function archiveViewerCanViewSongStats(viewer: ArchiveViewer) {
-  return viewer.kind === "admin" || getArchiveSongStatsAccess(viewer.id, viewer.level);
+  return viewer.songStatsAllowed;
 }
 
 export async function requireArchiveSongApi() {

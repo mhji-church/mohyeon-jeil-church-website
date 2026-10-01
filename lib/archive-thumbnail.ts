@@ -28,11 +28,14 @@ function placeholder(cacheControl = "private, no-store", body = PLACEHOLDER) {
 export async function serveArchiveThumbnail(id: string, cookieHeader: string | null, authorizedLevel?: ArchiveAccessLevel) {
   const video = await getArchiveVideo(id);
   if (!video) return new Response(null, { status: 404 });
-  const [member, admin] = await Promise.all([
-    getMemberSessionFromToken(cookieValue(cookieHeader, "mhji_member_session")),
-    getArchiveAdminSessionFromToken(cookieValue(cookieHeader, "mhji_archive_admin_session")),
-  ]);
-  const level = authorizedLevel ?? (admin ? "full" : member?.status === "approved" ? await getArchiveAccess(member.id) : "none");
+  let level = authorizedLevel;
+  if (!level) {
+    const [member, admin] = await Promise.all([
+      getMemberSessionFromToken(cookieValue(cookieHeader, "mhji_member_session")),
+      getArchiveAdminSessionFromToken(cookieValue(cookieHeader, "mhji_archive_admin_session")),
+    ]);
+    level = admin ? "full" : member?.status === "approved" ? await getArchiveAccess(member.id) : "none";
+  }
   if (level !== "worship" && level !== "full") {
     return new Response(null, { status: 403, headers: { "Cache-Control": "private, no-store" } });
   }
