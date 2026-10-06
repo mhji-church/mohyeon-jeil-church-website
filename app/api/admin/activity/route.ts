@@ -13,6 +13,7 @@ export async function GET(request: Request) {
       pageSize: 20,
       query: params.get("q") ?? "",
       action: params.get("action") ?? "",
+      group: params.get("group") ?? "",
     }), { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     return apiError("admin.activity.list", error, "활동 기록을 불러오지 못했습니다.", 503);

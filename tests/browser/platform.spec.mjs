@@ -254,9 +254,16 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await page.goto("/admin/activity");
   await expect(page.getByRole("heading", { name: "활동 기록", exact: true })).toBeVisible();
   await expect(page.getByText("회원 · 가상 회원")).toBeVisible();
-  await expect(page.getByText(/IP 주소: 203\.0\.113\.24/)).toBeVisible();
-  await expect(page.getByText(/사용 기기: 모바일 · Android · Chrome/)).toBeVisible();
-  await expect(page.getByText("2026.09.04 19:00:00 KST").first()).toBeVisible();
+  const firstActivityRow = page.locator(".admin-activity-table tbody tr").first();
+  await expect(firstActivityRow).not.toContainText("203.0.113.24");
+  await expect(firstActivityRow.getByRole("button", { name: "회원 로그인 상세" })).toBeVisible();
+  await firstActivityRow.getByRole("button", { name: "회원 로그인 상세" }).click();
+  const activityDetail = page.getByRole("dialog", { name: "활동 기록 상세" });
+  await expect(activityDetail).toContainText("203.0.113.24");
+  await expect(activityDetail).toContainText("모바일 · Android · Chrome");
+  await expect(activityDetail).toContainText("member.login");
+  await activityDetail.getByRole("button", { name: "활동 기록 상세 닫기" }).click();
+  await expect(page.locator('time[title="2026.09.04 19:00:00 KST"]').first()).toBeVisible();
   const refresh = page.getByRole("button", { name: "목록 새로고침" });
   await expect(refresh).toBeVisible();
   expect(await refresh.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(48, 47, 60)");
@@ -268,11 +275,15 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
     await expect(refresh).toBeVisible();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect.poll(() => activityRequests.some((search) => search.includes("group=login"))).toBe(true);
+  await page.getByRole("button", { name: "콘텐츠", exact: true }).click();
+  await expect.poll(() => activityRequests.some((search) => search.includes("group=content"))).toBe(true);
   await page.getByRole("button", { name: "2페이지" }).click();
   await expect(page.getByText("테스트 관리자 21")).toBeVisible();
   await page.getByLabel("활동 기록 검색").fill("테스트");
   await page.getByLabel("작업 유형 필터").selectOption("content.create");
-  await expect.poll(() => activityRequests.some((search) => search.includes("q=%ED%85%8C%EC%8A%A4%ED%8A%B8") && search.includes("action=content.create"))).toBe(true);
+  await expect.poll(() => activityRequests.some((search) => search.includes("q=%ED%85%8C%EC%8A%A4%ED%8A%B8") && search.includes("action=content.create") && search.includes("group=content"))).toBe(true);
 });
 
 test("archive mobile worship titles stay on one accessible line", async ({ page }) => {
@@ -1241,8 +1252,8 @@ test("website admin mobile navigation and lists stay compact without changing de
   const activityRows = page.locator(".admin-activity-table tbody tr");
   await expect(activityRows.first()).toBeVisible();
   expect(await activityRows.first().evaluate((row) => row.getBoundingClientRect().height)).toBeLessThanOrEqual(90);
-  await expect(page.getByText("예배 아카이브 권한 변경", { exact: true }).first()).toBeVisible();
-  const detailButton = activityRows.first().getByRole("button", { name: "상세" });
+  await expect(activityRows.getByRole("cell", { name: "예배 아카이브 권한 변경" }).first()).toBeVisible();
+  const detailButton = activityRows.first().getByRole("button", { name: /상세$/ });
   await detailButton.click();
   const detailDialog = page.getByRole("dialog", { name: "활동 기록 상세" });
   await expect(detailDialog).toContainText("작업 코드");

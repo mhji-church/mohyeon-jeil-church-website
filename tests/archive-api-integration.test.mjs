@@ -785,6 +785,19 @@ test("successful administrator and member logins show validated IP and device on
   assert.equal(matchingMemberLogin?.actorName, "예배회원");
   assert.equal(matchingMemberLogin?.metadata.device, "모바일 · Android · Chrome");
   assert.equal((await request("/api/admin/activity?action=member.login", { headers: { cookie: websiteAdminCookie } })).status, 403);
+
+  for (const [group, allowed] of [
+    ["login", (action) => action === "admin.login" || action === "member.login"],
+    ["member", (action) => action.startsWith("member.") && action !== "member.login"],
+    ["content", (action) => action.startsWith("content.")],
+    ["archive", (action) => action.startsWith("archive.")],
+  ]) {
+    const response = await request(`/api/admin/activity?group=${group}`, { headers: { cookie: adminCookie } });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.ok(data.logs.every((log) => allowed(log.action)));
+    if (group === "login") assert.ok(data.logs.some((log) => log.action === "member.login"));
+  }
 });
 
 test("archive administration requires auth and local CRUD rejects unsafe input", async () => {

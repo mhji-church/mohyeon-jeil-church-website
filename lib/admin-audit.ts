@@ -46,12 +46,14 @@ export async function listAdminAudit(options: {
   pageSize?: number;
   query?: string;
   action?: string;
+  group?: string;
 }) {
   await ensureNetlifySchema();
   const page = Math.max(1, Number.isFinite(options.page) ? options.page : 1);
   const pageSize = 20;
   const query = options.query?.trim().slice(0, 80) ?? "";
   const action = options.action?.trim().slice(0, 60) ?? "";
+  const group = options.group?.trim() ?? "";
   const filters: string[] = [];
   const args: string[] = [];
   if (query) {
@@ -62,6 +64,10 @@ export async function listAdminAudit(options: {
     filters.push("audit.action = ?");
     args.push(action);
   }
+  if (group === "login") filters.push("audit.action IN ('admin.login', 'member.login')");
+  if (group === "member") filters.push("audit.action LIKE 'member.%' AND audit.action <> 'member.login'");
+  if (group === "content") filters.push("audit.action LIKE 'content.%'");
+  if (group === "archive") filters.push("audit.action LIKE 'archive.%'");
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
   const from = `FROM admin_audit_logs AS audit
     LEFT JOIN members AS member ON audit.action = 'member.login' AND member.id = audit.actor_id`;

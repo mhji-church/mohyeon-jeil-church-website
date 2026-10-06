@@ -25,7 +25,19 @@ const actionGroups = [
   ["content.delete", "콘텐츠 삭제"],
   ["member.update", "회원 수정"],
   ["member.password_reset", "임시 비밀번호 발급"],
+  ["member.password_change", "비밀번호 변경"],
+  ["member.merge", "회원 계정 병합"],
   ["member.delete", "회원 삭제"],
+  ["archive.video.create", "예배 영상 등록"],
+  ["archive.video.update", "예배 영상 수정"],
+  ["archive.video.delete", "예배 영상 삭제"],
+  ["archive.access.update", "예배 아카이브 권한 변경"],
+  ["archive.settings.update", "아카이브 설정 변경"],
+  ["archive.song.merge", "찬양곡 병합"],
+] as const;
+
+const activityCategories = [
+  ["", "전체"], ["login", "로그인"], ["member", "회원"], ["content", "콘텐츠"], ["archive", "아카이브"],
 ] as const;
 
 const actionLabels: Record<string, string> = {
@@ -36,10 +48,25 @@ const actionLabels: Record<string, string> = {
   "content.delete": "콘텐츠 삭제",
   "member.update": "회원 정보 수정",
   "member.password_reset": "임시 비밀번호 발급",
+  "member.password_change": "비밀번호 변경",
   "member.delete": "회원 삭제",
   "member.merge": "회원 계정 병합",
   "archive.access.update": "예배 아카이브 권한 변경",
+  "archive.video.create": "예배 영상 등록",
+  "archive.video.update": "예배 영상 수정",
+  "archive.video.delete": "예배 영상 삭제",
+  "archive.settings.update": "아카이브 설정 변경",
+  "archive.song.merge": "찬양곡 병합",
 };
+
+const targetLabels: Record<string, string> = {
+  content: "게시물",
+  bulletin: "주보", news: "교회소식", gallery: "갤러리", business: "성도사업장",
+  member: "회원 계정", member_merge: "회원 계정 병합", archive_video: "예배 영상",
+  archive_song: "찬양곡", archive_settings: "아카이브 설정",
+};
+const accessLabels: Record<string, string> = { none: "권한 없음", worship: "예배 영상", full: "전체 기록" };
+const memberStatusLabels: Record<string, string> = { pending: "승인 대기", approved: "승인", suspended: "이용 중지" };
 
 function displayAction(action: string) {
   return actionLabels[action] ?? action;
@@ -49,15 +76,25 @@ function displayAccount(log: Log) {
   return log.action === "member.login" ? `회원 · ${log.actorName ?? log.actorId}` : `관리자 · ${log.actorId}`;
 }
 
-function displayTarget(log: Log) {
-  if (log.action === "member.login") return "회원 계정";
-  if (log.action === "admin.login") return "관리자 계정";
-  return `${log.targetType}${log.targetId ? ` · ${log.targetId}` : ""}`;
+function displayTargetSummary(log: Log) {
+  if (log.action === "member.login") return "회원 계정 접속";
+  if (log.action === "admin.login") return "관리자 계정 접속";
+  if (log.action === "archive.access.update") {
+    const level = accessLabels[log.metadata.accessLevel];
+    return level ? `회원 열람 권한 · ${level}` : log.metadata.summary ?? "회원 열람 권한 변경";
+  }
+  if (log.action.startsWith("archive.") && log.metadata.summary) return log.metadata.summary;
+  const target = targetLabels[log.targetType] ?? log.targetType ?? "기록";
+  if (log.action.startsWith("content.") && log.metadata.date) return `${target} · ${log.metadata.date}`;
+  if (log.action === "member.update" && log.metadata.status) return `${target} · ${memberStatusLabels[log.metadata.status] ?? log.metadata.status}`;
+  return target || "기록";
 }
 
 const metadataLabels: Record<string, string> = { ipAddress: "IP 주소", device: "사용 기기" };
-function displayMetadata(metadata: Log["metadata"]) {
-  return Object.entries(metadata).map(([key, value]) => `${metadataLabels[key] ?? key}: ${value}`).join(" · ") || "—";
+function ActivityTime({ value }: { value: string }) {
+  const formatted = formatAdminAuditTime(value);
+  const [date, ...time] = formatted.split(" ");
+  return <time title={formatted}><span>{date}</span><small>{time.join(" ")}</small></time>;
 }
 
 export default function UnifiedActivityAdmin(props: {
@@ -72,6 +109,7 @@ export default function UnifiedActivityAdmin(props: {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [action, setAction] = useState("");
+  const [group, setGroup] = useState("");
   const [failed, setFailed] = useState(false);
   const [selectedLog, setSelectedLog] = useState<Log | null>(null);
   const detailDialogRef = useRef<HTMLElement>(null);
@@ -116,7 +154,7 @@ export default function UnifiedActivityAdmin(props: {
   }, [closeDetail, selectedLog]);
 
   const load = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(page), q: query, action });
+    const params = new URLSearchParams({ page: String(page), q: query, action, group });
     try {
       const response = await fetch(`/api/admin/activity?${params}`, { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
@@ -127,7 +165,7 @@ export default function UnifiedActivityAdmin(props: {
     } catch {
       setFailed(true);
     }
-  }, [action, page, query]);
+  }, [action, group, page, query]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 180);
@@ -147,15 +185,18 @@ export default function UnifiedActivityAdmin(props: {
           <header>
             <div><h2>활동 기록 목록</h2><span>총 {total}개</span></div>
             <div className="admin-activity-toolbar">
-              <label><span className="sr-only">활동 기록 검색</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="계정·작업·IP 검색" /></label>
+              <label><span className="sr-only">활동 기록 검색</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="계정·작업·대상·IP 검색" /></label>
               <label><span className="sr-only">작업 유형 필터</span><select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }}>
                 {actionGroups.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
               </select></label>
             </div>
           </header>
+          <div className="admin-activity-categories" role="group" aria-label="작업 범주">
+            {activityCategories.map(([value, label]) => <button key={value} type="button" aria-pressed={group === value} onClick={() => { setGroup(value); setAction(""); setPage(1); }}>{label}</button>)}
+          </div>
           {failed ? <div className="admin-empty"><strong>활동 기록을 불러오지 못했습니다.</strong></div> : (
-            <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>계정</th><th>작업</th><th>대상</th><th>접속 정보·메타데이터</th><th><span className="sr-only">상세</span></th></tr></thead><tbody>
-              {logs.map((log) => <tr key={log.id}><td>{formatAdminAuditTime(log.createdAt)}</td><td>{displayAccount(log)}</td><td><strong>{displayAction(log.action)}</strong><small>{actionLabels[log.action] ? "" : log.action}</small></td><td>{displayTarget(log)}</td><td>{displayMetadata(log.metadata)}</td><td><button className="admin-activity-detail-button" type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
+            <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>계정</th><th>작업</th><th>대상·내용</th><th><span className="sr-only">상세</span></th></tr></thead><tbody>
+              {logs.map((log) => <tr key={log.id}><td><ActivityTime value={log.createdAt} /></td><td>{displayAccount(log)}</td><td><strong>{displayAction(log.action)}</strong></td><td className="admin-activity-summary">{displayTargetSummary(log)}</td><td><button className="admin-activity-detail-button" type="button" aria-label={`${displayAction(log.action)} 상세`} onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
             </tbody></table>{!logs.length && <div className="admin-empty"><strong>조건에 맞는 활동 기록이 없습니다.</strong></div>}</div>
           )}
           <AdminPagination currentPage={page} totalPages={pages} onPageChange={setPage} />
