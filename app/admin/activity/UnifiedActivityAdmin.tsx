@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AdminPagination from "../AdminPagination";
 import AdminSidebar from "../AdminSidebar";
+import { formatAdminAuditTime } from "@/lib/admin-audit-time";
 
 type Log = {
   id: string;
@@ -154,7 +155,7 @@ export default function UnifiedActivityAdmin(props: {
           </header>
           {failed ? <div className="admin-empty"><strong>활동 기록을 불러오지 못했습니다.</strong></div> : (
             <div className="admin-table-wrap"><table className="admin-activity-table"><thead><tr><th>시각</th><th>계정</th><th>작업</th><th>대상</th><th>접속 정보·메타데이터</th><th><span className="sr-only">상세</span></th></tr></thead><tbody>
-              {logs.map((log) => <tr key={log.id}><td>{log.createdAt.replace("T", " ")}</td><td>{displayAccount(log)}</td><td><strong>{displayAction(log.action)}</strong><small>{actionLabels[log.action] ? "" : log.action}</small></td><td>{displayTarget(log)}</td><td>{displayMetadata(log.metadata)}</td><td><button className="admin-activity-detail-button" type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
+              {logs.map((log) => <tr key={log.id}><td>{formatAdminAuditTime(log.createdAt)}</td><td>{displayAccount(log)}</td><td><strong>{displayAction(log.action)}</strong><small>{actionLabels[log.action] ? "" : log.action}</small></td><td>{displayTarget(log)}</td><td>{displayMetadata(log.metadata)}</td><td><button className="admin-activity-detail-button" type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setSelectedLog(log); }}>상세</button></td></tr>)}
             </tbody></table>{!logs.length && <div className="admin-empty"><strong>조건에 맞는 활동 기록이 없습니다.</strong></div>}</div>
           )}
           <AdminPagination currentPage={page} totalPages={pages} onPageChange={setPage} />
@@ -169,7 +170,7 @@ export default function UnifiedActivityAdmin(props: {
             </header>
             <div>
               <dl>
-                <div><dt>시각</dt><dd>{selectedLog.createdAt.replace("T", " ")}</dd></div>
+                <div><dt>시각</dt><dd>{formatAdminAuditTime(selectedLog.createdAt)}</dd></div>
                 <div><dt>계정</dt><dd>{displayAccount(selectedLog)}</dd></div>
                 <div><dt>대상</dt><dd>{selectedLog.targetType}{selectedLog.targetId ? ` · ${selectedLog.targetId}` : ""}</dd></div>
                 <div><dt>작업 코드</dt><dd><code>{selectedLog.action}</code></dd></div>

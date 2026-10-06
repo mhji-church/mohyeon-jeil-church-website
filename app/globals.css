@@ -596,6 +596,58 @@
   cursor: pointer;
 }
 
+.archive-save-backdrop {
+  position: fixed;
+  z-index: 350;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  background: rgba(17, 17, 24, .72);
+  backdrop-filter: blur(8px);
+}
+.archive-save-dialog {
+  display: grid;
+  justify-items: center;
+  width: min(440px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  border: 1px solid var(--archive-line-strong);
+  border-radius: 14px;
+  background: var(--archive-surface-strong);
+  padding: 32px 28px 28px;
+  color: var(--archive-text);
+  text-align: center;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .32);
+}
+.archive-save-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--archive-accent-soft);
+  color: var(--archive-accent);
+  font-size: 27px;
+  font-weight: 800;
+}
+.archive-save-eyebrow { color: var(--archive-accent); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+.archive-save-dialog h2 { margin: 9px 0 0; font-size: clamp(22px, 5vw, 27px); line-height: 1.35; }
+.archive-save-dialog p { margin: 12px 0 24px; color: var(--archive-muted); font-size: 14px; line-height: 1.65; }
+.archive-save-confirm {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--archive-accent);
+  color: var(--archive-bg);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.archive-save-confirm:hover { filter: brightness(1.08); }
+
 @media (max-width: 1280px) {
   .archive-app-header { grid-template-columns: 220px minmax(240px, 1fr) auto; }
   .archive-app-brand { padding-inline: 16px; }

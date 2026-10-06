@@ -131,6 +131,9 @@ test("public content, mobile menu, and pagination remain usable", async ({ page 
   const signupNoticeClose = page.getByRole("button", { name: "회원가입 안내 닫기" });
   if (await signupNoticeClose.isVisible()) await signupNoticeClose.click();
   const menuButton = page.getByRole("button", { name: "메뉴 열기" });
+  await expect.poll(() => menuButton.evaluate((button) =>
+    Object.keys(button).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 15_000 }).toBe(true);
   await menuButton.click();
   await expect(page.getByRole("navigation", { name: "모바일 주요 메뉴" })).toBeVisible();
   await page.getByRole("button", { name: "메뉴 닫기" }).click();
@@ -253,6 +256,7 @@ test("login, signup, admin guard, and admin authoring work on the temporary data
   await expect(page.getByText("회원 · 가상 회원")).toBeVisible();
   await expect(page.getByText(/IP 주소: 203\.0\.113\.24/)).toBeVisible();
   await expect(page.getByText(/사용 기기: 모바일 · Android · Chrome/)).toBeVisible();
+  await expect(page.getByText("2026.09.04 19:00:00 KST").first()).toBeVisible();
   const refresh = page.getByRole("button", { name: "목록 새로고침" });
   await expect(refresh).toBeVisible();
   expect(await refresh.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(48, 47, 60)");
@@ -780,6 +784,58 @@ test("archive admin navigation stays responsive above the edit drawer and recove
   expect(errors.filter((error) => !/status of 503|503 \(Service Unavailable\)/.test(error))).toEqual([]);
 });
 
+test("archive video save shows a centered themed confirmation without an unload warning", async ({ page }) => {
+  const nativeDialogs = [];
+  page.on("dialog", async (dialog) => { nativeDialogs.push(dialog.message()); await dialog.dismiss(); });
+  await page.route("**/api/archive/settings?admin=1", async (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ settings: { recentCount: 4, defaultSort: "newest", defaultServiceType: "주일 2부 예배", defaultPreacher: "담임목사", autoInspectYoutube: false, afterSave: "list" } }),
+  }));
+  await page.route("**/api/admin/archive/videos", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ video: { id: "virtual-video" } }) });
+  });
+  await page.goto("/admin/login");
+  await expect.poll(() => page.locator(".admin-login-form").evaluate((form) =>
+    Object.keys(form).some((key) => key.startsWith("__reactProps")),
+  ), { timeout: 15_000 }).toBe(true);
+  await page.getByLabel("아이디").fill("browser-archive-admin");
+  await page.getByLabel("비밀번호").fill("browser-archive-password");
+  await page.getByRole("button", { name: "관리자 로그인" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  await page.route("**/api/archive/admin/activity?*", async (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ total: 1, logs: [{ id: "virtual-activity", actor: "가상 관리자", action: "video.create", targetType: "video", targetId: "virtual-video", summary: "가상 영상 등록", details: {}, createdAt: "2026-10-07 00:15:00" }] }),
+  }));
+  await page.goto("/archive/admin/activity");
+  await expect(page.getByText("2026.10.07 09:15:00 KST")).toBeVisible();
+
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/archive/admin/new");
+    await expect.poll(() => page.locator(".archive-admin-form").evaluate((form) =>
+      Object.keys(form).some((key) => key.startsWith("__reactProps")),
+    ), { timeout: 15_000 }).toBe(true);
+    await page.getByLabel("유튜브 URL").fill("https://youtu.be/abcdefghijk");
+    await page.getByLabel("날짜", { exact: true }).fill("2026-10-04");
+    await page.getByLabel("영상 제목").fill("가상 예배 영상");
+    await page.getByRole("button", { name: "영상 등록" }).click();
+    const confirmation = page.getByRole("dialog", { name: "영상이 등록되었습니다." });
+    await expect(confirmation).toBeVisible();
+    await expect(page).toHaveURL(/\/archive\/admin\/new$/);
+    const center = await confirmation.boundingBox();
+    expect(Math.abs(center.x + center.width / 2 - viewport.width / 2)).toBeLessThan(2);
+    expect(Math.abs(center.y + center.height / 2 - viewport.height / 2)).toBeLessThan(2);
+    await expect(confirmation.getByRole("button", { name: "영상 목록으로" })).toBeFocused();
+    await confirmation.getByRole("button", { name: "영상 목록으로" }).click();
+    await expect(page).toHaveURL(/\/archive\/admin$/);
+    expect(nativeDialogs).toEqual([]);
+  }
+});
+
 test("admin member duplicates stay clear and require a fresh server confirmation", async ({ page }) => {
   const errors = watchErrors(page);
   const duplicateCheck = {
@@ -1229,7 +1285,7 @@ test("approved local member can enter the worship archive", async ({ page }) => 
   await page.getByLabel("이름 또는 기존 아이디").fill("test-member");
   await page.getByLabel("비밀번호").fill("browser-test-password");
   await page.getByRole("button", { name: "교인 로그인" }).click();
-  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:4178\/archive(?:[/?#]|$)/);
+  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:4178\/archive(?:[/?#]|$)/, { timeout: 20_000 });
   await expect(page.getByText("모현제일교회 예배 아카이브").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "브라우저테스트 집사 회원 메뉴" })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });

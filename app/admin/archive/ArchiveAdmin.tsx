@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideoAdmin } from "@/lib/archive-shared";
 import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "@/app/archive/ArchiveShell";
@@ -10,6 +10,7 @@ type Props = { userName: string; userEmail: string; signOutPath: string; mode?: 
 type AccessMember = { id: string; name: string; username: string; status: string; accessLevel: ArchiveAccessLevel; songStatsAllowed: boolean };
 type FormState = { id: string; type: "worship" | "attendance"; date: string; serviceType: string; title: string; preacher: string; youtubeUrl: string; thumbnailUrl: string; durationSeconds: string; note: string; songsText: string; sermonTitle: string; biblePassage: string; prayerName: string; prayerRole: string };
 type Notice = { message: string; tone: "success" | "error" } | null;
+type SaveConfirmation = { editing: boolean; destination: "list" | "continue" | "stay" } | null;
 type VideoTypeFilter = "" | "worship" | "attendance";
 type ServiceFilter = "" | "sunday" | "other";
 type Settings = { recentCount: 4 | 8 | 12; defaultSort: "newest" | "oldest"; defaultServiceType: string; defaultPreacher: string; autoInspectYoutube: boolean; afterSave: "list" | "continue" };
@@ -32,6 +33,8 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
   const [total, setTotal] = useState(0);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [notice, setNotice] = useState<Notice>(null);
+  const [saveConfirmation, setSaveConfirmation] = useState<SaveConfirmation>(null);
+  const saveConfirmationRef = useRef<HTMLDivElement>(null);
   const [loadingYoutube, setLoadingYoutube] = useState(false);
   const [saving, setSaving] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState("");
@@ -96,6 +99,18 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [formDirty, settingsDirty]);
+  useEffect(() => {
+    if (!saveConfirmation) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    saveConfirmationRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const keepFocus = (event: KeyboardEvent) => {
+      if (event.key === "Tab") event.preventDefault();
+      if (event.key === "Escape") setSaveConfirmation(null);
+    };
+    window.addEventListener("keydown", keepFocus);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", keepFocus); };
+  }, [saveConfirmation]);
   useEffect(() => {
     if (mode !== "manage") return;
     const syncTabFromUrl = () => {
@@ -178,16 +193,23 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
       const response = await fetch("/api/admin/archive/videos", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, durationSeconds: form.durationSeconds || null }) });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "영상을 저장하지 못했습니다.");
-      setNotice({ message: editing ? "수정이 완료되었습니다." : "등록이 완료되었습니다.", tone: "success" });
       setForm({ ...emptyForm, serviceType: settings.defaultServiceType, preacher: settings.defaultPreacher });
       setFormDirty(false);
-      if (!editing && mode === "new" && settings.afterSave === "list") location.assign("/archive/admin");
+      setSaveConfirmation({ editing, destination: editing ? "stay" : mode === "new" ? settings.afterSave : "stay" });
       if (mode === "manage") await loadVideos();
     } catch (error) {
       setNotice({ message: error instanceof Error ? error.message : "영상을 저장하지 못했습니다.", tone: "error" });
     } finally {
       setSaving(false);
     }
+  }
+
+  function confirmSavedVideo() {
+    if (saveConfirmation?.destination === "list") {
+      window.location.assign("/archive/admin");
+      return;
+    }
+    setSaveConfirmation(null);
   }
 
   function edit(video: ArchiveVideoAdmin) {
@@ -291,6 +313,7 @@ export default function ArchiveAdmin({ userName, userEmail, signOutPath, mode = 
         <header className="cms-page-head has-actions"><div className="cms-page-title"><h1>{mode === "new" ? "새 영상 등록" : tab === "access" ? "회원 관리" : tab === "settings" ? "설정" : "영상 관리"}</h1><p>{userName} · {userEmail}</p></div><div className="cms-page-actions"><a className="secondary-btn" href="/archive" target="_blank">아카이브 보기</a>{mode === "new" ? <Link className="secondary-btn" href="/archive/admin">목록으로</Link> : tab === "videos" && <Link className="primary-btn" href="/archive/admin/new">+ 새 영상 등록</Link>}</div></header>
         {mode === "manage" && <div className="archive-admin-tabs segmented-control"><button className={tab === "videos" ? "active" : ""} type="button" onClick={() => selectManageTab("videos")}>영상 관리</button><button className={tab === "access" ? "active" : ""} type="button" onClick={() => selectManageTab("access")}>열람 등급</button></div>}
         {notice && <div className={`toast-message is-${notice.tone}`} role="status" aria-live="polite"><span>{notice.message}</span><button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">×</button></div>}
+        {saveConfirmation && <div className="archive-save-backdrop" role="presentation"><div className="archive-save-dialog" role="dialog" aria-modal="true" aria-labelledby="archive-save-title" aria-describedby="archive-save-description" ref={saveConfirmationRef}><span className="archive-save-mark" aria-hidden="true">✓</span><span className="archive-save-eyebrow">VIDEO MANAGEMENT</span><h2 id="archive-save-title">영상이 {saveConfirmation.editing ? "수정되었습니다." : "등록되었습니다."}</h2><p id="archive-save-description">{saveConfirmation.destination === "list" ? "저장이 완료되었습니다. 영상 목록에서 등록 내용을 확인할 수 있습니다." : "저장이 완료되었습니다. 영상 관리 작업을 계속할 수 있습니다."}</p><button className="archive-save-confirm" type="button" onClick={confirmSavedVideo}>{saveConfirmation.destination === "list" ? "영상 목록으로" : "확인"}</button></div></div>}
         {mode === "new" ? <div className="archive-form-page">{videoForm("page")}</div> : tab === "videos" ? <>
           <section className="admin-card archive-video-list">
             <div className="archive-list-head"><div className="admin-list-heading"><h2>등록된 영상</h2><span>총 {total}개</span></div><form className="archive-list-search" onSubmit={applySearch}><label><span className="sr-only">영상 검색</span><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="제목·날짜·설교·찬양 검색" /></label><button className="secondary-btn" type="submit">검색</button></form></div>
