@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
-  const { user, canManageArchive } = await requireAdminPage();
+  const { user, canManageArchive, canViewAnalytics } = await requireAdminPage();
   if (!canManageArchive) redirect("/admin");
   const initialPendingMemberCount = await countPendingMembers().catch(() => null);
   return (
@@ -16,6 +16,7 @@ export default async function ActivityPage() {
       signOutPath="/api/admin/session?return_to=/"
       initialPendingMemberCount={initialPendingMemberCount}
       canManageArchive={canManageArchive}
+      canViewAnalytics={canViewAnalytics}
     />
   );
 }

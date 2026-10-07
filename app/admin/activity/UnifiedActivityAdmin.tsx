@@ -103,6 +103,7 @@ export default function UnifiedActivityAdmin(props: {
   signOutPath: string;
   initialPendingMemberCount: number | null;
   canManageArchive: boolean;
+  canViewAnalytics: boolean;
 }) {
   const [logs, setLogs] = useState<Log[]>([]);
   const [total, setTotal] = useState(0);

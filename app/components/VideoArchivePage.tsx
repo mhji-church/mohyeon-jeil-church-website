@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { YouTubePlaylistType } from "../../lib/youtube";
+import { trackAnalyticsAction } from "@/lib/analytics-client";
 
 export type ArchiveVideo = {
   videoId: string;
@@ -241,7 +242,7 @@ export default function VideoArchivePage({
                   <button
                     className="archive-thumbnail"
                     type="button"
-                    onClick={() => setPlaying(video)}
+                    onClick={() => { setPlaying(video); trackAnalyticsAction("video.open", "video", video.videoId); }}
                     aria-label={`${displayTitle} 사이트에서 재생`}
                   >
                     <img
@@ -266,6 +267,7 @@ export default function VideoArchivePage({
                       href={`https://www.youtube.com/watch?v=${video.videoId}`}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => trackAnalyticsAction("video.open", "video", video.videoId)}
                       aria-label={`${displayTitle} 유튜브에서 보기`}
                     >
                       유튜브에서 보기 <ArrowIcon diagonal />

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity" | "archive";
+export type AdminSection = "home" | "bulletin" | "news" | "gallery" | "business" | "members" | "activity" | "analytics" | "archive";
 
 type Props = {
   active: AdminSection;
@@ -13,6 +13,7 @@ type Props = {
   initialPendingMemberCount: number | null;
   canManageWebsite: boolean;
   canManageArchive: boolean;
+  canViewAnalytics?: boolean;
 };
 
 const menuItems: Array<{ key: AdminSection; label: string; href: string }> = [
@@ -23,6 +24,7 @@ const menuItems: Array<{ key: AdminSection; label: string; href: string }> = [
   { key: "business", label: "성도사업장 관리", href: "/admin/content?section=business" },
   { key: "members", label: "회원 관리", href: "/admin/members" },
   { key: "activity", label: "활동 기록", href: "/admin/activity" },
+  { key: "analytics", label: "접속 통계", href: "/admin/analytics" },
 ];
 
 export default function AdminSidebar({
@@ -33,6 +35,7 @@ export default function AdminSidebar({
   initialPendingMemberCount,
   canManageWebsite,
   canManageArchive,
+  canViewAnalytics = false,
 }: Props) {
   const [pendingMemberCount, setPendingMemberCount] = useState(initialPendingMemberCount);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -160,7 +163,7 @@ export default function AdminSidebar({
         <span>WEBSITE ADMIN</span>
       </Link>
       <nav aria-label="관리 메뉴">
-        {canManageWebsite && menuItems.filter((item) => item.key !== "activity" || canManageArchive).map((item, index) => (
+        {canManageWebsite && menuItems.filter((item) => (item.key !== "activity" || canManageArchive) && (item.key !== "analytics" || canViewAnalytics)).map((item, index) => (
           <Link className={active === item.key ? "is-active" : ""} href={item.href} key={item.key} onClick={closeMobileMenu}>
             <i>{String(index + 1).padStart(2, "0")}</i>
             <span>{item.label}</span>

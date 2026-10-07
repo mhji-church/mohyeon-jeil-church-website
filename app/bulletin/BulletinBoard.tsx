@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ZoomableImage from "../components/ZoomableImage";
 import type { ContentPost } from "../../lib/content";
 import PublicPagination from "../components/PublicPagination";
+import { trackAnalyticsAction } from "@/lib/analytics-client";
 
 type Props = { posts: ContentPost[]; totalCount: number; currentPage: number; totalPages: number };
 
@@ -38,6 +39,7 @@ export default function BulletinBoard({ posts, totalCount, currentPage, totalPag
   }, [viewer, movePage]);
 
   const openViewer = (bulletin: ContentPost, page = 0) => {
+    trackAnalyticsAction("bulletin.open", "bulletin", bulletin.id);
     setPageIndex(page);
     setDirection("next");
     setViewer(bulletin);

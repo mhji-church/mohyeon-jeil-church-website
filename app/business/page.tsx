@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ContentPage from "../components/ContentPage";
 import { listContentPosts } from "../../lib/content";
+import AnalyticsExternalLink from "../components/AnalyticsExternalLink";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/business" },
@@ -132,14 +133,9 @@ export default async function BusinessPage({ searchParams }: BusinessPageProps) 
                         </dl>
                       )}
                       {website && (
-                        <a
-                          className="business-link"
-                          href={website}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
+                        <AnalyticsExternalLink className="business-link" href={website} contentId={business.id}>
                           홈페이지·SNS 보기 ↗
-                        </a>
+                        </AnalyticsExternalLink>
                       )}
                     </div>
                   </article>

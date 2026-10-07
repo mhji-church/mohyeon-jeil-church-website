@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatArchiveDuration, type ArchiveAccessLevel, type ArchiveVideo } from "@/lib/archive-shared";
 import { ArchiveIcon, ArchiveShell, type ArchiveNavKey } from "./ArchiveShell";
 import ArchiveVideoViewer, { type ArchivePlayingVideo } from "./ArchiveVideoViewer";
+import { trackAnalyticsAction } from "@/lib/analytics-client";
 
 export type ArchiveSection = "all" | "sunday" | "other" | "attendance";
 type AccessState = { authenticated: boolean; approvalPending?: boolean; level: ArchiveAccessLevel; member?: { name: string; position?: string }; songStatsAllowed: boolean };
@@ -89,7 +90,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const video = videos.find((item) => item.id === requested);
     if (!video || !canPlay(access.level, video.type)) return;
     openedVideo.current = requested;
-    fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" }).then(async (response) => ({ response, data: await response.json() })).then(({ response, data }) => { if (response.ok && data.embedUrl) setPlaying({ video: data.video ?? { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl }); }).catch(() => undefined);
+    fetch(`/api/archive/videos/${encodeURIComponent(video.id)}/playback`, { cache: "no-store" }).then(async (response) => ({ response, data: await response.json() })).then(({ response, data }) => { if (response.ok && data.embedUrl) { setPlaying({ video: data.video ?? { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl }); trackAnalyticsAction("video.open", "video", video.id); } }).catch(() => undefined);
   }, [access.authenticated, access.level, searchParams, videos]);
 
   const years = useMemo(() => { const now = new Date().getFullYear(); return Array.from({ length: 10 }, (_, index) => String(now - index)); }, []);
@@ -107,6 +108,7 @@ export default function ArchivePortal({ initialAccess }: { initialAccess: Access
     const data = await response.json();
     if (!response.ok || !data.embedUrl) { setNotice(data.error ?? "재생 정보를 불러오지 못했습니다."); return; }
     setPlaying({ video: data.video ?? { ...video, note: data.note ?? "" }, embedUrl: data.embedUrl });
+    trackAnalyticsAction("video.open", "video", video.id);
   }
 
   function renderCard(video: ArchiveVideo, featuredCard = false, prioritizeThumbnail = false) {

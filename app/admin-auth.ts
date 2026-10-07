@@ -12,6 +12,7 @@ export async function requireAdminPage() {
       fullName: "홈페이지 관리자",
     },
     canManageArchive: session.canManageArchive,
+    canViewAnalytics: session.canViewAnalytics,
     authorized: true,
   };
 }
@@ -24,5 +25,7 @@ export async function requireAdminApi() {
     email: session.username,
     fullName: "홈페이지 관리자",
     canManageArchive: session.canManageArchive,
+    canViewAnalytics: session.canViewAnalytics,
+    accountId: session.accountId,
   };
 }

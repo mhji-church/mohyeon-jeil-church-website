@@ -1,5 +1,7 @@
 "use client";
 
+import { trackAnalyticsAction } from "@/lib/analytics-client";
+
 import {
   type ClipboardEvent,
   type FormEvent,
@@ -182,6 +184,7 @@ export default function SignupForm() {
         // Signup remains complete even when browser storage is unavailable.
       }
       setCompleteUsername(data.username);
+      trackAnalyticsAction("signup.complete");
     } catch {
       setError("인터넷 연결을 확인한 뒤 다시 신청해 주세요.");
       window.setTimeout(() => errorSummaryRef.current?.focus(), 0);

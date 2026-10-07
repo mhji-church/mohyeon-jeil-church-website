@@ -11,10 +11,12 @@ type AdminEnvironment = {
 };
 
 type AdminSession = {
+  accountId: "website-credential" | "archive-credential";
   username: string;
   expiresAt: number;
   canManageWebsite: boolean;
   canManageArchive: boolean;
+  canViewAnalytics: boolean;
 };
 
 export type AdminSessionScope = "website" | "archive";
@@ -127,7 +129,11 @@ export async function getAdminSessionFromToken(
     (scopeValue === "archive" || (scopeValue === "website" && isWebsiteAdmin));
   if (!canManageWebsite && !canManageArchive) return null;
 
-  return { username, expiresAt, canManageWebsite, canManageArchive };
+  // Administrators are configured as two credential slots, not member rows.
+  // The signed credential scope is their stable account identity; a member
+  // choosing the same username can never acquire this session.
+  const accountId = scopeValue === "archive" ? "archive-credential" : "website-credential";
+  return { username, accountId, expiresAt, canManageWebsite, canManageArchive, canViewAnalytics: accountId === "archive-credential" && isArchiveAdmin };
 }
 
 async function sign(value: string) {

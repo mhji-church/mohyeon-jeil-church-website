@@ -1,0 +1,94 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { actionLabels, type AnalyticsAction, type AnalyticsPeriod } from "@/lib/analytics-model";
+import type { AnalyticsReport } from "@/lib/analytics-report";
+
+const periodLabels: Record<AnalyticsPeriod, string> = { today: "오늘", yesterday: "어제", week: "이번 주", month: "이번 달", year: "올해", all: "전체 기간", custom: "직접 선택" };
+const sourceLabels: Record<string, string> = { search: "검색", sns: "SNS", external: "외부 사이트", direct: "직접/출처 미확인", other: "기타" };
+const deviceLabels: Record<string, string> = { mobile: "모바일", desktop: "PC", tablet: "태블릿", unknown: "알 수 없음" };
+const countryNames = new Intl.DisplayNames(["ko"], { type: "region" });
+
+type Breakdown = { label: string; visitors: number; visits: number };
+function integer(value: number) { return new Intl.NumberFormat("ko-KR").format(value); }
+function change(current: number, previous: number | undefined) {
+  if (previous === undefined) return "비교 없음";
+  if (!previous) return current ? "신규" : "변화 없음";
+  const amount = Math.round((current - previous) / previous * 100);
+  return `${amount > 0 ? "+" : ""}${amount}%`;
+}
+function labelCountry(value: string) { try { return value === "ZZ" ? "알 수 없음" : countryNames.of(value) ?? value; } catch { return value; } }
+
+function DetailTable({ title, rows, format = (value: string) => value }: { title: string; rows: Breakdown[]; format?: (value: string) => string }) {
+  return <details className="analytics-panel analytics-detail">
+    <summary>{title}<span>{rows.length ? `${rows.length}개 항목` : "자료 없음"}</span></summary>
+    {rows.length ? <div className="analytics-table-scroll"><table><thead><tr><th scope="col">항목</th><th scope="col">방문자</th><th scope="col">방문 횟수</th></tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{format(row.label)}</th><td>{integer(row.visitors)}</td><td>{integer(row.visits)}</td></tr>)}</tbody></table></div> : <p className="analytics-empty">선택 기간에 기록이 없습니다.</p>}
+  </details>;
+}
+
+export default function AnalyticsDashboard() {
+  const [period, setPeriod] = useState<AnalyticsPeriod>("month");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [grain, setGrain] = useState<"day" | "week" | "month" | "year">("day");
+  const [source, setSource] = useState("");
+  const [device, setDevice] = useState("");
+  const [country, setCountry] = useState("");
+  const [result, setResult] = useState<{ key: string; report: AnalyticsReport | null; error: string }>({ key: "", report: null, error: "" });
+  const [version, setVersion] = useState(0);
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ period, grain });
+    if (period === "custom") { if (start) params.set("start", start); if (end) params.set("end", end); }
+    if (source) params.set("source", source);
+    if (device) params.set("device", device);
+    if (country) params.set("country", country);
+    return params.toString();
+  }, [period, grain, start, end, source, device, country]);
+  const reload = useCallback(() => setVersion((value) => value + 1), []);
+  const key = `${query}&reload=${version}`;
+  const customError = period === "custom" && (!start || !end) ? "시작일과 종료일을 선택해 주세요." : "";
+  const loading = !customError && result.key !== key;
+  const error = customError || (result.key === key ? result.error : "");
+  const report = result.key === key ? result.report : null;
+  useEffect(() => {
+    if (customError) return;
+    const controller = new AbortController();
+    fetch(`/api/admin/analytics?${query}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "접속 통계를 불러오지 못했습니다."); return data as AnalyticsReport; })
+      .then((data) => { if (!controller.signal.aborted) setResult({ key, report: data, error: "" }); })
+      .catch((cause: unknown) => { if (!controller.signal.aborted) setResult({ key, report: null, error: cause instanceof Error ? cause.message : "접속 통계를 불러오지 못했습니다." }); });
+    return () => controller.abort();
+  }, [customError, query, key]);
+
+  const metrics = report?.metrics;
+  const trendMax = Math.max(1, ...(report?.trend.map((point) => point.visitors) ?? []));
+  return <section className="admin-workspace admin-members-workspace analytics-workspace" aria-labelledby="analytics-title">
+    <header className="analytics-header"><div><span className="analytics-eyebrow">SITE ANALYTICS</span><h1 id="analytics-title">접속 통계</h1><p>익명으로 집계한 홈페이지 이용 현황을 확인합니다.</p></div><button type="button" onClick={reload} aria-label="통계 새로고침">새로고침</button></header>
+    <section className="analytics-panel analytics-filters" aria-label="통계 기간과 필터">
+      <div className="analytics-periods" role="group" aria-label="기간 선택">{(Object.keys(periodLabels) as AnalyticsPeriod[]).map((key) => <button key={key} type="button" className={period === key ? "is-selected" : ""} aria-pressed={period === key} onClick={() => setPeriod(key)}>{periodLabels[key]}</button>)}</div>
+      {period === "custom" && <div className="analytics-filter-row"><label>시작일<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>종료일<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>}
+      <div className="analytics-filter-row"><label>추이<select value={grain} onChange={(event) => setGrain(event.target.value as typeof grain)}><option value="day">일간</option><option value="week">주간</option><option value="month">월간</option><option value="year">연간</option></select></label><label>유입<select value={source} onChange={(event) => setSource(event.target.value)}><option value="">전체 유입</option>{Object.entries(sourceLabels).map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select></label><label>기기<select value={device} onChange={(event) => setDevice(event.target.value)}><option value="">전체 기기</option>{Object.entries(deviceLabels).filter(([value]) => value !== "unknown").map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select></label><label>국가<select value={country} onChange={(event) => setCountry(event.target.value)}><option value="">전체 국가</option>{report?.countries.map((row) => <option value={row.label} key={row.label}>{labelCountry(row.label)}</option>)}</select></label></div>
+    </section>
+    {loading && <p role="status" className="analytics-notice">접속 통계를 불러오는 중입니다…</p>}
+    {error && <div role="alert" className="analytics-notice analytics-error">{error} <button type="button" onClick={reload}>다시 시도</button></div>}
+    {!loading && !error && report && <>
+      <p className="analytics-meta">{report.range.start} ~ {report.range.end} · 수집 시작 {report.collectionDay} · 마지막 갱신 {report.updatedAt ?? "기록 없음"}</p>
+      {report.precollection ? <div className="analytics-notice">수집 전 기간입니다. 과거 통계는 생성하지 않았습니다.</div> : <>
+        <div className="analytics-kpis">{[
+          ["방문자 수", metrics?.visitors ?? 0, report.previous?.visitors], ["방문 횟수", metrics?.visits ?? 0, report.previous?.visits], ["페이지 조회수", metrics?.pageviews ?? 0, report.previous?.pageviews],
+          ["신규 방문자", metrics?.newVisitors ?? 0, report.previous?.newVisitors], ["재방문자", metrics?.returningVisitors ?? 0, report.previous?.returningVisitors],
+        ].map(([label, value, previous]) => <div className="analytics-panel analytics-kpi" key={String(label)}><span>{label}</span><strong>{integer(Number(value))}{label === "방문자 수" && metrics?.visitorsEstimated ? <small> 추정</small> : null}</strong><small>이전 기간 대비 {change(Number(value), previous === undefined ? undefined : Number(previous))}</small></div>)}
+          <div className="analytics-panel analytics-kpi"><span>방문당 조회수</span><strong>{metrics?.pagesPerVisit ?? 0}</strong><small>조회수 ÷ 방문 횟수</small></div>
+          <div className="analytics-panel analytics-kpi"><span>평균 참여 시간</span><strong>{metrics?.averageEngagementSeconds ?? 0}초</strong><small>측정 가능한 활성 탭 기준</small></div>
+        </div>
+        {!metrics?.visits ? <div className="analytics-notice">수집 이후 선택 기간에 기록된 방문이 없습니다.</div> : null}
+        {report.metrics.historicBreakdownUnavailable && <div className="analytics-notice">상세 자료는 최근 400일만 보관합니다. 이전 날짜의 방문자·추이 방문자 수는 추정이며, 오래된 기간의 세부 분류와 정확한 기간별 중복 제거는 제공되지 않습니다.</div>}
+        <section className="analytics-panel" aria-labelledby="analytics-trend"><div className="analytics-panel-title"><h2 id="analytics-trend">방문 추이</h2><small>방문자 수 · {grain === "day" ? "일간" : grain === "week" ? "주간" : grain === "month" ? "월간" : "연간"}</small></div>{report.trend.length ? <div className="analytics-chart" role="img" aria-label={report.trend.map((point) => `${point.bucket} 방문자 ${point.visitors}명`).join(", ")}>{report.trend.map((point) => <div className="analytics-chart-point" key={point.bucket} title={`${point.bucket}: 방문자 ${point.visitors}명, 방문 ${point.visits}회, 조회 ${point.pageviews}회${point.estimated ? " (추정)" : ""}`}><span style={{ height: `${Math.max(3, point.visitors / trendMax * 100)}%` }} /><small>{point.bucket.slice(-5)}</small></div>)}</div> : <p className="analytics-empty">추이 데이터가 없습니다.</p>}</section>
+        <div className="analytics-two-column"><section className="analytics-panel" aria-labelledby="analytics-pages"><div className="analytics-panel-title"><h2 id="analytics-pages">인기 페이지</h2><small>조회수 · 방문자</small></div>{report.pages.length ? <ol className="analytics-ranked">{report.pages.map((row) => { const compared = report.pageChanges.find((item) => item.label === row.label); return <li key={row.label}><span>{row.label}</span><strong>{integer(row.pageviews)}회</strong><small>방문자 {integer(row.visitors)}명{compared ? ` · 이전 대비 ${compared.difference > 0 ? "+" : ""}${compared.difference}회` : ""}</small></li>; })}</ol> : <p className="analytics-empty">기록된 페이지가 없습니다.</p>}</section><section className="analytics-panel" aria-labelledby="analytics-actions"><div className="analytics-panel-title"><h2 id="analytics-actions">주요 행동</h2><small>영상 열기는 시청 완료가 아닙니다</small></div>{report.actions.length ? <ol className="analytics-ranked">{report.actions.map((row) => <li key={`${row.kind}-${row.contentId}`}><span>{actionLabels[row.kind as AnalyticsAction] ?? row.kind}{row.title ? ` · ${row.title}` : ""}</span><strong>{integer(row.total)}회</strong></li>)}</ol> : <p className="analytics-empty">기록된 행동이 없습니다.</p>}</section></div>
+        <div className="analytics-two-column"><section className="analytics-panel" aria-labelledby="analytics-source"><div className="analytics-panel-title"><h2 id="analytics-source">유입 출처</h2></div><ol className="analytics-ranked">{report.sources.map((row) => <li key={row.label}><span>{sourceLabels[row.label] ?? row.label}</span><strong>{integer(row.visits)}회</strong><small>{metrics?.visits ? Math.round(row.visits / metrics.visits * 100) : 0}%</small></li>)}</ol></section><section className="analytics-panel" aria-labelledby="analytics-country"><div className="analytics-panel-title"><h2 id="analytics-country">국가·기기</h2></div><ol className="analytics-ranked">{report.countries.map((row) => <li key={`c-${row.label}`}><span>{labelCountry(row.label)}</span><strong>{integer(row.visitors)}명 · {integer(row.visits)}회</strong><small>{metrics?.visits ? Math.round(row.visits / metrics.visits * 100) : 0}%</small></li>)}{report.devices.map((row) => <li key={`d-${row.label}`}><span>{deviceLabels[row.label] ?? row.label}</span><strong>{integer(row.visitors)}명 · {integer(row.visits)}회</strong><small>{metrics?.visits ? Math.round(row.visits / metrics.visits * 100) : 0}%</small></li>)}</ol></section></div>
+        <section className="analytics-details" aria-label="세부 통계"><DetailTable title="외부 유입 도메인" rows={report.domains} /><DetailTable title="브라우저" rows={report.browsers} /><DetailTable title="운영체제" rows={report.systems} /><DetailTable title="UTM 캠페인" rows={report.campaigns} /><DetailTable title="방문 시작 페이지" rows={report.entries} /><DetailTable title="종료 페이지" rows={report.exits} /><DetailTable title="요일별" rows={report.weekdays} format={(value) => ["월", "화", "수", "목", "금", "토", "일"][Number(value)] ?? value} /><DetailTable title="시간대별" rows={report.hours} format={(value) => `${value}시`} />{report.actionSources.length ? <details className="analytics-panel analytics-detail"><summary>유입별 주요 행동</summary><div className="analytics-table-scroll"><table><thead><tr><th>유입</th><th>행동</th><th>횟수</th></tr></thead><tbody>{report.actionSources.map((row) => <tr key={`${row.source}-${row.kind}`}><td>{sourceLabels[row.source] ?? row.source}</td><td>{actionLabels[row.kind as AnalyticsAction] ?? row.kind}</td><td>{integer(row.total)}</td></tr>)}</tbody></table></div></details> : null}</section>
+        <div className="analytics-panel analytics-export"><a href={`/api/admin/analytics/export?${query}`} download>선택 기간·필터 CSV 다운로드</a><details><summary>집계 기준과 한계</summary><p>한국 시간 기준이며 한 주는 월요일부터 일요일까지입니다. 임의의 익명 식별 쿠키별로 30분 동안 활동이 없으면 새 방문으로 집계합니다. 방문자 수는 선택 기간의 중복을 제거합니다. 쿠키 삭제, 다른 브라우저나 기기 사용은 별도 방문자로 계산될 수 있습니다. 알려진 자동화 트래픽은 가능한 범위에서 제외합니다. 평균 참여 시간은 활성 탭에서 측정 가능한 시간에 한합니다. 유입 정보가 없는 경우 직접/출처 미확인입니다. 국가는 신뢰 가능한 서버 측 위치 정보가 없으면 알 수 없음으로 표시합니다.</p></details></div>
+      </>}
+    </>}
+  </section>;
+}

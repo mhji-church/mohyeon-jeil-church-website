@@ -39,7 +39,7 @@ function getPublishDate(post: ContentPost) {
 }
 
 export default async function AdminHomePage() {
-  const { user, canManageArchive } = await requireAdminPage();
+  const { user, canManageArchive, canViewAnalytics } = await requireAdminPage();
   const month = getKoreaDate().slice(0, 7).replaceAll(".", "-");
   let memberSummary: Awaited<ReturnType<typeof getAdminMemberSummary>> | null = null;
   let contentSummary: Awaited<ReturnType<typeof getAdminContentSummary>> | null = null;
@@ -59,7 +59,7 @@ export default async function AdminHomePage() {
 
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active="home" userName={user.fullName ?? "홈페이지 관리자"} userEmail={user.email} signOutPath="/api/admin/session?return_to=/" initialPendingMemberCount={pendingCount} canManageWebsite canManageArchive={canManageArchive} />
+      <AdminSidebar active="home" userName={user.fullName ?? "홈페이지 관리자"} userEmail={user.email} signOutPath="/api/admin/session?return_to=/" initialPendingMemberCount={pendingCount} canManageWebsite canManageArchive={canManageArchive} canViewAnalytics={canViewAnalytics} />
       <section className="admin-workspace admin-members-workspace admin-home-workspace">
         <section className="admin-home-section" aria-labelledby="admin-status-title">
           <header className="admin-section-heading"><div><span>STATUS</span><h2 id="admin-status-title">운영 현황</h2></div></header>

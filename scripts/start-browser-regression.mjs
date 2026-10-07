@@ -7,9 +7,10 @@ import { createClient } from "@libsql/client";
 import { createServer } from "vite";
 import { applyNetlifyMigrations } from "./netlify-migrations.mjs";
 
-const fixtureDirectory = path.resolve(".browser-test");
-await rm(fixtureDirectory, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
-await mkdir(fixtureDirectory, { recursive: true });
+const customFixtureDirectory = process.env.MHJI_BROWSER_FIXTURE_DIRECTORY;
+const fixtureDirectory = customFixtureDirectory ? path.resolve(customFixtureDirectory) : path.resolve(".browser-test");
+if (!customFixtureDirectory) await rm(fixtureDirectory, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
+await mkdir(fixtureDirectory, { recursive: false });
 const databasePath = path.join(fixtureDirectory, "browser.sqlite");
 const databaseUrl = pathToFileURL(databasePath).href;
 const client = createClient({ url: databaseUrl });
@@ -62,6 +63,13 @@ await client.execute({
     ]),
   ],
 });
+const analyticsNow = new Date();
+const analyticsDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(analyticsNow);
+await client.execute({ sql: "INSERT INTO analytics_visitors (visitor_key, first_seen_at, last_seen_at) VALUES (?, ?, ?)", args: ["browser-anonymous-visitor", analyticsNow.toISOString(), analyticsNow.toISOString()] });
+await client.execute({ sql: "INSERT INTO analytics_sessions (id, visitor_key, started_at, last_seen_at, day_kst, entry_path, exit_path, country_code, device_type, browser_name, os_name, source_category, source_domain, utm_campaign) VALUES (?, ?, ?, ?, ?, '/', '/gallery', 'ZZ', 'mobile', 'Chrome', 'Android', 'search', 'google.com', 'autumn')", args: ["browser-anonymous-session", "browser-anonymous-visitor", analyticsNow.toISOString(), analyticsNow.toISOString(), analyticsDay] });
+await client.execute({ sql: "INSERT INTO analytics_events (id, visitor_key, session_id, kind, day_kst, hour_kst, weekday_kst, path, created_at) VALUES (?, ?, ?, 'pageview', ?, 10, 2, '/gallery', ?)", args: ["browser-anonymous-pageview", "browser-anonymous-visitor", "browser-anonymous-session", analyticsDay, analyticsNow.toISOString()] });
+await client.execute({ sql: "INSERT INTO analytics_events (id, visitor_key, session_id, kind, day_kst, hour_kst, weekday_kst, path, content_type, content_id, created_at) VALUES (?, ?, ?, 'gallery.open', ?, 10, 2, '/gallery', 'gallery', 'browser-gallery', ?)", args: ["browser-anonymous-gallery-open", "browser-anonymous-visitor", "browser-anonymous-session", analyticsDay, analyticsNow.toISOString()] });
+await client.execute({ sql: "INSERT INTO analytics_daily_totals (day_kst, visitors_first_seen, visits, pageviews, actions) VALUES (?, 1, 1, 1, 1)", args: [analyticsDay] });
 for (const [id, title, image] of [
   ["browser-square", "정사각형 한 장 앨범", "/assets/icon-512.png"],
   ["browser-portrait", "세로형 사진과 함께 확인하는 아주 긴 앨범 제목입니다 글자가 확대되어도 닫기 버튼은 항상 눌릴 수 있어야 합니다", "/assets/hero-flowers-mobile.webp"],
@@ -94,13 +102,14 @@ Object.assign(process.env, {
   ARCHIVE_ADMIN_USERNAME: "browser-archive-admin",
   ARCHIVE_ADMIN_PASSWORD: "browser-archive-password",
   ARCHIVE_ADMIN_SESSION_SECRET: "browser-archive-session-secret",
-  WRANGLER_LOG_PATH: ".browser-test/wrangler.log",
+  WRANGLER_LOG_PATH: path.join(fixtureDirectory, "wrangler.log"),
 });
-const server = await createServer({ server: { host: "127.0.0.1", port: 4178 } });
+const browserPort = Number(process.env.MHJI_BROWSER_PORT ?? 4178);
+const server = await createServer({ server: { host: "127.0.0.1", port: browserPort, strictPort: true } });
 await server.listen();
 const serveOnly = process.argv.includes("--serve-only");
 if (serveOnly) {
-  console.log("Browser fixture server: http://127.0.0.1:4178");
+  console.log(`Browser fixture server: http://127.0.0.1:${browserPort}`);
   await new Promise((resolve) => {
     for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.once(signal, resolve);
   });

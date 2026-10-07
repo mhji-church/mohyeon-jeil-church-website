@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState } from "react";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
+import AnalyticsTracker from "./AnalyticsTracker";
 
 const SiteAuthenticationContext = createContext<boolean | null>(null);
 
@@ -22,6 +23,7 @@ export default function SiteLayoutChrome({
     return (
       <SiteAuthenticationContext.Provider value={authenticated}>
         {children}
+        <AnalyticsTracker />
       </SiteAuthenticationContext.Provider>
     );
   }
@@ -31,6 +33,7 @@ export default function SiteLayoutChrome({
       <SiteHeader onAuthenticationChange={setAuthenticated} />
       {children}
       <SiteFooter />
+      <AnalyticsTracker />
     </SiteAuthenticationContext.Provider>
   );
 }

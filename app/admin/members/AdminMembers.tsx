@@ -19,6 +19,7 @@ type Props = {
   signOutPath: string;
   initialPendingMemberCount: number | null;
   canManageArchive: boolean;
+  canViewAnalytics: boolean;
 };
 
 const statusLabel: Record<MemberStatus, string> = {
@@ -91,7 +92,7 @@ function getMergeFieldChoices(preview: MemberMergePreview, field: MergeProfileFi
   return [...choices].map(([value, sources]) => ({ value, sources }));
 }
 
-export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount, canManageArchive }: Props) {
+export default function AdminMembers({ userName, userEmail, signOutPath, initialPendingMemberCount, canManageArchive, canViewAnalytics }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -549,7 +550,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
 
   return (
     <main className="admin-shell admin-members-shell">
-      <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} canManageWebsite canManageArchive={canManageArchive} />
+      <AdminSidebar active="members" userName={userName} userEmail={userEmail} signOutPath={signOutPath} initialPendingMemberCount={initialPendingMemberCount} canManageWebsite canManageArchive={canManageArchive} canViewAnalytics={canViewAnalytics} />
 
       <section className="admin-workspace admin-members-workspace">
         <header className="admin-topbar">

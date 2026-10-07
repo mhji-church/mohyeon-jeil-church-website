@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS analytics_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('collection_started_at', CURRENT_TIMESTAMP);
+INSERT OR IGNORE INTO analytics_meta (key, value) VALUES ('last_cleanup_day', '');
+CREATE TABLE IF NOT EXISTS analytics_visitors (visitor_key TEXT PRIMARY KEY NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS analytics_visitors_last_seen_idx ON analytics_visitors(last_seen_at);
+CREATE TABLE IF NOT EXISTS analytics_sessions (id TEXT PRIMARY KEY NOT NULL, visitor_key TEXT NOT NULL, started_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, day_kst TEXT NOT NULL, entry_path TEXT NOT NULL, exit_path TEXT NOT NULL, country_code TEXT NOT NULL DEFAULT 'ZZ', device_type TEXT NOT NULL DEFAULT 'unknown', browser_name TEXT NOT NULL DEFAULT 'unknown', os_name TEXT NOT NULL DEFAULT 'unknown', source_category TEXT NOT NULL DEFAULT 'direct', source_domain TEXT NOT NULL DEFAULT '', utm_source TEXT NOT NULL DEFAULT '', utm_medium TEXT NOT NULL DEFAULT '', utm_campaign TEXT NOT NULL DEFAULT '', engagement_ms INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS analytics_sessions_day_idx ON analytics_sessions(day_kst, visitor_key);
+CREATE INDEX IF NOT EXISTS analytics_sessions_visitor_last_idx ON analytics_sessions(visitor_key, last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_sessions_started_idx ON analytics_sessions(started_at);
+CREATE TABLE IF NOT EXISTS analytics_events (id TEXT PRIMARY KEY NOT NULL, visitor_key TEXT NOT NULL, session_id TEXT NOT NULL, kind TEXT NOT NULL, day_kst TEXT NOT NULL, hour_kst INTEGER NOT NULL, weekday_kst INTEGER NOT NULL, path TEXT NOT NULL, content_type TEXT NOT NULL DEFAULT '', content_id TEXT NOT NULL DEFAULT '', engagement_ms INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS analytics_events_day_kind_idx ON analytics_events(day_kst, kind);
+CREATE INDEX IF NOT EXISTS analytics_events_session_idx ON analytics_events(session_id);
+CREATE INDEX IF NOT EXISTS analytics_events_created_idx ON analytics_events(created_at);
+CREATE TABLE IF NOT EXISTS analytics_daily_totals (day_kst TEXT PRIMARY KEY NOT NULL, visitors_first_seen INTEGER NOT NULL DEFAULT 0, visits INTEGER NOT NULL DEFAULT 0, pageviews INTEGER NOT NULL DEFAULT 0, actions INTEGER NOT NULL DEFAULT 0, engagement_ms INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS analytics_ingest_limits (visitor_key TEXT NOT NULL, minute_key TEXT NOT NULL, event_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(visitor_key, minute_key));
+CREATE INDEX IF NOT EXISTS analytics_ingest_limits_minute_idx ON analytics_ingest_limits(minute_key);

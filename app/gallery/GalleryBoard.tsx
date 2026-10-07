@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { GalleryListItem } from "../../lib/content";
 import GalleryViewer, { type GalleryModalAlbum } from "./GalleryViewer";
 import AccessibleDialog from "../components/AccessibleDialog";
+import { trackAnalyticsAction } from "@/lib/analytics-client";
 
 const GALLERY_PAGE_SIZE = 6;
 
@@ -45,6 +46,7 @@ export default function GalleryBoard({
 }) {
   const boardRef = useRef<HTMLElement>(null);
   const viewerTriggerRef = useRef<HTMLElement | null>(null);
+  const reportedAlbumRef = useRef("");
   const previousPageRef = useRef(1);
   const [page, setPage] = useState(1);
   const selectedAlbumId = useSyncExternalStore(subscribeGalleryLocation, currentAlbumId, () => initialAlbumId);
@@ -53,6 +55,14 @@ export default function GalleryBoard({
     memberAccess === "pending" && (initialApprovalRequired || Boolean(initialAlbumId)),
   );
   const isMember = memberAccess === "approved";
+  useEffect(() => {
+    if (!viewer) { reportedAlbumRef.current = ""; return; }
+    if (isMember && reportedAlbumRef.current !== viewer.id) {
+      reportedAlbumRef.current = viewer.id;
+      const timer = window.setTimeout(() => trackAnalyticsAction("gallery.open", "gallery", viewer.id), 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [isMember, viewer]);
   const totalPages = Math.max(1, Math.ceil(albums.length / GALLERY_PAGE_SIZE));
   const pageAlbums = useMemo(
     () => albums.slice((page - 1) * GALLERY_PAGE_SIZE, page * GALLERY_PAGE_SIZE),

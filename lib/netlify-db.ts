@@ -1,4 +1,4 @@
-import { createClient, type Client, type InStatement } from "@libsql/client";
+import { createClient, type Client, type InStatement, type Transaction } from "@libsql/client";
 
 type BoundValue = string | number | bigint | null | Uint8Array;
 
@@ -95,6 +95,20 @@ class NetlifyDatabase {
     // Writes deliberately have no automatic retry: callers must know whether a
     // mutation committed before deciding how to recover.
     return this.client.batch(statements.map((statement) => statement.toStatement()), "write");
+  }
+
+  async writeTransaction<T>(operation: (transaction: Transaction) => Promise<T>): Promise<T> {
+    const transaction = await this.client.transaction("write");
+    try {
+      const result = await operation(transaction);
+      await transaction.commit();
+      return result;
+    } catch (error) {
+      if (!transaction.closed) await transaction.rollback();
+      throw error;
+    } finally {
+      transaction.close();
+    }
   }
 }
 
