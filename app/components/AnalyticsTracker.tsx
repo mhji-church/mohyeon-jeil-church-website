@@ -40,7 +40,8 @@ export default function AnalyticsTracker() {
     if (page.current && visibleSince.current && now - visibleSince.current >= 1000) queue.current.push({ id: crypto.randomUUID(), kind: "engagement", path: page.current, engagementMs: Math.min(600_000, now - visibleSince.current) });
     const wasArchive = page.current.startsWith("/archive");
     page.current = pathname;
-    queue.current.push({ id: crypto.randomUUID(), kind: "pageview", path: pathname });
+    const galleryDetail = /^\/gallery\/([a-zA-Z0-9_-]{1,64})$/.exec(pathname);
+    queue.current.push({ id: crypto.randomUUID(), kind: "pageview", path: pathname, ...(galleryDetail ? { contentType: "gallery", contentId: galleryDetail[1] } : {}) });
     if (pathname.startsWith("/archive") && !wasArchive) queue.current.push({ id: crypto.randomUUID(), kind: "archive.enter", path: pathname });
     visibleSince.current = document.visibilityState === "visible" ? now : null;
     const timer = window.setTimeout(() => void flush(), 1200);

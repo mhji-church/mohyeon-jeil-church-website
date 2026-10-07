@@ -19,6 +19,10 @@ type AdminSession = {
   canViewAnalytics: boolean;
 };
 
+export function canViewAnalyticsForAdmin(session: Pick<AdminSession, "accountId" | "canManageWebsite"> | null | undefined) {
+  return Boolean(session?.canManageWebsite && (session.accountId === "website-credential" || session.accountId === "archive-credential"));
+}
+
 export type AdminSessionScope = "website" | "archive";
 
 function config() {
@@ -133,7 +137,7 @@ export async function getAdminSessionFromToken(
   // The signed credential scope is their stable account identity; a member
   // choosing the same username can never acquire this session.
   const accountId = scopeValue === "archive" ? "archive-credential" : "website-credential";
-  return { username, accountId, expiresAt, canManageWebsite, canManageArchive, canViewAnalytics: accountId === "archive-credential" && isArchiveAdmin };
+  return { username, accountId, expiresAt, canManageWebsite, canManageArchive, canViewAnalytics: canViewAnalyticsForAdmin({ accountId, canManageWebsite }) };
 }
 
 async function sign(value: string) {

@@ -1,4 +1,5 @@
 import { requireAdminApi } from "@/app/admin-auth";
+import { canViewAnalyticsForAdmin } from "@/app/credential-auth";
 import { getAnalyticsReport } from "@/lib/analytics-report";
 import { parseAnalyticsOptions } from "@/lib/analytics-request";
 
@@ -11,7 +12,7 @@ function safeCell(value: unknown) {
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store, max-age=0", Vary: "Cookie" };
   const admin = await requireAdminApi();
-  if (!admin?.canViewAnalytics || admin.accountId !== "archive-credential") return Response.json({ error: "접속 통계 다운로드 권한이 필요합니다." }, { status: 403, headers });
+  if (!canViewAnalyticsForAdmin(admin)) return Response.json({ error: "접속 통계 다운로드 권한이 필요합니다." }, { status: 403, headers });
   const options = parseAnalyticsOptions(request.url);
   if (!options) return Response.json({ error: "기간 또는 필터를 확인해 주세요." }, { status: 400, headers });
   try {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
       ["방문당 페이지 조회수", report.metrics.pagesPerVisit], ["평균 측정 참여 시간(초)", report.metrics.averageEngagementSeconds],
       [], ["추이", "방문자", "방문 횟수", "조회수", "추정 여부"],
       ...report.trend.map((item) => [item.bucket, item.visitors, item.visits, item.pageviews, item.estimated ? "추정" : ""]),
-      [], ["인기 페이지", "조회수", "방문자"], ...report.pages.map((item) => [item.label, item.pageviews, item.visitors]),
+      [], ["인기 페이지", "경로", "조회수", "방문자"], ...report.pages.map((item) => [item.title || item.label, item.label, item.pageviews, item.visitors]),
       [], ["유입 유형", "방문자", "방문 횟수"], ...report.sources.map((item) => [item.label, item.visitors, item.visits]),
       [], ["국가", "방문자", "방문 횟수"], ...report.countries.map((item) => [item.label, item.visitors, item.visits]),
       [], ["기기", "방문자", "방문 횟수"], ...report.devices.map((item) => [item.label, item.visitors, item.visits]),

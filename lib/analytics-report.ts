@@ -6,7 +6,8 @@ export type AnalyticsReportOptions = Filter & { period: AnalyticsPeriod; start?:
 type Row = Record<string, unknown>;
 
 const reportCache = new Map<string, { until: number; value: AnalyticsReport }>();
-export function clearAnalyticsReportCache() { reportCache.clear(); }
+let todayCache: { day: string; until: number; value: AnalyticsTodaySummary } | null = null;
+export function clearAnalyticsReportCache() { reportCache.clear(); todayCache = null; }
 const number = (value: unknown) => Number(value ?? 0) || 0;
 const string = (value: unknown) => String(value ?? "");
 
@@ -19,6 +20,29 @@ function bucketExpression(column: string, grain: AnalyticsReportOptions["grain"]
   if (grain === "month") return `substr(${column}, 1, 7)`;
   if (grain === "year") return `substr(${column}, 1, 4)`;
   return column;
+}
+
+function bucketDay(day: string, grain: AnalyticsReportOptions["grain"]) {
+  if (grain === "year") return day.slice(0, 4);
+  if (grain === "month") return day.slice(0, 7);
+  if (grain === "week") {
+    const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+    return shiftDay(day, -((weekday + 6) % 7));
+  }
+  return day;
+}
+
+function nextBucket(bucket: string, grain: AnalyticsReportOptions["grain"]) {
+  if (grain === "year") return String(Number(bucket) + 1);
+  if (grain === "month") return new Date(Date.UTC(Number(bucket.slice(0, 4)), Number(bucket.slice(5, 7)), 1)).toISOString().slice(0, 7);
+  return shiftDay(bucket, grain === "week" ? 7 : 1);
+}
+
+function bucketEnd(bucket: string, grain: AnalyticsReportOptions["grain"]) {
+  const next = nextBucket(bucket, grain);
+  return grain === "year" ? `${bucket}-12-31`
+    : grain === "month" ? shiftDay(`${next}-01`, -1)
+    : shiftDay(next, -1);
 }
 
 function conditions(alias: string, filter: Filter) {
@@ -34,13 +58,12 @@ function conditions(alias: string, filter: Filter) {
 async function totals(start: string, end: string, filter: Filter, cutoff: string, collectionDay: string) {
   const recentStart = start < cutoff ? cutoff : start;
   const where = conditions("s", filter);
-  const visits = recentStart <= end ? (await rows(`SELECT COUNT(*) AS visits, COUNT(DISTINCT s.visitor_key) AS visitors, COALESCE(SUM(s.engagement_ms), 0) AS engagement FROM analytics_sessions s WHERE s.day_kst BETWEEN ? AND ?${where.sql}`, [recentStart, end, ...where.args]))[0] : {};
-  const pages = recentStart <= end ? (await rows(`SELECT COUNT(*) AS pageviews FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.day_kst BETWEEN ? AND ? AND e.kind = 'pageview'${where.sql}`, [recentStart, end, ...where.args]))[0] : {};
+  const { visits, pages } = recentStart <= end ? await sessionPageCounts(recentStart, end, filter) : { visits: {}, pages: {} };
   const newcomers = recentStart <= end ? (await rows(`SELECT COUNT(DISTINCT s.visitor_key) AS total FROM analytics_sessions s JOIN analytics_visitors v ON v.visitor_key = s.visitor_key WHERE s.day_kst BETWEEN ? AND ? AND date(v.first_seen_at, '+9 hours') BETWEEN ? AND ?${where.sql}`, [recentStart, end, recentStart, end, ...where.args]))[0] : {};
   const hasFilter = Boolean(filter.source || filter.device || filter.country);
   const historicEnd = shiftDay(cutoff, -1);
   const historic = !hasFilter && start < cutoff ? (await rows("SELECT COALESCE(SUM(visits),0) AS visits, COALESCE(SUM(pageviews),0) AS pageviews, COALESCE(SUM(visitors_first_seen),0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [start, end < historicEnd ? end : historicEnd]))[0] : {};
-  const completeHistory = !hasFilter && start <= collectionDay && end >= cutoff;
+  const completeHistory = !hasFilter && start < cutoff && start <= collectionDay && end >= cutoff;
   const firstSeenTotal = completeHistory ? (await rows("SELECT COALESCE(SUM(visitors_first_seen), 0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [collectionDay, end]))[0] : {};
   const visitorCount = completeHistory ? number(firstSeenTotal?.visitors) : number(visits?.visitors) + number(historic?.visitors);
   const newCount = number(newcomers?.total) + number(historic?.visitors);
@@ -54,7 +77,14 @@ async function totals(start: string, end: string, filter: Filter, cutoff: string
   };
 }
 
-async function trend(start: string, end: string, filter: Filter, cutoff: string, grain: AnalyticsReportOptions["grain"]) {
+async function sessionPageCounts(start: string, end: string, filter: Filter) {
+  const where = conditions("s", filter);
+  const visits = (await rows(`SELECT COUNT(*) AS visits, COUNT(DISTINCT s.visitor_key) AS visitors, COALESCE(SUM(s.engagement_ms), 0) AS engagement FROM analytics_sessions s WHERE s.day_kst BETWEEN ? AND ?${where.sql}`, [start, end, ...where.args]))[0];
+  const pages = (await rows(`SELECT COUNT(*) AS pageviews FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.day_kst BETWEEN ? AND ? AND e.kind = 'pageview'${where.sql}`, [start, end, ...where.args]))[0];
+  return { visits, pages };
+}
+
+async function trend(start: string, end: string, filter: Filter, cutoff: string, grain: AnalyticsReportOptions["grain"], collectionDay: string) {
   const recentStart = start < cutoff ? cutoff : start;
   const where = conditions("s", filter);
   const bucket = bucketExpression("s.day_kst", grain);
@@ -72,7 +102,11 @@ async function trend(start: string, end: string, filter: Filter, cutoff: string,
     point.estimated ||= historic.includes(row);
     merged.set(key, point);
   }
-  return [...merged.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+  const points = [];
+  for (let bucket = bucketDay(start, grain), last = bucketDay(end, grain); bucket <= last; bucket = nextBucket(bucket, grain)) {
+    points.push({ ...(merged.get(bucket) ?? { bucket, visitors: 0, visits: 0, pageviews: 0, estimated: false }), precollection: bucketEnd(bucket, grain) < collectionDay });
+  }
+  return points;
 }
 
 async function groupSessions(start: string, end: string, filter: Filter, expression: string, label: string, limit = 20) {
@@ -81,6 +115,26 @@ async function groupSessions(start: string, end: string, filter: Filter, express
 }
 
 export type AnalyticsReport = Awaited<ReturnType<typeof buildAnalyticsReport>>;
+export type AnalyticsTodaySummary = { collectionDay: string; day: string; precollection: boolean; updatedAt: string | null; metrics: Pick<Awaited<ReturnType<typeof totals>>, "visitors" | "visits" | "pageviews"> };
+
+function formatUpdatedAt(value: unknown) {
+  return value ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(string(value))) + " KST" : null;
+}
+
+export async function getAnalyticsTodaySummary(): Promise<AnalyticsTodaySummary> {
+  const day = koreaClock(new Date()).day;
+  if (todayCache?.day === day && todayCache.until > Date.now()) return todayCache.value;
+  const started = (await rows("SELECT value FROM analytics_meta WHERE key = 'collection_started_at'"))[0]?.value;
+  if (!started) throw new Error("analytics-schema-missing");
+  const raw = string(started).replace(" ", "T");
+  const collectionDay = koreaClock(new Date(raw.endsWith("Z") ? raw : `${raw}Z`)).day;
+  const precollection = day < collectionDay;
+  const counts = precollection ? null : await sessionPageCounts(day, day, {});
+  const last = (await rows("SELECT MAX(last_seen_at) AS timestamp FROM analytics_sessions WHERE day_kst = ?", [day]))[0]?.timestamp;
+  const value = { collectionDay, day, precollection, updatedAt: formatUpdatedAt(last), metrics: { visitors: number(counts?.visits?.visitors), visits: number(counts?.visits?.visits), pageviews: number(counts?.pages?.pageviews) } };
+  todayCache = { day, until: Date.now() + 60_000, value };
+  return value;
+}
 
 async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   const started = (await rows("SELECT value FROM analytics_meta WHERE key = 'collection_started_at'"))[0]?.value;
@@ -95,13 +149,14 @@ async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   const filter = { source: options.source, device: options.device, country: options.country };
   const metrics = await totals(range.start, range.end, filter, cutoff, collectionDay);
   const previous = options.period === "all" || range.previousEnd < collectionDay ? null : await totals(range.previousStart, range.previousEnd, filter, cutoff, collectionDay);
-  const points = await trend(range.start, range.end, filter, cutoff, options.grain);
+  const points = await trend(range.start, range.end, filter, cutoff, options.grain, collectionDay);
   const where = conditions("s", filter);
   const detailAvailable = recentStart <= range.end && !precollection;
-  const pages = detailAvailable ? (await rows(`SELECT e.path AS label, COUNT(*) AS pageviews, COUNT(DISTINCT e.visitor_key) AS visitors FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.kind = 'pageview' AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.path ORDER BY pageviews DESC LIMIT 20`, [recentStart, range.end, ...where.args])).map((row) => ({ label: string(row.label), pageviews: number(row.pageviews), visitors: number(row.visitors) })) : [];
-  const previousPageRows = previous && range.previousEnd >= cutoff ? await rows(`SELECT e.path AS label, COUNT(*) AS pageviews FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.kind = 'pageview' AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.path`, [range.previousStart < cutoff ? cutoff : range.previousStart, range.previousEnd, ...where.args]) : [];
-  const previousPageviews = new Map(previousPageRows.map((row) => [string(row.label), number(row.pageviews)]));
-  const pageChanges = previousPageRows.length ? pages.map((row) => ({ label: row.label, current: row.pageviews, previous: previousPageviews.get(row.label) ?? 0, difference: row.pageviews - (previousPageviews.get(row.label) ?? 0) })) : [];
+  const pages = detailAvailable ? (await rows(`SELECT e.path AS label, e.content_id AS contentId, COALESCE(post.title, '') AS title, COUNT(*) AS pageviews, COUNT(DISTINCT e.visitor_key) AS visitors FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id LEFT JOIN content_posts post ON e.path = '/gallery/detail' AND e.content_id = post.id AND post.type = 'gallery' WHERE e.kind = 'pageview' AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.path, e.content_id ORDER BY pageviews DESC LIMIT 20`, [recentStart, range.end, ...where.args])).map((row) => ({ label: string(row.label), contentId: string(row.contentId), title: string(row.title), pageviews: number(row.pageviews), visitors: number(row.visitors) })) : [];
+  const previousPageRows = previous && range.previousEnd >= cutoff ? await rows(`SELECT e.path AS label, e.content_id AS contentId, COUNT(*) AS pageviews FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.kind = 'pageview' AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.path, e.content_id`, [range.previousStart < cutoff ? cutoff : range.previousStart, range.previousEnd, ...where.args]) : [];
+  const pageKey = (path: string, id: string) => `${path}:${id}`;
+  const previousPageviews = new Map(previousPageRows.map((row) => [pageKey(string(row.label), string(row.contentId)), number(row.pageviews)]));
+  const pageChanges = previousPageRows.length ? pages.map((row) => ({ label: row.label, contentId: row.contentId, current: row.pageviews, previous: previousPageviews.get(pageKey(row.label, row.contentId)) ?? 0, difference: row.pageviews - (previousPageviews.get(pageKey(row.label, row.contentId)) ?? 0) })) : [];
   const actions = detailAvailable ? (await rows(`SELECT e.kind AS kind, e.content_type AS contentType, e.content_id AS contentId, COALESCE(post.title, video.title, '') AS title, COUNT(*) AS total FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id LEFT JOIN content_posts post ON e.content_id = post.id LEFT JOIN archive_videos video ON e.content_id = video.id WHERE e.kind NOT IN ('pageview','engagement') AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.kind, e.content_type, e.content_id ORDER BY total DESC LIMIT 30`, [recentStart, range.end, ...where.args])).map((row) => ({ kind: string(row.kind), contentType: string(row.contentType), contentId: string(row.contentId), title: string(row.title), total: number(row.total) })) : [];
   const actionSources = detailAvailable ? (await rows(`SELECT s.source_category AS source, e.kind AS kind, COUNT(*) AS total FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.kind NOT IN ('pageview','engagement') AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY s.source_category, e.kind ORDER BY total DESC LIMIT 30`, [recentStart, range.end, ...where.args])).map((row) => ({ source: string(row.source), kind: string(row.kind), total: number(row.total) })) : [];
   const breakdown = async (expression: string, fallback: string, limit?: number) => detailAvailable ? groupSessions(recentStart, range.end, filter, expression, fallback, limit) : [];
@@ -120,7 +175,7 @@ async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   }
   const [sources, domains, countries, devices, browsers, systems, campaigns, entries, exits, weekdays, hours] = details;
   const last = (await rows("SELECT MAX(last_seen_at) AS timestamp FROM analytics_sessions"))[0]?.timestamp;
-  const lastUpdated = last ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(string(last))) + " KST" : null;
+  const lastUpdated = formatUpdatedAt(last);
   return {
     collectionDay, updatedAt: lastUpdated, range, period: options.period, grain: options.grain,
     precollection, coverageStart: range.start < cutoff ? cutoff : range.start, metrics, previous, trend: points,

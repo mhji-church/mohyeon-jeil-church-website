@@ -25,6 +25,7 @@ export async function requireAdminApi() {
     email: session.username,
     fullName: "홈페이지 관리자",
     canManageArchive: session.canManageArchive,
+    canManageWebsite: session.canManageWebsite,
     canViewAnalytics: session.canViewAnalytics,
     accountId: session.accountId,
   };
