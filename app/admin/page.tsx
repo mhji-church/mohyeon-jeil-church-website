@@ -5,7 +5,7 @@ import { getAdminMemberSummary } from "../../lib/members";
 import { getKoreaDate } from "../../lib/korea-date";
 import AdminSidebar from "./AdminSidebar";
 import { logServerError } from "../../lib/api-response";
-import { getAnalyticsTodaySummary } from "../../lib/analytics-report";
+import { getAnalyticsVisitorSummary } from "../../lib/analytics-report";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ export default async function AdminHomePage() {
   const month = getKoreaDate().slice(0, 7).replaceAll(".", "-");
   let memberSummary: Awaited<ReturnType<typeof getAdminMemberSummary>> | null = null;
   let contentSummary: Awaited<ReturnType<typeof getAdminContentSummary>> | null = null;
-  let todaySummary: Awaited<ReturnType<typeof getAnalyticsTodaySummary>> | null = null;
+  let visitorSummary: Awaited<ReturnType<typeof getAnalyticsVisitorSummary>> | null = null;
   try {
     memberSummary = await getAdminMemberSummary();
   } catch (error) {
@@ -57,7 +57,7 @@ export default async function AdminHomePage() {
   }
   if (canViewAnalytics) {
     try {
-      todaySummary = await getAnalyticsTodaySummary();
+      visitorSummary = await getAnalyticsVisitorSummary();
     } catch (error) {
       logServerError("admin.home.analytics_summary", error);
     }
@@ -70,6 +70,15 @@ export default async function AdminHomePage() {
     <main className="admin-shell admin-members-shell">
       <AdminSidebar active="home" userName={user.fullName ?? "홈페이지 관리자"} userEmail={user.email} signOutPath="/api/admin/session?return_to=/" initialPendingMemberCount={pendingCount} canManageWebsite canManageArchive={canManageArchive} canViewAnalytics={canViewAnalytics} />
       <section className="admin-workspace admin-members-workspace admin-home-workspace">
+        {canViewAnalytics && <section className="admin-home-visitor-panel" aria-label="방문자 통계">
+          {visitorSummary === null ? <div className="admin-empty"><strong>접속 통계를 불러오지 못했습니다.</strong><p>잠시 후 다시 확인해 주세요.</p></div>
+            : visitorSummary.precollection ? <div className="admin-empty"><strong>통계 수집 전입니다.</strong><p>수집 시작일 {visitorSummary.collectionDay}</p></div>
+              : <div className="admin-home-visitor-grid">
+                {([ ["오늘 방문자 수", visitorSummary.visitors.today], ["이번 달 방문자 수", visitorSummary.visitors.month], ["누적 방문자 수", visitorSummary.visitors.cumulative] ] as const).map(([label, count]) =>
+                  <div key={label}><span>{label}</span><strong>{count.toLocaleString("ko-KR")}<em>명</em></strong></div>)}
+              </div>}
+          <Link className="admin-home-visitor-panel-action" href="/admin/analytics?period=today" aria-label="접속통계 보기"><span>접속통계 보기</span><span aria-hidden="true">→</span></Link>
+        </section>}
         <section className="admin-home-section" aria-labelledby="admin-status-title">
           <header className="admin-section-heading"><div><span>STATUS</span><h2 id="admin-status-title">운영 현황</h2></div></header>
           <div className="admin-home-status-grid">
@@ -84,20 +93,6 @@ export default async function AdminHomePage() {
             </Link>
           </div>
         </section>
-
-        {canViewAnalytics && <section className="admin-home-section" aria-labelledby="admin-today-title">
-          <header className="admin-section-heading admin-home-analytics-heading">
-            <div><span>SITE ANALYTICS</span><h2 id="admin-today-title">오늘의 접속</h2></div>
-            <Link href="/admin/analytics?period=today">접속통계 보기 <span aria-hidden="true">→</span></Link>
-          </header>
-          {todaySummary === null ? <div className="admin-empty"><strong>접속 통계를 불러오지 못했습니다.</strong><p>잠시 후 다시 확인해 주세요.</p></div>
-            : todaySummary.precollection ? <div className="admin-empty"><strong>통계 수집 전입니다.</strong><p>수집 시작일 {todaySummary.collectionDay}</p></div>
-              : <div className="admin-home-status-grid admin-home-analytics-grid">
-                {([ ["오늘 방문자 수", todaySummary.metrics.visitors, "명", "♙"], ["오늘 방문 횟수", todaySummary.metrics.visits, "회", "↗"], ["오늘 페이지 조회수", todaySummary.metrics.pageviews, "회", "▤"] ] as const).map(([label, value, unit, icon]) =>
-                  <div key={label} aria-label={`${label} ${value}${unit}`}><i aria-hidden="true">{icon}</i><span>{label}</span><strong>{value}<em>{unit}</em></strong><small>{value === 0 ? "수집 이후 기록 없음" : "한국 시간 기준"}</small></div>)}
-              </div>}
-          <p className="admin-home-analytics-updated">한국 시간 기준 · 마지막 갱신 {todaySummary?.updatedAt ?? "기록 없음"}</p>
-        </section>}
 
         <div className="admin-home-detail-grid">
           <section className="admin-home-section admin-home-recent-section" aria-labelledby="admin-recent-title">

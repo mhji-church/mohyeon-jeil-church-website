@@ -9941,6 +9941,27 @@ body.modal-open { overflow: hidden; }
 .admin-members-shell .admin-account .admin-public-site-link + a:focus-visible { color: rgba(255, 255, 255, .82); }
 .admin-home-workspace > * { width: min(100%, 1360px); margin-right: auto; margin-left: auto; }
 .admin-home-workspace > .admin-home-section:first-child { margin-top: 0; }
+.admin-home-visitor-panel {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 10px 18px;
+  border: 1px solid rgba(48, 47, 60, .11);
+  border-radius: 8px;
+  background: #fff;
+}
+.admin-home-visitor-panel-action { display: inline-flex; min-height: 44px; flex: 0 0 auto; align-items: center; gap: 5px; color: #a56550; font-size: 12px; font-weight: 700; text-decoration: none; }
+.admin-home-visitor-panel-action:hover { text-decoration: underline; }
+.admin-home-visitor-panel-action:focus-visible { outline: 3px solid #bb7963; outline-offset: 2px; }
+.admin-home-visitor-grid { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-home-visitor-grid > div { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: 8px; padding: 0 16px; border-left: 1px solid #e8e2de; }
+.admin-home-visitor-grid > div:first-child { border-left: 0; }
+.admin-home-visitor-grid span { color: var(--admin-muted); font-size: 13px; font-weight: 700; }
+.admin-home-visitor-grid strong { color: var(--admin-ink); font-size: 29px; font-weight: 720; font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; }
+.admin-home-visitor-grid em { margin-left: 2px; font-size: 12px; font-style: normal; font-weight: 680; }
+.admin-home-visitor-panel + .admin-home-section { margin-top: 0; }
 .admin-home-status-grid { gap: 12px; }
 
 .admin-home-status-grid > * {
@@ -10951,11 +10972,6 @@ textarea { font-family: var(--font-pretendard); }
   .analytics-two-column, .analytics-details { grid-template-columns: minmax(0, 1fr); }
   .analytics-export { display: grid; }
 }
-.admin-home-analytics-heading > a { color: #a56550; font-size: 13px; font-weight: 700; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; gap: 5px; }
-.admin-home-analytics-heading > a:hover { text-decoration: underline; }
-.admin-home-analytics-heading > a:focus-visible { outline: 3px solid #bb7963; outline-offset: 2px; }
-.admin-home-analytics-grid > div { cursor: default; }
-.admin-home-analytics-updated { margin: 9px 0 0; color: #858088; font-size: 12px; }
 .analytics-filter-toggle { display: none; }
 .analytics-secondary-kpis { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); padding: 14px 18px; gap: 10px; margin-bottom: 18px; }
 .analytics-secondary-kpis > div { display: grid; gap: 5px; min-width: 0; border-left: 1px solid #e5e1df; padding-left: 16px; }

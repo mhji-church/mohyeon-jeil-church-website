@@ -280,6 +280,13 @@
 
   .admin-home-workspace { padding-top: 8px; }
   .admin-home-section { margin-top: 16px; }
+  .admin-home-visitor-panel { gap: 4px; margin-bottom: 12px; padding: 8px 7px; }
+  .admin-home-visitor-panel-action { min-width: 44px; justify-content: center; font-size: 16px; }
+  .admin-home-visitor-panel-action span:first-child { display: none; }
+  .admin-home-visitor-grid > div { display: grid; min-height: 44px; align-content: center; gap: 2px; padding: 0 5px; }
+  .admin-home-visitor-grid span { font-size: 11px; line-height: 1.25; }
+  .admin-home-visitor-grid strong { font-size: clamp(16px, 5vw, 22px); }
+  .admin-home-visitor-grid em { margin-left: 2px; font-size: 11px; }
   .admin-section-heading > div > span { display: none; }
   .admin-section-heading h2 { font-size: 21px; }
   .admin-home-status-grid { display: flex; gap: 7px; overflow-x: auto; padding: 1px 1px 6px; scroll-snap-type: x mandatory; }
@@ -287,12 +294,6 @@
   .admin-home-status-grid > * > i { width: 34px; height: 34px; }
   .admin-home-status-grid strong { font-size: 29px; }
   .admin-home-status-grid small { display: none; }
-  .admin-home-analytics-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); overflow: visible; gap: 6px; padding: 0; }
-  .admin-home-analytics-grid > div { min-width: 0; min-height: 82px; flex: initial; padding: 11px 8px; grid-template-columns: minmax(0,1fr); gap: 3px; }
-  .admin-home-analytics-grid > div > i { display: none; }
-  .admin-home-analytics-grid > div > span { grid-column: 1; font-size: 11px; white-space: nowrap; }
-  .admin-home-analytics-grid > div > strong { grid-column: 1; grid-row: auto; font-size: 24px; }
-  .admin-home-analytics-grid strong em { font-size: 11px; }
   .admin-home-detail-grid { margin-top: 15px; }
   .admin-home-recent-list article { min-height: 66px; grid-template-columns: auto minmax(0,1fr) 52px; gap: 8px; padding: 0 10px; }
   .admin-home-recent-list article > span { grid-column: 1; grid-row: 1; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

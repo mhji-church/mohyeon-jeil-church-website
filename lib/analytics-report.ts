@@ -6,8 +6,8 @@ export type AnalyticsReportOptions = Filter & { period: AnalyticsPeriod; start?:
 type Row = Record<string, unknown>;
 
 const reportCache = new Map<string, { until: number; value: AnalyticsReport }>();
-let todayCache: { day: string; until: number; value: AnalyticsTodaySummary } | null = null;
-export function clearAnalyticsReportCache() { reportCache.clear(); todayCache = null; }
+let visitorSummaryCache: { day: string; until: number; value: AnalyticsVisitorSummary } | null = null;
+export function clearAnalyticsReportCache() { reportCache.clear(); visitorSummaryCache = null; }
 const number = (value: unknown) => Number(value ?? 0) || 0;
 const string = (value: unknown) => String(value ?? "");
 
@@ -115,24 +115,35 @@ async function groupSessions(start: string, end: string, filter: Filter, express
 }
 
 export type AnalyticsReport = Awaited<ReturnType<typeof buildAnalyticsReport>>;
-export type AnalyticsTodaySummary = { collectionDay: string; day: string; precollection: boolean; updatedAt: string | null; metrics: Pick<Awaited<ReturnType<typeof totals>>, "visitors" | "visits" | "pageviews"> };
+export type AnalyticsVisitorSummary = { collectionDay: string; day: string; precollection: boolean; visitors: { today: number; month: number; cumulative: number } };
 
 function formatUpdatedAt(value: unknown) {
   return value ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(string(value))) + " KST" : null;
 }
 
-export async function getAnalyticsTodaySummary(): Promise<AnalyticsTodaySummary> {
+export async function getAnalyticsVisitorSummary(): Promise<AnalyticsVisitorSummary> {
   const day = koreaClock(new Date()).day;
-  if (todayCache?.day === day && todayCache.until > Date.now()) return todayCache.value;
+  if (visitorSummaryCache?.day === day && visitorSummaryCache.until > Date.now()) return visitorSummaryCache.value;
   const started = (await rows("SELECT value FROM analytics_meta WHERE key = 'collection_started_at'"))[0]?.value;
   if (!started) throw new Error("analytics-schema-missing");
   const raw = string(started).replace(" ", "T");
   const collectionDay = koreaClock(new Date(raw.endsWith("Z") ? raw : `${raw}Z`)).day;
   const precollection = day < collectionDay;
-  const counts = precollection ? null : await sessionPageCounts(day, day, {});
-  const last = (await rows("SELECT MAX(last_seen_at) AS timestamp FROM analytics_sessions WHERE day_kst = ?", [day]))[0]?.timestamp;
-  const value = { collectionDay, day, precollection, updatedAt: formatUpdatedAt(last), metrics: { visitors: number(counts?.visits?.visitors), visits: number(counts?.visits?.visits), pageviews: number(counts?.pages?.pageviews) } };
-  todayCache = { day, until: Date.now() + 60_000, value };
+  const cutoff = shiftDay(day, -ANALYTICS_RETENTION_DAYS);
+  const counts = precollection ? null : (await rows(`SELECT
+    COUNT(DISTINCT CASE WHEN day_kst = ? THEN visitor_key END) AS today,
+    COUNT(DISTINCT CASE WHEN day_kst BETWEEN ? AND ? THEN visitor_key END) AS month,
+    COUNT(DISTINCT visitor_key) AS retained_total
+    FROM analytics_sessions WHERE day_kst BETWEEN ? AND ?`, [day, `${day.slice(0, 7)}-01`, day, collectionDay < cutoff ? cutoff : collectionDay, day]))[0];
+  // Keep the cumulative number aligned with the detailed "all" report after
+  // individual sessions expire, without summing daily unique visitors.
+  const historic = !precollection && collectionDay < cutoff
+    ? (await rows("SELECT COALESCE(SUM(visitors_first_seen), 0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [collectionDay, day]))[0]
+    : null;
+  const value = { collectionDay, day, precollection, visitors: {
+    today: number(counts?.today), month: number(counts?.month), cumulative: historic ? number(historic.visitors) : number(counts?.retained_total),
+  } };
+  visitorSummaryCache = { day, until: Date.now() + 60_000, value };
   return value;
 }
 

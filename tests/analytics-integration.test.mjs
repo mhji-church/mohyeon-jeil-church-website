@@ -104,7 +104,11 @@ test("both signed administrator credential slots may open the page, report and C
     assert.doesNotMatch(allowedPage.headers.get("cache-control") ?? "", /public/i);
     const home = await request("/admin", { headers: { cookie } });
     assert.equal(home.status, 200);
-    assert.match(await home.text(), /오늘의 접속/);
+    const homeMarkup = await home.text();
+    assert.match(homeMarkup, /오늘 방문자 수/);
+    assert.match(homeMarkup, /이번 달 방문자 수/);
+    assert.match(homeMarkup, /누적 방문자 수/);
+    assert.doesNotMatch(homeMarkup, /오늘의 접속|한국 시간 기준 · 마지막 갱신/);
   }
   const csv = await request("/api/admin/analytics/export", { headers: { cookie: archiveCookie } });
   const bytes = new Uint8Array(await csv.arrayBuffer());
@@ -137,8 +141,10 @@ test("automatic first-party collection, validation, deduplication and no raw per
   assert.equal(data.metrics.pageviews, 1);
   const home = await request("/admin", { headers: { cookie: websiteCookie } });
   const homeMarkup = await home.text();
-  assert.match(homeMarkup, /오늘의 접속/);
-  assert.match(homeMarkup, /오늘 페이지 조회수/);
+  assert.match(homeMarkup, /오늘 방문자 수/);
+  assert.match(homeMarkup, /이번 달 방문자 수/);
+  assert.match(homeMarkup, /누적 방문자 수/);
+  assert.doesNotMatch(homeMarkup, /오늘의 접속|한국 시간 기준 · 마지막 갱신/);
   assert.equal(data.sources[0].label, "search");
   const stored = await database.execute("SELECT path FROM analytics_events");
   assert.deepEqual(stored.rows.map((row) => row.path), ["/gallery"]);
