@@ -2,13 +2,14 @@ import { ingestAnonymousEvents } from "@/lib/analytics-ingest";
 import { isLikelyAutomation } from "@/lib/analytics-model";
 import { ANALYTICS_COOKIE, analyticsCookieOptions, isAdministratorRequest, sameOriginPost, visitorCookie, visitorKeyFromRequest, visitorKeyFromToken } from "@/lib/analytics-identity";
 import { getContext } from "@netlify/functions";
+import type { TrustedAnalyticsGeo } from "@/lib/analytics-region";
 import { NextResponse } from "next/server";
 
-function trustedCountry() {
+function trustedLocation(): TrustedAnalyticsGeo {
   try {
-    const code = getContext().geo?.country?.code?.toUpperCase() ?? "";
-    return /^[A-Z]{2}$/.test(code) ? code : "ZZ";
-  } catch { return "ZZ"; }
+    const geo = getContext().geo;
+    return { available: Boolean(geo), countryCode: geo?.country?.code, subdivisionCode: geo?.subdivision?.code, subdivisionName: geo?.subdivision?.name, city: geo?.city };
+  } catch { return { available: false }; }
 }
 
 export async function POST(request: Request) {
@@ -30,9 +31,9 @@ export async function POST(request: Request) {
   try { body = JSON.parse(text); } catch { return Response.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400, headers }); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400, headers });
   try {
-    // Only the trusted Netlify function context is used; IP and client country
-    // headers are never stored or trusted.
-    const result = await ingestAnonymousEvents(visitorKey, body, userAgent, trustedCountry());
+    // Only the Netlify function context is trusted. No IP, coordinates, or
+    // client-supplied location headers are read or stored.
+    const result = await ingestAnonymousEvents(visitorKey, body, userAgent, trustedLocation());
     if (!result.accepted) return Response.json({ error: "이벤트 형식이 올바르지 않습니다." }, { status: 400, headers });
     const response = NextResponse.json({ ok: true, stored: result.stored }, { headers });
     if (newCookie) response.cookies.set(ANALYTICS_COOKIE, newCookie, analyticsCookieOptions());

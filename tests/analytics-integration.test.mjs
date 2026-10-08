@@ -9,7 +9,7 @@ import test, { after, before } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createClient } from "@libsql/client";
 import { applyNetlifyMigrations } from "../scripts/netlify-migrations.mjs";
-import { classifyDevice, classifySource, koreaClock, normalizeAnalyticsPath, periodRange, sanitizeCampaign, sanitizeReferrerHost } from "../lib/analytics-model.ts";
+import { classifyDevice, classifySource, koreaClock, normalizeAnalyticsPath, periodRange, sanitizeCampaign, sanitizeReferrerHost, shiftDay } from "../lib/analytics-model.ts";
 
 let server;
 let port;
@@ -148,6 +148,8 @@ test("automatic first-party collection, validation, deduplication and no raw per
   assert.equal(data.sources[0].label, "search");
   const stored = await database.execute("SELECT path FROM analytics_events");
   assert.deepEqual(stored.rows.map((row) => row.path), ["/gallery"]);
+  const localLocations = await database.execute("SELECT DISTINCT country_code, region_code, city_code, geo_status FROM analytics_sessions");
+  assert.deepEqual(localLocations.rows.map((row) => [row.country_code, row.region_code, row.city_code, row.geo_status]), [["ZZ", "", "", "unsupported"]]);
   await database.execute("UPDATE analytics_sessions SET last_seen_at = '2026-01-01T00:00:00.000Z'");
   const nextVisit = await request("/api/analytics/collect", { method: "POST", headers, body: JSON.stringify({ events: [{ id: randomUUID(), kind: "pageview", path: "/bulletin" }] }) });
   assert.equal(nextVisit.status, 200);
@@ -172,4 +174,46 @@ test("a known gallery detail uses its registered title without changing pageview
   const data = await report.json();
   assert.equal(data.pages.find((page) => page.contentId === "virtual-gallery-title")?.title, "가상 갤러리 긴 제목");
   assert.equal(data.metrics.pageviews, 4);
+});
+
+test("regional breakdown uses first session location, domestic denominator, filters and a separate collection start", async () => {
+  const today = koreaClock(new Date()).day;
+  const day = shiftDay(today, -2);
+  const before = shiftDay(today, -5);
+  const regionStart = shiftDay(today, -3);
+  await database.execute({ sql: "UPDATE analytics_meta SET value = ? WHERE key = 'collection_started_at'", args: [`${before} 00:00:00`] });
+  await database.execute({ sql: "UPDATE analytics_meta SET value = ? WHERE key = 'region_collection_started_at'", args: [`${regionStart} 00:00:00`] });
+  const sessions = [
+    [day, "KR", "41", "41460", "available", "search", "mobile"],
+    [day, "KR", "41", "41130", "available", "search", "mobile"],
+    [day, "KR", "41", "", "available", "direct", "desktop"],
+    [day, "KR", "11", "", "available", "direct", "desktop"],
+    [day, "US", "", "", "available", "direct", "desktop"],
+    [before, "KR", "", "", "legacy", "direct", "desktop"],
+  ];
+  let yonginSession = "";
+  for (const [sessionDay, country, region, city, geoStatus, source, device] of sessions) {
+    const id = randomUUID();
+    if (city === "41460") yonginSession = id;
+    await database.execute({ sql: "INSERT INTO analytics_sessions (id, visitor_key, started_at, last_seen_at, day_kst, entry_path, exit_path, country_code, region_code, city_code, geo_status, source_category, device_type) VALUES (?, ?, ?, ?, ?, '/', '/', ?, ?, ?, ?, ?, ?)", args: [id, randomUUID(), `${sessionDay}T03:00:00.000Z`, `${sessionDay}T03:00:00.000Z`, sessionDay, country, region, city, geoStatus, source, device] });
+  }
+  for (const path of ["/", "/gallery"]) {
+    await database.execute({ sql: "INSERT INTO analytics_events (id, visitor_key, session_id, kind, day_kst, hour_kst, weekday_kst, path, created_at) VALUES (?, ?, ?, 'pageview', ?, 12, 1, ?, ?)", args: [randomUUID(), "virtual-region-visitor", yonginSession, day, path, `${day}T03:00:00.000Z`] });
+  }
+  const params = `period=custom&start=${day}&end=${day}`;
+  const report = await request(`/api/admin/analytics?${params}`, { headers: { cookie: archiveCookie } });
+  assert.equal(report.status, 200);
+  const domestic = (await report.json()).domestic;
+  assert.equal(domestic.collectionDay, regionStart);
+  assert.equal(domestic.domesticVisits, 4);
+  assert.equal(domestic.cityKnownVisits, 2);
+  assert.equal(domestic.yonginVisits, 1);
+  assert.deepEqual(domestic.cities.find((row) => row.label === "경기도 · 시군구 미확인"), { label: "경기도 · 시군구 미확인", visits: 1 });
+  assert.equal(domestic.cities.reduce((sum, row) => sum + row.visits, 0), 4);
+  const searched = await request(`/api/admin/analytics?${params}&source=search&device=mobile&country=KR`, { headers: { cookie: websiteCookie } });
+  assert.equal((await searched.json()).domestic.domesticVisits, 2);
+  const overseas = await request(`/api/admin/analytics?${params}&country=US`, { headers: { cookie: archiveCookie } });
+  assert.equal((await overseas.json()).domestic.status, "empty");
+  const past = await request(`/api/admin/analytics?period=custom&start=${before}&end=${before}`, { headers: { cookie: archiveCookie } });
+  assert.equal((await past.json()).domestic.status, "precollection");
 });

@@ -1,5 +1,7 @@
 import { getNetlifyDb } from "./netlify-db";
 import { ANALYTICS_RETENTION_DAYS, koreaClock, periodRange, shiftDay, type AnalyticsPeriod } from "./analytics-model";
+import { summarizeDomesticRegions } from "./analytics-region";
+import { getContext } from "@netlify/functions";
 
 type Filter = { source?: string; device?: string; country?: string };
 export type AnalyticsReportOptions = Filter & { period: AnalyticsPeriod; start?: string; end?: string; grain: "day" | "week" | "month" | "year" };
@@ -114,6 +116,15 @@ async function groupSessions(start: string, end: string, filter: Filter, express
   return (await rows(`SELECT ${expression} AS label, COUNT(DISTINCT s.visitor_key) AS visitors, COUNT(*) AS visits FROM analytics_sessions s WHERE s.day_kst BETWEEN ? AND ?${where.sql} GROUP BY ${expression} ORDER BY visits DESC LIMIT ?`, [start, end, ...where.args, limit])).map((row) => ({ label: string(row.label) || label, visitors: number(row.visitors), visits: number(row.visits) }));
 }
 
+
+async function domesticRegions(start: string, end: string, filter: Filter, collectionDay: string) {
+  const where = conditions("s", filter);
+  const input = start <= end ? await rows(`SELECT s.region_code, s.city_code, s.geo_status, COUNT(*) AS visits FROM analytics_sessions s WHERE s.day_kst BETWEEN ? AND ? AND s.country_code = 'KR'${where.sql} GROUP BY s.region_code, s.city_code, s.geo_status`, [start, end, ...where.args]) : [];
+  let providerAvailable = false;
+  try { providerAvailable = Boolean(getContext().geo); } catch { /* Local preview has no Netlify geo context. */ }
+  return summarizeDomesticRegions(input, collectionDay, end, filter.country && filter.country !== "KR" ? true : providerAvailable);
+}
+
 export type AnalyticsReport = Awaited<ReturnType<typeof buildAnalyticsReport>>;
 export type AnalyticsVisitorSummary = { collectionDay: string; day: string; precollection: boolean; visitors: { today: number; month: number; cumulative: number } };
 
@@ -152,6 +163,9 @@ async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   if (!started) throw new Error("analytics-schema-missing");
   const startedAt = string(started).replace(" ", "T") + (string(started).includes("Z") ? "" : "Z");
   const collectionDay = koreaClock(new Date(startedAt)).day;
+  const regionStarted = (await rows("SELECT value FROM analytics_meta WHERE key = 'region_collection_started_at'"))[0]?.value;
+  if (!regionStarted) throw new Error("analytics-region-schema-missing");
+  const regionCollectionDay = koreaClock(new Date(string(regionStarted).replace(" ", "T") + (string(regionStarted).includes("Z") ? "" : "Z"))).day;
   const today = koreaClock(new Date()).day;
   const range = periodRange(options.period, today, collectionDay, options.start, options.end);
   const cutoff = shiftDay(today, -ANALYTICS_RETENTION_DAYS);
@@ -170,12 +184,13 @@ async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   const pageChanges = previousPageRows.length ? pages.map((row) => ({ label: row.label, contentId: row.contentId, current: row.pageviews, previous: previousPageviews.get(pageKey(row.label, row.contentId)) ?? 0, difference: row.pageviews - (previousPageviews.get(pageKey(row.label, row.contentId)) ?? 0) })) : [];
   const actions = detailAvailable ? (await rows(`SELECT e.kind AS kind, e.content_type AS contentType, e.content_id AS contentId, COALESCE(post.title, video.title, '') AS title, COUNT(*) AS total FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id LEFT JOIN content_posts post ON e.content_id = post.id LEFT JOIN archive_videos video ON e.content_id = video.id WHERE e.kind NOT IN ('pageview','engagement') AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY e.kind, e.content_type, e.content_id ORDER BY total DESC LIMIT 30`, [recentStart, range.end, ...where.args])).map((row) => ({ kind: string(row.kind), contentType: string(row.contentType), contentId: string(row.contentId), title: string(row.title), total: number(row.total) })) : [];
   const actionSources = detailAvailable ? (await rows(`SELECT s.source_category AS source, e.kind AS kind, COUNT(*) AS total FROM analytics_events e JOIN analytics_sessions s ON s.id = e.session_id WHERE e.kind NOT IN ('pageview','engagement') AND e.day_kst BETWEEN ? AND ?${where.sql} GROUP BY s.source_category, e.kind ORDER BY total DESC LIMIT 30`, [recentStart, range.end, ...where.args])).map((row) => ({ source: string(row.source), kind: string(row.kind), total: number(row.total) })) : [];
+  const domestic = await domesticRegions(recentStart, range.end, filter, regionCollectionDay);
   const breakdown = async (expression: string, fallback: string, limit?: number) => detailAvailable ? groupSessions(recentStart, range.end, filter, expression, fallback, limit) : [];
   const detailGroups: Array<[string, string, number?]> = [
     ["s.source_category", "direct"], ["s.source_domain", "직접/출처 미확인"],
     ["s.country_code", "ZZ"], ["s.device_type", "unknown"],
     ["s.browser_name", "알 수 없음"], ["s.os_name", "알 수 없음"],
-    ["s.utm_campaign", "캠페인 없음"], ["s.entry_path", "기록 없음"],
+    ["s.entry_path", "기록 없음"],
     ["s.exit_path", "기록 없음"],
     ["(CAST(strftime('%w', s.started_at, '+9 hours') AS INTEGER) + 6) % 7", "0", 7],
     ["strftime('%H', s.started_at, '+9 hours')", "00", 24],
@@ -184,13 +199,13 @@ async function buildAnalyticsReport(options: AnalyticsReportOptions) {
   for (let index = 0; index < detailGroups.length; index += 3) {
     details.push(...await Promise.all(detailGroups.slice(index, index + 3).map(([expression, fallback, limit]) => breakdown(expression, fallback, limit))));
   }
-  const [sources, domains, countries, devices, browsers, systems, campaigns, entries, exits, weekdays, hours] = details;
+  const [sources, domains, countries, devices, browsers, systems, entries, exits, weekdays, hours] = details;
   const last = (await rows("SELECT MAX(last_seen_at) AS timestamp FROM analytics_sessions"))[0]?.timestamp;
   const lastUpdated = formatUpdatedAt(last);
   return {
     collectionDay, updatedAt: lastUpdated, range, period: options.period, grain: options.grain,
     precollection, coverageStart: range.start < cutoff ? cutoff : range.start, metrics, previous, trend: points,
-    pages, pageChanges, actions, actionSources, sources, domains, countries, devices, browsers, systems, campaigns: campaigns.filter((row) => row.label !== "캠페인 없음"), entries, exits, weekdays, hours,
+    pages, pageChanges, actions, actionSources, sources, domains, countries, devices, browsers, systems, domestic, entries, exits, weekdays, hours,
   };
 }
 

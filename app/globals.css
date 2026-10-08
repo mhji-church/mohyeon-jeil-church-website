@@ -10993,6 +10993,27 @@ textarea { font-family: var(--font-pretendard); }
 .analytics-ranked li span b { display: block; font-weight: 700; }
 .analytics-path { display: block; color: #88838a; font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
 .analytics-ranked li span .analytics-path { white-space: normal; }
+.analytics-domestic { min-width: 0; }
+.analytics-region-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 9px 11px; border-radius: 6px; background: #f8f5f2; color: #30303d; }
+.analytics-region-summary strong { font-size: 16px; }
+.analytics-region-summary > span { color: #a56550; font-size: 13px; font-weight: 700; }
+.analytics-region-summary small { flex-basis: 100%; color: #77747a; font-size: 11px; }
+.analytics-region-switch { display: flex; gap: 5px; margin: 10px 0 4px; }
+.analytics-region-switch button { min-height: 44px; padding: 0 12px; border: 1px solid #dedcda; border-radius: 5px; background: #fff; color: #514c52; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
+.analytics-region-switch button.is-selected { border-color: #30303d; background: #30303d; color: #fff; }
+.analytics-region-switch button:hover:not(.is-selected) { background: #ece8e5; }
+.analytics-region-switch button:focus-visible, .analytics-region-help summary:focus-visible { outline: 3px solid #bb7963; outline-offset: 2px; }
+.analytics-region-list { max-height: 310px; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+.analytics-region-list li { padding: 7px 0; border-top: 1px solid #eee; }
+.analytics-region-list li > div { display: flex; min-width: 0; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
+.analytics-region-list li > div > span { min-width: 0; overflow-wrap: anywhere; }
+.analytics-region-list strong { flex: 0 0 auto; white-space: nowrap; color: #30303d; font-size: 12px; }
+.analytics-region-list strong small { margin-left: 3px; color: #77747a; font-size: 11px; font-weight: 400; }
+.analytics-region-bar { display: block; height: 4px; margin-top: 5px; border-radius: 4px; background: #f0eeeb; overflow: hidden; }
+.analytics-region-bar i { display: block; height: 100%; border-radius: inherit; background: #b57964; }
+.analytics-region-help { margin-top: 9px; color: #77747a; font-size: 11px; line-height: 1.5; }
+.analytics-region-help summary { min-height: 30px; display: inline-flex; align-items: center; color: #514c52; cursor: pointer; font-weight: 700; }
+.analytics-region-help p { margin: 4px 0 0; }
 .analytics-details { display: block; }
 .analytics-details > h2 { margin: 22px 0 10px; color: #30303d; font-size: 18px; }
 .analytics-details-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }

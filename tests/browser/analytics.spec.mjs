@@ -10,7 +10,8 @@ const mockReport = {
   pages: [{ label: "/sermons", contentId: "", title: "", pageviews: 7, visitors: 2 }, { label: "/gallery/detail", contentId: "virtual-gallery", title: "가상 갤러리 행사 사진을 함께 돌아보는 긴 제목", pageviews: 1, visitors: 1 }], pageChanges: [{ label: "/sermons", contentId: "", current: 7, previous: 5, difference: 2 }],
   actions: [{ kind: "gallery.open", contentType: "gallery", contentId: "local-gallery", title: "가상 갤러리", total: 4 }],
   actionSources: [{ source: "search", kind: "gallery.open", total: 2 }],
-  sources: breakdown("search"), domains: breakdown("google.com"), countries: breakdown("ZZ"), devices: breakdown("mobile"), browsers: breakdown("Chrome"), systems: breakdown("Android"), campaigns: breakdown("autumn"), entries: breakdown("/"), exits: breakdown("/gallery"), weekdays: breakdown("2"), hours: breakdown("19"),
+  sources: breakdown("search"), domains: breakdown("google.com"), countries: breakdown("KR"), devices: breakdown("mobile"), browsers: breakdown("Chrome"), systems: breakdown("Android"), entries: breakdown("/"), exits: breakdown("/gallery"), weekdays: breakdown("2"), hours: breakdown("19"),
+  domestic: { collectionDay: "2026-10-07", status: "available", domesticVisits: 7, cityKnownVisits: 5, yonginVisits: 3, cityStatus: "available", precollectionVisits: 0, unsupportedVisits: 0, cities: [{ label: "경기도 용인시", visits: 3 }, { label: "경기도 성남시", visits: 2 }, { label: "경기도 · 시군구 미확인", visits: 2 }], provinces: [{ label: "경기도", visits: 7 }] },
 };
 
 for (const width of [320, 390, 760, 820, 1440]) {
@@ -54,6 +55,19 @@ for (const width of [320, 390, 760, 820, 1440]) {
     await expect(page.getByText("가상 갤러리 행사 사진을 함께 돌아보는 긴 제목")).toBeVisible();
     await expect(page.getByText("갤러리 상세 열기 · 가상 갤러리", { exact: true })).toBeVisible();
     await expect(page.getByText("통계 수집을 시작했습니다.", { exact: false })).toBeVisible();
+    await expect(page.getByText("UTM 캠페인")).toHaveCount(0);
+    const devicePanel = page.locator(".analytics-panel").filter({ has: page.getByRole("heading", { name: "기기", exact: true }) });
+    const regionPanel = page.locator(".analytics-domestic");
+    await expect(regionPanel.getByText("용인시 방문 3회")).toBeVisible();
+    await expect(regionPanel.getByText("도시 확인 가능 방문 5회 / 국내 방문 7회")).toBeVisible();
+    await expect(regionPanel.getByText("경기도 · 시군구 미확인")).toBeVisible();
+    const deviceBox = await devicePanel.boundingBox();
+    const regionBox = await regionPanel.boundingBox();
+    expect(width <= 760 ? regionBox.y > deviceBox.y : regionBox.x > deviceBox.x && Math.abs(regionBox.y - deviceBox.y) < 2).toBe(true);
+    await regionPanel.getByRole("button", { name: "시·도" }).click();
+    await expect(regionPanel.getByText("경기도", { exact: true })).toBeVisible();
+    await regionPanel.getByRole("button", { name: "시·군·구" }).click();
+    await expect(regionPanel.getByText("경기도 용인시")).toBeVisible();
     if (width === 390 || width === 1440) await page.screenshot({ path: `test-results/analytics-dashboard-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "이번 주" }).click();
     await expect(page.getByRole("button", { name: "이번 주" })).toHaveAttribute("aria-pressed", "true");
@@ -74,6 +88,15 @@ for (const width of [320, 390, 760, 820, 1440]) {
     await browserDetails.locator("summary").click({ noWaitAfter: true });
     await expect(browserDetails.locator("table")).toBeVisible();
     if (width === 390) {
+      reportVariant = { ...mockReport, domestic: { ...mockReport.domestic, status: "precollection" } };
+      await page.getByRole("button", { name: "통계 새로고침" }).click();
+      await expect(regionPanel.getByText("지역 통계 수집 전입니다.", { exact: false })).toBeVisible();
+      reportVariant = { ...mockReport, domestic: { ...mockReport.domestic, status: "unsupported" } };
+      await page.getByRole("button", { name: "통계 새로고침" }).click();
+      await expect(regionPanel.getByText("지역 정보 미지원", { exact: false })).toBeVisible();
+      reportVariant = { ...mockReport, domestic: { ...mockReport.domestic, status: "empty" } };
+      await page.getByRole("button", { name: "통계 새로고침" }).click();
+      await expect(regionPanel.getByText("선택 조건에 해당하는 국내 방문이 없습니다.")).toBeVisible();
       reportVariant = { ...mockReport, range: { ...mockReport.range, start: "2026-10-06", end: "2026-10-08" }, trend: [
         { bucket: "2026-10-06", visitors: 0, visits: 0, pageviews: 0, estimated: false, precollection: true },
         { bucket: "2026-10-07", visitors: 0, visits: 0, pageviews: 0, estimated: false, precollection: false },

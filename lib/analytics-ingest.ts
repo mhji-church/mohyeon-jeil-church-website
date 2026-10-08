@@ -4,6 +4,7 @@ import {
   koreaClock, parseAnalyticsEvents, sanitizeCampaign, sanitizeReferrerHost, shiftDay,
 } from "./analytics-model";
 import { clearAnalyticsReportCache } from "./analytics-report";
+import { normalizeTrustedAnalyticsGeo, type TrustedAnalyticsGeo } from "./analytics-region";
 
 type IngestBody = {
   events?: unknown;
@@ -13,7 +14,7 @@ type IngestBody = {
   utmCampaign?: unknown;
 };
 
-export async function ingestAnonymousEvents(visitorKey: string, body: IngestBody, userAgent: string, countryCode = "ZZ", now = new Date()) {
+export async function ingestAnonymousEvents(visitorKey: string, body: IngestBody, userAgent: string, geo: TrustedAnalyticsGeo = { available: false }, now = new Date()) {
   const events = parseAnalyticsEvents(body.events);
   if (!events) return { accepted: false, reason: "invalid-events" } as const;
   const clock = koreaClock(now);
@@ -24,7 +25,7 @@ export async function ingestAnonymousEvents(visitorKey: string, body: IngestBody
   const utmCampaign = sanitizeCampaign(body.utmCampaign);
   const source = classifySource(referrerHost, utmSource, utmMedium);
   const device = classifyDevice(userAgent);
-  const country = /^[A-Z]{2}$/.test(countryCode) ? countryCode : "ZZ";
+  const location = normalizeTrustedAnalyticsGeo(geo);
   const placeholders = events.map(() => "?").join(",");
 
   const result = await getNetlifyDb().writeTransaction(async (transaction) => {
@@ -52,8 +53,8 @@ export async function ingestAnonymousEvents(visitorKey: string, body: IngestBody
     const lastPath = [...unseen].reverse().find((event) => event.kind === "pageview")?.path;
     if (newSession) {
       await transaction.execute({
-        sql: "INSERT INTO analytics_sessions (id, visitor_key, started_at, last_seen_at, day_kst, entry_path, exit_path, country_code, device_type, browser_name, os_name, source_category, source_domain, utm_source, utm_medium, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        args: [sessionId, visitorKey, timestamp, timestamp, clock.day, firstPath, lastPath ?? firstPath, country, device.device, device.browser, device.os, source.category, source.label === "직접/출처 미확인" ? "" : referrerHost, utmSource, utmMedium, utmCampaign],
+        sql: "INSERT INTO analytics_sessions (id, visitor_key, started_at, last_seen_at, day_kst, entry_path, exit_path, country_code, region_code, city_code, geo_status, device_type, browser_name, os_name, source_category, source_domain, utm_source, utm_medium, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [sessionId, visitorKey, timestamp, timestamp, clock.day, firstPath, lastPath ?? firstPath, location.countryCode, location.regionCode, location.cityCode, location.geoStatus, device.device, device.browser, device.os, source.category, source.label === "직접/출처 미확인" ? "" : referrerHost, utmSource, utmMedium, utmCampaign],
       });
     }
 

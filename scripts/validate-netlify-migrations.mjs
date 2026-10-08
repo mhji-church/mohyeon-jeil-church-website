@@ -19,6 +19,15 @@ async function withTemporaryDatabase(name, setup) {
     for (const required of ["content_posts", "members", "archive_videos", "admin_audit_logs", "member_merge_groups", "member_merge_accounts", "member_login_aliases", "member_auth_state", "analytics_meta", "analytics_visitors", "analytics_sessions", "analytics_events", "analytics_daily_totals", "analytics_ingest_limits", "schema_migrations"]) {
       if (!names.has(required)) throw new Error(`${name}: missing table ${required}`);
     }
+    const sessionColumns = await client.execute("PRAGMA table_info(analytics_sessions)");
+    const columns = new Set(sessionColumns.rows.map((row) => String(row.name)));
+    for (const required of ["region_code", "city_code", "geo_status"]) {
+      if (!columns.has(required)) throw new Error(`${name}: missing session column ${required}`);
+    }
+    const regionStart = await client.execute("SELECT value FROM analytics_meta WHERE key = 'region_collection_started_at'");
+    if (regionStart.rows.length !== 1) throw new Error(`${name}: missing region collection start`);
+    const regionIndex = await client.execute("SELECT name FROM sqlite_schema WHERE name = 'analytics_sessions_region_idx'");
+    if (regionIndex.rows.length !== 1) throw new Error(`${name}: missing regional index`);
   } finally {
     await client.close();
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

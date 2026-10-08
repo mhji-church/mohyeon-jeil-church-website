@@ -34,6 +34,22 @@ function BreakdownPanel({ id, title, rows, format, basis, total }: { id: string;
   </section>;
 }
 
+function DomesticRegionPanel({ domestic, view, onViewChange }: { domestic: AnalyticsReport["domestic"]; view: "city" | "province"; onViewChange: (view: "city" | "province") => void }) {
+  const rows = view === "city" ? domestic.cities : domestic.provinces;
+  return <section className="analytics-panel analytics-domestic" aria-labelledby="analytics-domestic-title">
+    <div className="analytics-panel-title"><h2 id="analytics-domestic-title">국내 지역별 방문</h2><small>비율 기준: 국내 방문 횟수</small></div>
+    {domestic.status === "precollection" ? <p className="analytics-empty">지역 통계 수집 전입니다. {domestic.collectionDay}부터 수집합니다.</p>
+      : domestic.status === "empty" ? <p className="analytics-empty">선택 조건에 해당하는 국내 방문이 없습니다.</p>
+        : domestic.status === "unsupported" ? <p className="analytics-empty">지역 정보 미지원 · 서버에서 신뢰할 수 있는 위치 정보를 받지 못했습니다.</p>
+          : <>
+            <div className="analytics-region-summary"><strong>{domestic.cityStatus === "available" ? `용인시 방문 ${integer(domestic.yonginVisits)}회` : "도시 정보 미지원"}</strong>{domestic.cityStatus === "available" && <span>{Math.round(domestic.yonginVisits / domestic.domesticVisits * 100)}%</span>}<small>도시 확인 가능 방문 {integer(domestic.cityKnownVisits)}회 / 국내 방문 {integer(domestic.domesticVisits)}회</small></div>
+            <div className="analytics-region-switch" role="group" aria-label="지역 집계 단위"><button type="button" aria-pressed={view === "city"} className={view === "city" ? "is-selected" : ""} onClick={() => onViewChange("city")}>시·군·구</button><button type="button" aria-pressed={view === "province"} className={view === "province" ? "is-selected" : ""} onClick={() => onViewChange("province")}>시·도</button></div>
+            <ol className="analytics-region-list">{rows.map((row) => <li key={row.label}><div><span>{row.label}</span><strong>{integer(row.visits)}회 <small>{Math.round(row.visits / domestic.domesticVisits * 100)}%</small></strong></div><span className="analytics-region-bar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, row.visits / domestic.domesticVisits * 100))}%` }} /></span></li>)}</ol>
+          </>}
+    <details className="analytics-region-help"><summary>위치 집계 안내</summary><p>IP 기반 추정 위치로, 통신사·VPN 등의 영향으로 실제 접속 지역과 다를 수 있습니다. 용인시 방문은 IP 위치상 용인시로 분류된 방문입니다. 동일 세션은 최초 확인한 지역에서 한 번만 집계합니다. 과거 위치는 소급 추정하지 않습니다.</p></details>
+  </section>;
+}
+
 export default function AnalyticsDashboard({ initialPeriod = "month" }: { initialPeriod?: AnalyticsPeriod }) {
   const [period, setPeriod] = useState<AnalyticsPeriod>(initialPeriod);
   const [start, setStart] = useState("");
@@ -42,6 +58,7 @@ export default function AnalyticsDashboard({ initialPeriod = "month" }: { initia
   const [source, setSource] = useState("");
   const [device, setDevice] = useState("");
   const [country, setCountry] = useState("");
+  const [regionView, setRegionView] = useState<"city" | "province">("city");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [chartMetric, setChartMetric] = useState<Metric>("visitors");
   const [focusedPoint, setFocusedPoint] = useState<string | null>(null);
@@ -110,8 +127,8 @@ export default function AnalyticsDashboard({ initialPeriod = "month" }: { initia
           <section className="analytics-panel" aria-labelledby="analytics-actions"><div className="analytics-panel-title"><h2 id="analytics-actions">주요 행동</h2><small>영상 열기는 시청 완료가 아닙니다</small></div>{report.actions.length ? <ol className="analytics-ranked">{report.actions.map((row) => <li key={`${row.kind}-${row.contentId}`}><span>{actionLabels[row.kind as AnalyticsAction] ?? row.kind}{row.title ? ` · ${row.title}` : ""}</span><strong>{integer(row.total)}회</strong></li>)}</ol> : <p className="analytics-empty">기록된 행동이 없습니다.</p>}</section>
         </div>
         <div className="analytics-two-column"><BreakdownPanel id="analytics-source" title="유입 출처" rows={report.sources} format={(value) => sourceLabels[value] ?? value} basis="visits" total={metrics?.visits ?? 0} /><BreakdownPanel id="analytics-country" title="국가" rows={report.countries} format={labelCountry} basis="visitors" total={metrics?.visitors ?? 0} /></div>
-        <div className="analytics-two-column"><BreakdownPanel id="analytics-device" title="기기" rows={report.devices} format={(value) => deviceLabels[value] ?? value} basis="visitors" total={metrics?.visitors ?? 0} /></div>
-        <section className="analytics-details" aria-label="상세 분석"><h2>상세 분석</h2><div className="analytics-details-grid"><DetailTable title="외부 유입 도메인" rows={report.domains} /><DetailTable title="브라우저" rows={report.browsers} /><DetailTable title="운영체제" rows={report.systems} /><DetailTable title="UTM 캠페인" rows={report.campaigns} /><DetailTable title="방문 시작 페이지" rows={report.entries} format={pageName} /><DetailTable title="종료 페이지" rows={report.exits} format={pageName} /><DetailTable title="요일별" rows={report.weekdays} format={(value) => ["월", "화", "수", "목", "금", "토", "일"][Number(value)] ?? value} /><DetailTable title="시간대별" rows={report.hours} format={(value) => `${value}시`} />{report.actionSources.length > 0 && <details className="analytics-panel analytics-detail"><summary>유입별 주요 행동</summary><div className="analytics-table-scroll"><table><thead><tr><th>유입</th><th>행동</th><th>횟수</th></tr></thead><tbody>{report.actionSources.map((row) => <tr key={`${row.source}-${row.kind}`}><td>{sourceLabels[row.source] ?? row.source}</td><td>{actionLabels[row.kind as AnalyticsAction] ?? row.kind}</td><td>{integer(row.total)}</td></tr>)}</tbody></table></div></details>}</div></section>
+        <div className="analytics-two-column"><BreakdownPanel id="analytics-device" title="기기" rows={report.devices} format={(value) => deviceLabels[value] ?? value} basis="visitors" total={metrics?.visitors ?? 0} /><DomesticRegionPanel domestic={report.domestic} view={regionView} onViewChange={setRegionView} /></div>
+        <section className="analytics-details" aria-label="상세 분석"><h2>상세 분석</h2><div className="analytics-details-grid"><DetailTable title="외부 유입 도메인" rows={report.domains} /><DetailTable title="브라우저" rows={report.browsers} /><DetailTable title="운영체제" rows={report.systems} /><DetailTable title="방문 시작 페이지" rows={report.entries} format={pageName} /><DetailTable title="종료 페이지" rows={report.exits} format={pageName} /><DetailTable title="요일별" rows={report.weekdays} format={(value) => ["월", "화", "수", "목", "금", "토", "일"][Number(value)] ?? value} /><DetailTable title="시간대별" rows={report.hours} format={(value) => `${value}시`} />{report.actionSources.length > 0 && <details className="analytics-panel analytics-detail"><summary>유입별 주요 행동</summary><div className="analytics-table-scroll"><table><thead><tr><th>유입</th><th>행동</th><th>횟수</th></tr></thead><tbody>{report.actionSources.map((row) => <tr key={`${row.source}-${row.kind}`}><td>{sourceLabels[row.source] ?? row.source}</td><td>{actionLabels[row.kind as AnalyticsAction] ?? row.kind}</td><td>{integer(row.total)}</td></tr>)}</tbody></table></div></details>}</div></section>
         <div className="analytics-panel analytics-export"><a className="analytics-csv-link" href={`/api/admin/analytics/export?${query}`} download>선택 기간·필터 CSV 다운로드</a><details><summary>집계 기준과 한계</summary><p>한국 시간 기준이며 한 주는 월요일부터 일요일까지입니다. 임의의 익명 식별 쿠키별로 30분 동안 활동이 없으면 새 방문으로 집계합니다. 방문자 수는 선택 기간의 중복을 제거합니다. 쿠키 삭제, 다른 브라우저나 기기 사용은 별도 방문자로 계산될 수 있습니다. 알려진 자동화 트래픽은 가능한 범위에서 제외합니다. 평균 참여 시간은 활성 탭에서 측정 가능한 시간에 한합니다. 유입 정보가 없는 경우 직접/출처 미확인입니다. 국가는 신뢰 가능한 서버 측 위치 정보가 없으면 알 수 없음으로 표시합니다.</p></details></div>
       </>}
     </>}
