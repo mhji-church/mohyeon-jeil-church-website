@@ -6633,6 +6633,12 @@ svg {
   line-height: 1.6;
 }
 
+.visit-phones { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.visit-phones > a { white-space: nowrap; }
+.visit-phones a { color: inherit; text-decoration: none; }
+.visit-phones a:hover { text-decoration: underline; }
+.visit-phones a:focus-visible { outline: 2px solid var(--peach); outline-offset: 3px; }
+
 .visit-links {
   display: grid;
   width: 205px;
@@ -9942,6 +9948,7 @@ body.modal-open { overflow: hidden; }
 .admin-home-workspace > * { width: min(100%, 1360px); margin-right: auto; margin-left: auto; }
 .admin-home-workspace > .admin-home-section:first-child { margin-top: 0; }
 .admin-home-visitor-panel {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -9959,8 +9966,24 @@ body.modal-open { overflow: hidden; }
 .admin-home-visitor-grid > div { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: 8px; padding: 0 16px; border-left: 1px solid #e8e2de; }
 .admin-home-visitor-grid > div:first-child { border-left: 0; }
 .admin-home-visitor-grid span { color: var(--admin-muted); font-size: 13px; font-weight: 700; }
-.admin-home-visitor-grid strong { color: var(--admin-ink); font-size: 29px; font-weight: 720; font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; }
+.admin-home-visitor-grid strong { display: inline-flex; min-height: 44px; align-items: baseline; color: var(--admin-ink); font-size: 29px; font-weight: 720; font-variant-numeric: tabular-nums; line-height: 44px; white-space: nowrap; }
 .admin-home-visitor-grid em { margin-left: 2px; font-size: 12px; font-style: normal; font-weight: 680; }
+.admin-home-visitor-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.admin-home-visitor-number { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; border-radius: 4px; color: inherit; text-decoration: none; cursor: pointer; }
+.admin-home-visitor-number:hover strong { color: #a56550; }
+.admin-home-visitor-number:focus-visible { outline: 3px solid #bb7963; outline-offset: 2px; }
+.admin-home-visitor-estimate { margin-left: 4px; font-size: 10px; font-weight: 400; }
+.admin-home-visitor-help summary { display: flex; width: 44px; min-height: 44px; align-items: center; justify-content: center; border-radius: 4px; color: #77747a; cursor: pointer; list-style: none; }
+.admin-home-visitor-help summary::-webkit-details-marker { display: none; }
+.admin-home-visitor-help summary:hover { background: #f6f3f0; color: #a56550; }
+.admin-home-visitor-help summary:focus-visible { outline: 3px solid #bb7963; outline-offset: 2px; }
+.admin-home-visitor-help > div { position: absolute; z-index: 5; top: calc(100% + 5px); right: 0; box-sizing: border-box; width: min(440px, 100%); padding: 12px 14px; border: 1px solid #e8e2de; border-radius: 6px; background: #fff; box-shadow: 0 4px 15px #302f3c15; color: var(--admin-muted); font-size: 12px; line-height: 1.65; }
+@media (min-width: 761px) and (max-width: 1200px) {
+  .admin-home-visitor-panel { padding-top: 8px; padding-bottom: 8px; }
+  .admin-home-visitor-grid > div { display: grid; gap: 2px; padding: 0 8px; }
+  .admin-home-visitor-grid span { font-size: 12px; }
+  .admin-home-visitor-grid strong { font-size: 23px; }
+}
 .admin-home-visitor-panel + .admin-home-section { margin-top: 0; }
 .admin-home-status-grid { gap: 12px; }
 

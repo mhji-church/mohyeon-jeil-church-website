@@ -57,6 +57,18 @@ function conditions(alias: string, filter: Filter) {
   return { sql: clauses.length ? ` AND ${clauses.join(" AND ")}` : "", args };
 }
 
+async function cumulativeVisitCounts(collectionDay: string, end: string, cutoff: string, retainedVisitors: number, retainedVisits: number) {
+  if (collectionDay >= cutoff) return { visitors: retainedVisitors, visits: retainedVisits, visitorsEstimated: false };
+  const historic = (await rows(`SELECT COALESCE(SUM(visitors_first_seen), 0) AS visitors,
+    COALESCE(SUM(visits), 0) AS visits
+    FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?`, [collectionDay, end]))[0];
+  // These are first-seen counters, not sums of daily unique visitors. An
+  // anonymous key returning after its retention period can be counted again.
+  // Session starts belong to exactly one KST day. Their durable total also
+  // includes boundary-day sessions that retention has already removed.
+  return { visitors: number(historic?.visitors), visits: number(historic?.visits), visitorsEstimated: true };
+}
+
 async function totals(start: string, end: string, filter: Filter, cutoff: string, collectionDay: string) {
   const recentStart = start < cutoff ? cutoff : start;
   const where = conditions("s", filter);
@@ -66,16 +78,16 @@ async function totals(start: string, end: string, filter: Filter, cutoff: string
   const historicEnd = shiftDay(cutoff, -1);
   const historic = !hasFilter && start < cutoff ? (await rows("SELECT COALESCE(SUM(visits),0) AS visits, COALESCE(SUM(pageviews),0) AS pageviews, COALESCE(SUM(visitors_first_seen),0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [start, end < historicEnd ? end : historicEnd]))[0] : {};
   const completeHistory = !hasFilter && start < cutoff && start <= collectionDay && end >= cutoff;
-  const firstSeenTotal = completeHistory ? (await rows("SELECT COALESCE(SUM(visitors_first_seen), 0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [collectionDay, end]))[0] : {};
-  const visitorCount = completeHistory ? number(firstSeenTotal?.visitors) : number(visits?.visitors) + number(historic?.visitors);
+  const cumulative = completeHistory ? await cumulativeVisitCounts(collectionDay, end, cutoff, number(visits?.visitors), number(visits?.visits)) : null;
+  const visitorCount = cumulative ? cumulative.visitors : number(visits?.visitors) + number(historic?.visitors);
   const newCount = number(newcomers?.total) + number(historic?.visitors);
-  const visitCount = number(visits?.visits) + number(historic?.visits);
+  const visitCount = cumulative ? cumulative.visits : number(visits?.visits) + number(historic?.visits);
   const pageCount = number(pages?.pageviews) + number(historic?.pageviews);
   return {
     visitors: visitorCount, visits: visitCount, pageviews: pageCount, newVisitors: newCount,
     returningVisitors: Math.max(0, visitorCount - newCount), pagesPerVisit: visitCount ? Math.round(pageCount / visitCount * 100) / 100 : 0,
     averageEngagementSeconds: number(visits?.visits) ? Math.round(number(visits?.engagement) / number(visits?.visits) / 1000) : 0,
-    visitorsEstimated: start < cutoff && !completeHistory, historicBreakdownUnavailable: start < cutoff,
+    visitorsEstimated: cumulative?.visitorsEstimated ?? start < cutoff, historicBreakdownUnavailable: start < cutoff,
   };
 }
 
@@ -126,7 +138,7 @@ async function domesticRegions(start: string, end: string, filter: Filter, colle
 }
 
 export type AnalyticsReport = Awaited<ReturnType<typeof buildAnalyticsReport>>;
-export type AnalyticsVisitorSummary = { collectionDay: string; day: string; precollection: boolean; visitors: { today: number; month: number; cumulative: number } };
+export type AnalyticsVisitorSummary = { collectionDay: string; day: string; precollection: boolean; visitors: { today: number; cumulative: number }; visits: { cumulative: number }; cumulativeVisitorsEstimated: boolean; retentionDays: number };
 
 function formatUpdatedAt(value: unknown) {
   return value ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(string(value))) + " KST" : null;
@@ -143,17 +155,13 @@ export async function getAnalyticsVisitorSummary(): Promise<AnalyticsVisitorSumm
   const cutoff = shiftDay(day, -ANALYTICS_RETENTION_DAYS);
   const counts = precollection ? null : (await rows(`SELECT
     COUNT(DISTINCT CASE WHEN day_kst = ? THEN visitor_key END) AS today,
-    COUNT(DISTINCT CASE WHEN day_kst BETWEEN ? AND ? THEN visitor_key END) AS month,
-    COUNT(DISTINCT visitor_key) AS retained_total
-    FROM analytics_sessions WHERE day_kst BETWEEN ? AND ?`, [day, `${day.slice(0, 7)}-01`, day, collectionDay < cutoff ? cutoff : collectionDay, day]))[0];
-  // Keep the cumulative number aligned with the detailed "all" report after
-  // individual sessions expire, without summing daily unique visitors.
-  const historic = !precollection && collectionDay < cutoff
-    ? (await rows("SELECT COALESCE(SUM(visitors_first_seen), 0) AS visitors FROM analytics_daily_totals WHERE day_kst BETWEEN ? AND ?", [collectionDay, day]))[0]
-    : null;
+    COUNT(DISTINCT visitor_key) AS retained_total, COUNT(*) AS retained_visits
+    FROM analytics_sessions WHERE day_kst BETWEEN ? AND ?`, [day, collectionDay < cutoff ? cutoff : collectionDay, day]))[0];
+  const cumulative = precollection ? { visitors: 0, visits: 0, visitorsEstimated: false }
+    : await cumulativeVisitCounts(collectionDay, day, cutoff, number(counts?.retained_total), number(counts?.retained_visits));
   const value = { collectionDay, day, precollection, visitors: {
-    today: number(counts?.today), month: number(counts?.month), cumulative: historic ? number(historic.visitors) : number(counts?.retained_total),
-  } };
+    today: number(counts?.today), cumulative: cumulative.visitors,
+  }, visits: { cumulative: cumulative.visits }, cumulativeVisitorsEstimated: cumulative.visitorsEstimated, retentionDays: ANALYTICS_RETENTION_DAYS };
   visitorSummaryCache = { day, until: Date.now() + 60_000, value };
   return value;
 }

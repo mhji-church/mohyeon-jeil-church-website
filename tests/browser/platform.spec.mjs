@@ -68,7 +68,7 @@ for (const viewport of viewports) {
   });
 }
 
-test("mobile hero keeps the full desktop composition across all five slides", async ({ page }) => {
+test("hero keeps the new first image, complete cycle, zoom and responsive composition", async ({ page }) => {
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   await page.addInitScript(() => window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1"));
@@ -80,7 +80,13 @@ test("mobile hero keeps the full desktop composition across all five slides", as
     const heroSize = await hero.evaluate((element) => element.getBoundingClientRect().toJSON());
     expect(heroSize.width / heroSize.height).toBeCloseTo(16 / 9, 2);
 
-    for (let index = 0; index < 5; index += 1) {
+    const slideCount = await page.locator(".hero-slide").count();
+    expect(slideCount).toBe(6);
+    await expect(page.locator(".hero-counter em")).toHaveText(String(slideCount).padStart(2, "0"));
+    await expect(page.locator(".hero-slide.is-active img")).toHaveAttribute("src", /hero-pink-muhly-2026\.webp$/);
+    const requested = await page.evaluate(() => performance.getEntriesByType("resource").filter((entry) => /hero-.*\.webp/.test(entry.name)).map((entry) => entry.name));
+    expect(requested.filter((name) => /hero-(sign|worship|flowers|winter)-4k/.test(name))).toEqual([]);
+    for (let index = 0; index < slideCount; index += 1) {
       const activeSlide = page.locator(".hero-slide.is-active");
       await expect(activeSlide).toHaveCount(1);
       const image = activeSlide.locator("img");
@@ -95,7 +101,7 @@ test("mobile hero keeps the full desktop composition across all five slides", as
           objectFit: style.objectFit,
         };
       });
-      expect(imageState.currentSrc).toMatch(/hero-(?:drone|sign|worship|flowers|winter)-4k\.webp$/);
+      expect(imageState.currentSrc).toMatch(/hero-(?:(?:drone|sign|worship|flowers|winter)-4k|pink-muhly-2026-mobile)\.webp$/);
       expect(imageState.naturalRatio).toBeCloseTo(16 / 9, 2);
       expect(imageState.boxRatio).toBeCloseTo(16 / 9, 2);
       expect(imageState.objectFit).toBe("cover");
@@ -109,12 +115,23 @@ test("mobile hero keeps the full desktop composition across all five slides", as
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       await hero.screenshot({ path: `test-results/hero-mobile-${viewport.width}-${index + 1}.png` });
-      if (index < 4) {
+      if (index < slideCount - 1) {
         await page.getByRole("button", { name: "다음 사진" }).click();
         await expect(page.locator(".hero-counter strong")).toHaveText(String(index + 2).padStart(2, "0"));
         await page.waitForTimeout(900);
       }
     }
+    await page.getByRole("button", { name: "다음 사진" }).click();
+    await expect(page.locator(".hero-counter strong")).toHaveText("01");
+    await page.getByRole("button", { name: "이전 사진" }).click();
+    await expect(page.locator(".hero-counter strong")).toHaveText(String(slideCount).padStart(2, "0"));
+    await expect(page.locator(".hero-counter strong")).toHaveText("01", { timeout: 9000 });
+  }
+  for (const width of [820, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".hero-slide.is-active img")).toHaveAttribute("src", /hero-pink-muhly-2026\.webp$/);
+    await page.locator(".hero").screenshot({ path: `test-results/hero-${width}-first.png` });
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -122,6 +139,24 @@ test("mobile hero keeps the full desktop composition across all five slides", as
   await expect(page.locator(".hero-slide.is-active img")).toHaveCSS("animation-name", "none");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   expect(errors).toEqual([]);
+});
+
+test("visit contact keeps both phone links together and wraps within narrow layouts", async ({ page }) => {
+  await page.addInitScript(() => window.sessionStorage.setItem("mhji-signup-notice-session-dismissed", "1"));
+  for (const width of [320, 390, 820, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const contact = page.locator(".visit-phones");
+    await contact.scrollIntoViewIfNeeded();
+    await expect(contact.getByRole("link", { name: "031-333-5420" })).toHaveAttribute("href", "tel:0313335420");
+    await expect(contact.getByRole("link", { name: "010-7591-9111" })).toHaveAttribute("href", "tel:01075919111");
+    await expect(contact).toContainText("|");
+    await expect(contact).not.toContainText("대표 휴대폰");
+    const box = await contact.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator(".visit-copy").screenshot({ path: `test-results/visit-contact-${width}.png` });
+  }
 });
 
 test("public content, mobile menu, and pagination remain usable", async ({ page }) => {

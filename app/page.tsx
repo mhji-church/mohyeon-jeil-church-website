@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import AccessibleDialog from "./components/AccessibleDialog";
 import KakaoChurchMap from "./components/KakaoChurchMap";
 import { useSiteAuthentication } from "./components/SiteLayoutChrome";
@@ -9,6 +9,13 @@ const heroTitle = ["말씀으로 바로 서고", "사랑으로 함께하는 교�
 const heroEyebrow = "MOHYEON JEIL CHURCH";
 
 const heroSlides = [
+  {
+    image: "/assets/hero-pink-muhly-2026.webp",
+    mobileImage: "/assets/hero-pink-muhly-2026-mobile.webp",
+    mobilePosition: "center 50%",
+    alt: "가을 핑크뮬리 꽃밭과 십자가가 보이는 모현제일교회 전경",
+    position: "center 50%",
+  },
   {
     image: "/assets/hero-drone-4k.webp",
     mobileImage: "/assets/hero-drone-4k.webp",
@@ -854,17 +861,45 @@ function HomeFloatingActions() {
 
 export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [preparedSlides, setPreparedSlides] = useState(() => new Set([0]));
+  const slideImages = useRef(new Map<string, Promise<void>>());
+  const slideRequest = useRef(0);
   const [sermons, setSermons] = useState(initialSermons);
   const [playingSermon, setPlayingSermon] = useState<string | null>(null);
   const [modalSermon, setModalSermon] = useState<HomeSermon | null>(null);
   const [newsItems, setNewsItems] = useState(initialNewsItems);
 
+  const prepareSlide = useCallback((index: number) => {
+    const slide = heroSlides[index];
+    const source = window.matchMedia("(max-width: 720px)").matches ? slide.mobileImage : slide.image;
+    let pending = slideImages.current.get(source);
+    if (!pending) {
+      const image = new window.Image();
+      image.decoding = "async";
+      image.src = source;
+      pending = image.decode();
+      slideImages.current.set(source, pending);
+      pending.catch(() => slideImages.current.delete(source));
+    }
+    return pending;
+  }, []);
+
+  const showSlide = useCallback(async (index: number) => {
+    const request = ++slideRequest.current;
+    try { await prepareSlide(index); } catch { return; }
+    if (request !== slideRequest.current) return;
+    setPreparedSlides((current) => new Set([...current, index]));
+    setActiveSlide(index);
+  }, [prepareSlide]);
+
+  useEffect(() => () => { slideRequest.current += 1; }, []);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % heroSlides.length);
+      void showSlide((activeSlide + 1) % heroSlides.length);
     }, 6500);
     return () => window.clearInterval(timer);
-  }, [activeSlide]);
+  }, [activeSlide, showSlide]);
 
   useEffect(() => {
     fetch("/api/content?type=news&limit=3", { cache: "no-store" })
@@ -937,9 +972,7 @@ export default function Home() {
   }, [modalSermon]);
 
   const moveSlide = (direction: number) => {
-    setActiveSlide(
-      (current) => (current + direction + heroSlides.length) % heroSlides.length,
-    );
+    void showSlide((activeSlide + direction + heroSlides.length) % heroSlides.length);
   };
 
   return (
@@ -958,7 +991,7 @@ export default function Home() {
               key={slide.image}
               aria-hidden={index !== activeSlide}
             >
-              <picture>
+              {preparedSlides.has(index) && <picture>
                 <source media="(max-width: 720px)" srcSet={slide.mobileImage} />
                 <img
                   src={slide.image}
@@ -966,13 +999,14 @@ export default function Home() {
                   loading={index === 0 ? "eager" : "lazy"}
                   fetchPriority={index === 0 ? "high" : "auto"}
                   decoding="async"
+                  onLoad={() => { if (index === activeSlide) void prepareSlide((index + 1) % heroSlides.length).catch(() => {}); }}
                   sizes="100vw"
                   style={{
                     objectPosition: slide.position,
                     "--hero-mobile-position": slide.mobilePosition,
                   } as CSSProperties}
                 />
-              </picture>
+              </picture>}
               <div className="hero-overlay" aria-hidden="true" />
             </figure>
           ))}
@@ -1237,7 +1271,7 @@ export default function Home() {
             </div>
             <div>
               <dt>TELEPHONE</dt>
-              <dd>031-333-5420</dd>
+              <dd className="visit-phones"><a href="tel:0313335420">031-333-5420</a><span aria-hidden="true">|</span><a href="tel:01075919111">010-7591-9111</a></dd>
             </div>
             <div>
               <dt>PASTOR</dt>

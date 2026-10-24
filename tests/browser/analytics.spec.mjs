@@ -26,19 +26,31 @@ for (const width of [320, 390, 760, 820, 1440]) {
     await page.getByLabel("비밀번호").fill("browser-archive-password");
     await page.getByRole("button", { name: "관리자 로그인" }).click();
     await expect(page).toHaveURL(/\/admin$/);
-    if (width === 320 || width === 390 || width === 1440) {
+    if (width === 320 || width === 390 || width === 820 || width === 1440) {
       await expect(page.getByText("오늘의 접속")).toHaveCount(0);
       await expect(page.getByText("한국 시간 기준 · 마지막 갱신", { exact: false })).toHaveCount(0);
       await expect(page.getByText("오늘 방문자 수")).toBeVisible();
-      await expect(page.getByText("이번 달 방문자 수")).toBeVisible();
+      await expect(page.getByText("누적 방문 횟수", { exact: true })).toBeVisible();
       await expect(page.getByText("누적 방문자 수")).toBeVisible();
-      await expect(page.locator(".admin-home-visitor-grid strong")).toHaveText(["1명", "1명", "1명"]);
+      await expect(page.locator(".admin-home-visitor-grid strong")).toHaveText(["1명", "1명", "1회"]);
+      const todayLink = page.getByRole("link", { name: "오늘 방문자 수 1명, 오늘 접속통계 보기" });
+      await expect(todayLink).toHaveAttribute("href", "/admin/analytics?period=today");
+      await expect(todayLink).toHaveCSS("cursor", "pointer");
+      const hitBox = await todayLink.boundingBox();
+      expect(hitBox.width).toBeGreaterThanOrEqual(44);
+      expect(hitBox.height).toBeGreaterThanOrEqual(44);
+      await page.locator(".admin-home-visitor-help summary").click();
+      await expect(page.locator(".admin-home-visitor-help")).toContainText("수집 시작일:");
+      await page.locator(".admin-home-visitor-help summary").click();
       const panel = await page.locator(".admin-home-visitor-panel").boundingBox();
-      expect(panel?.height).toBeLessThan(width <= 390 ? 90 : 80);
+      expect(panel?.height).toBeLessThan(width === 320 ? 105 : width <= 820 ? 90 : 80);
       const cards = page.locator(".admin-home-visitor-grid > div");
       await expect(cards).toHaveCount(3);
       const boxes = await cards.evaluateAll((items) => items.map((item) => item.getBoundingClientRect().toJSON()));
       expect(boxes.every((box) => box.width > 55 && box.right <= width && box.y === boxes[0].y)).toBe(true);
+      const numberBoxes = await page.locator(".admin-home-visitor-grid strong").evaluateAll(items => items.map(item => item.getBoundingClientRect().toJSON()));
+      expect(numberBoxes.every((box, index) => box.right <= boxes[index].right && Math.abs(box.y - numberBoxes[0].y) <= 1)).toBe(true);
+      console.log(JSON.stringify({ viewport: width, statPanelHeight: panel.height, numberY: numberBoxes.map(box => box.y) }));
       const visitorTop = await page.locator(".admin-home-visitor-panel").evaluate((item) => item.getBoundingClientRect().top);
       const statusTop = await page.getByRole("heading", { name: "운영 현황" }).evaluate((item) => item.getBoundingClientRect().top);
       expect(visitorTop).toBeLessThan(statusTop);
@@ -46,7 +58,14 @@ for (const width of [320, 390, 760, 820, 1440]) {
     }
     let reportVariant = mockReport;
     await page.route("**/api/admin/analytics?*", (route) => route.fulfill(reportVariant ? { status: 200, contentType: "application/json", body: JSON.stringify(reportVariant) } : { status: 503, contentType: "application/json", body: JSON.stringify({ error: "접속 통계를 불러오지 못했습니다." }) }));
-    await page.goto("/admin/analytics", { waitUntil: "domcontentloaded" });
+    const todayNavigation = page.getByRole("link", { name: /오늘 방문자 수 .*오늘 접속통계 보기/ });
+    await page.keyboard.press("Tab");
+    await todayNavigation.focus();
+    await expect(todayNavigation).toBeFocused();
+    await expect(todayNavigation).toHaveCSS("outline-style", "solid");
+    await todayNavigation.press("Enter");
+    await expect(page).toHaveURL(/\/admin\/analytics\?period=today$/);
+    await expect(page.getByRole("button", { name: "오늘", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByRole("heading", { name: "접속 통계" })).toBeVisible();
     await expect(page.locator(".analytics-primary-kpis").getByText("방문자 수", { exact: true })).toBeVisible();
     await expect(page.getByText("인기 페이지")).toBeVisible();
@@ -129,7 +148,7 @@ test("website administrator sees analytics menu, home summary and direct route",
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("link", { name: "접속 통계" })).toBeVisible();
   await expect(page.getByText("오늘 방문자 수")).toBeVisible();
-  await expect(page.getByText("이번 달 방문자 수")).toBeVisible();
+  await expect(page.getByText("누적 방문 횟수", { exact: true })).toBeVisible();
   await expect(page.getByText("누적 방문자 수")).toBeVisible();
   expect((await page.request.get("/api/admin/analytics")).status()).toBe(200);
   expect((await page.request.get("/api/admin/analytics/export")).status()).toBe(200);

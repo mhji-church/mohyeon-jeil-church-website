@@ -74,10 +74,14 @@ export default async function AdminHomePage() {
           {visitorSummary === null ? <div className="admin-empty"><strong>접속 통계를 불러오지 못했습니다.</strong><p>잠시 후 다시 확인해 주세요.</p></div>
             : visitorSummary.precollection ? <div className="admin-empty"><strong>통계 수집 전입니다.</strong><p>수집 시작일 {visitorSummary.collectionDay}</p></div>
               : <div className="admin-home-visitor-grid">
-                {([ ["오늘 방문자 수", visitorSummary.visitors.today], ["이번 달 방문자 수", visitorSummary.visitors.month], ["누적 방문자 수", visitorSummary.visitors.cumulative] ] as const).map(([label, count]) =>
-                  <div key={label}><span>{label}</span><strong>{count.toLocaleString("ko-KR")}<em>명</em></strong></div>)}
+                <div><span>오늘 방문자 수</span><Link className="admin-home-visitor-number" href="/admin/analytics?period=today" aria-label={`오늘 방문자 수 ${visitorSummary.visitors.today.toLocaleString("ko-KR")}명, 오늘 접속통계 보기`}><strong>{visitorSummary.visitors.today.toLocaleString("ko-KR")}<em>명</em></strong></Link></div>
+                <div><span>누적 방문자 수{visitorSummary.cumulativeVisitorsEstimated && <small className="admin-home-visitor-estimate">추정</small>}</span><strong>{visitorSummary.visitors.cumulative.toLocaleString("ko-KR")}<em>명</em></strong></div>
+                <div><span>누적 방문 횟수</span><strong>{visitorSummary.visits.cumulative.toLocaleString("ko-KR")}<em>회</em></strong></div>
               </div>}
-          <Link className="admin-home-visitor-panel-action" href="/admin/analytics?period=today" aria-label="접속통계 보기"><span>접속통계 보기</span><span aria-hidden="true">→</span></Link>
+          <div className="admin-home-visitor-actions">
+            {visitorSummary && <details className="admin-home-visitor-help"><summary aria-label="방문 통계 집계 기준"><span aria-hidden="true">ⓘ</span></summary><div>수집 시작일: {visitorSummary.collectionDay} (한국 시간). 오늘 방문자는 오늘 시작한 세션의 익명 방문자를 중복 제거합니다. 누적 방문자는 수집 시작일부터 중복 제거한 익명 방문자이며, 누적 방문 횟수는 전체 세션 수입니다. 상세 기록 보관 기간은 {visitorSummary.retentionDays}일입니다. 보관 기간 이후 누적 방문자는 최초 방문 집계를 이용한 추정값이며, 삭제된 익명 식별자가 다시 방문하면 중복될 수 있습니다. 쿠키 삭제·다른 브라우저·기기 사용도 별도 방문자로 집계됩니다.</div></details>}
+            <Link className="admin-home-visitor-panel-action" href="/admin/analytics?period=today" aria-label="접속통계 보기"><span>접속통계 보기</span><span aria-hidden="true">→</span></Link>
+          </div>
         </section>}
         <section className="admin-home-section" aria-labelledby="admin-status-title">
           <header className="admin-section-heading"><div><span>STATUS</span><h2 id="admin-status-title">운영 현황</h2></div></header>

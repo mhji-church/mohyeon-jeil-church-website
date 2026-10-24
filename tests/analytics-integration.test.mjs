@@ -106,7 +106,7 @@ test("both signed administrator credential slots may open the page, report and C
     assert.equal(home.status, 200);
     const homeMarkup = await home.text();
     assert.match(homeMarkup, /오늘 방문자 수/);
-    assert.match(homeMarkup, /이번 달 방문자 수/);
+    assert.match(homeMarkup, /누적 방문 횟수/);
     assert.match(homeMarkup, /누적 방문자 수/);
     assert.doesNotMatch(homeMarkup, /오늘의 접속|한국 시간 기준 · 마지막 갱신/);
   }
@@ -142,7 +142,7 @@ test("automatic first-party collection, validation, deduplication and no raw per
   const home = await request("/admin", { headers: { cookie: websiteCookie } });
   const homeMarkup = await home.text();
   assert.match(homeMarkup, /오늘 방문자 수/);
-  assert.match(homeMarkup, /이번 달 방문자 수/);
+  assert.match(homeMarkup, /누적 방문 횟수/);
   assert.match(homeMarkup, /누적 방문자 수/);
   assert.doesNotMatch(homeMarkup, /오늘의 접속|한국 시간 기준 · 마지막 갱신/);
   assert.equal(data.sources[0].label, "search");
@@ -216,4 +216,57 @@ test("regional breakdown uses first session location, domestic denominator, filt
   assert.equal((await overseas.json()).domestic.status, "empty");
   const past = await request(`/api/admin/analytics?period=custom&start=${before}&end=${before}`, { headers: { cookie: archiveCookie } });
   assert.equal((await past.json()).domestic.status, "precollection");
+});
+
+test("home summary separates KST visitors and lifetime sessions, matches the all report, and reports retention and errors", async () => {
+  const today = koreaClock(new Date()).day;
+  const yesterday = shiftDay(today, -1);
+  async function seedSummary(collectionDay, expired = false) {
+    // A successful temporary collection clears the server's existing caches.
+    const invalidator = await request("/api/analytics/collect", { method: "POST", headers: originHeaders(), body: JSON.stringify({ events: [{ id: randomUUID(), kind: "pageview", path: "/" }] }) });
+    assert.equal(invalidator.status, 200);
+    for (const table of ["analytics_events", "analytics_sessions", "analytics_visitors", "analytics_daily_totals", "analytics_ingest_limits"]) await database.execute(`DELETE FROM ${table}`);
+    await database.execute({ sql: "UPDATE analytics_meta SET value = ? WHERE key = 'collection_started_at'", args: [`${collectionDay}T00:00:00Z`] });
+    for (const [id, visitor, timestamp, expectedDay] of [
+      ["summary-before-midnight", "summary-a", `${yesterday}T14:59:59Z`, yesterday],
+      ["summary-after-midnight", "summary-a", `${yesterday}T15:00:00Z`, today],
+      ["summary-other-visitor", "summary-b", `${today}T03:00:00Z`, today],
+    ]) {
+      assert.equal(koreaClock(new Date(timestamp)).day, expectedDay);
+      await database.execute({ sql: "INSERT INTO analytics_sessions (id, visitor_key, started_at, last_seen_at, day_kst, entry_path, exit_path) VALUES (?, ?, ?, ?, ?, '/', '/')", args: [id, visitor, timestamp, timestamp, expectedDay] });
+    }
+    await database.execute({ sql: "INSERT INTO analytics_daily_totals (day_kst, visitors_first_seen, visits) VALUES (?, 1, 1), (?, 1, 2)", args: [yesterday, today] });
+    if (expired) await database.execute({ sql: "INSERT INTO analytics_daily_totals (day_kst, visitors_first_seen, visits) VALUES (?, 2, 4)", args: [collectionDay] });
+  }
+  await seedSummary(shiftDay(today, -2));
+  let markup = await (await request("/admin", { headers: { cookie: websiteCookie } })).text();
+  assert.match(markup, /aria-label="오늘 방문자 수 2명, 오늘 접속통계 보기"/);
+  assert.match(markup, /href="\/admin\/analytics\?period=today"/);
+  assert.match(markup, /누적 방문자 수<\/span><strong>2<em>명/);
+  assert.match(markup, /누적 방문 횟수<\/span><strong>3<em>회/);
+  assert.doesNotMatch(markup, /이번 달 방문자 수/);
+  let all = await (await request("/api/admin/analytics?period=all", { headers: { cookie: websiteCookie } })).json();
+  const daily = await (await request("/api/admin/analytics?period=today", { headers: { cookie: websiteCookie } })).json();
+  assert.deepEqual([daily.metrics.visitors, all.metrics.visitors, all.metrics.visits], [2, 2, 3]);
+
+  const { ANALYTICS_RETENTION_DAYS } = await import("../lib/analytics-model.ts");
+  await seedSummary(shiftDay(today, -ANALYTICS_RETENTION_DAYS - 2), true);
+  // A cutoff-day session was removed by retention, but its durable daily
+  // session count must remain in both the home and the all-period report.
+  await database.execute({ sql: "INSERT INTO analytics_daily_totals (day_kst, visitors_first_seen, visits) VALUES (?, 0, 1)", args: [shiftDay(today, -ANALYTICS_RETENTION_DAYS)] });
+  markup = await (await request("/admin", { headers: { cookie: archiveCookie } })).text();
+  assert.match(markup, /admin-home-visitor-estimate[^>]*>추정/);
+  assert.match(markup, /누적 방문 횟수<\/span><strong>8<em>회/);
+  all = await (await request("/api/admin/analytics?period=all", { headers: { cookie: archiveCookie } })).json();
+  assert.deepEqual([all.metrics.visitors, all.metrics.visits, all.metrics.visitorsEstimated], [4, 8, true]);
+  assert.match(markup, /<strong>4<em>명/);
+
+  await seedSummary(shiftDay(today, 1));
+  markup = await (await request("/admin", { headers: { cookie: archiveCookie } })).text();
+  assert.match(markup, /통계 수집 전입니다/);
+  await seedSummary(today);
+  await database.execute("DELETE FROM analytics_meta WHERE key = 'collection_started_at'");
+  markup = await (await request("/admin", { headers: { cookie: archiveCookie } })).text();
+  assert.match(markup, /접속 통계를 불러오지 못했습니다/);
+  assert.doesNotMatch(markup, /admin-home-visitor-grid/);
 });
