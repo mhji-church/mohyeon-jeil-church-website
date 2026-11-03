@@ -21,5 +21,5 @@ export async function listArchiveAudit(options: { page: number; pageSize: number
   const db = getNetlifyDb();
   const count = await db.prepare(`SELECT COUNT(*) AS count FROM archive_audit_logs ${where}`).bind(...args).first<{ count: number }>();
   const rows = await db.prepare(`SELECT id, actor, action, target_type, target_id, summary, details_json, created_at FROM archive_audit_logs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...args, pageSize, (page - 1) * pageSize).all<Record<string, unknown>>();
-  return { total: Number(count?.count ?? 0), logs: rows.results.map((row) => ({ id:String(row.id), actor:String(row.actor), action:String(row.action), targetType:String(row.target_type), targetId:String(row.target_id), summary:String(row.summary), details:JSON.parse(String(row.details_json || "{}")), createdAt:String(row.created_at) })) };
+  return { total: Number(count?.count ?? 0), logs: rows.results.map((row) => ({ id:String(row.id), actor:String(row.actor).startsWith("withdrawn:") ? "탈퇴 회원" : String(row.actor), action:String(row.action), targetType:String(row.target_type), targetId:String(row.target_id), summary:String(row.summary), details:JSON.parse(String(row.details_json || "{}")), createdAt:String(row.created_at) })) };
 }

@@ -28,6 +28,7 @@ const actionGroups = [
   ["member.password_change", "비밀번호 변경"],
   ["member.merge", "회원 계정 병합"],
   ["member.delete", "회원 삭제"],
+  ["member.withdrawal", "회원 본인 탈퇴"],
   ["archive.video.create", "예배 영상 등록"],
   ["archive.video.update", "예배 영상 수정"],
   ["archive.video.delete", "예배 영상 삭제"],
@@ -50,6 +51,7 @@ const actionLabels: Record<string, string> = {
   "member.password_reset": "임시 비밀번호 발급",
   "member.password_change": "비밀번호 변경",
   "member.delete": "회원 삭제",
+  "member.withdrawal": "회원 본인 탈퇴",
   "member.merge": "회원 계정 병합",
   "archive.access.update": "예배 아카이브 권한 변경",
   "archive.video.create": "예배 영상 등록",
@@ -73,10 +75,12 @@ function displayAction(action: string) {
 }
 
 function displayAccount(log: Log) {
+  if (log.actorId.startsWith("withdrawn:")) return "탈퇴 회원";
   return log.action === "member.login" ? `회원 · ${log.actorName ?? log.actorId}` : `관리자 · ${log.actorId}`;
 }
 
 function displayTargetSummary(log: Log) {
+  if (log.targetType === "withdrawn_member") return "탈퇴 회원";
   if (log.action === "member.login") return "회원 계정 접속";
   if (log.action === "admin.login") return "관리자 계정 접속";
   if (log.action === "archive.access.update") {

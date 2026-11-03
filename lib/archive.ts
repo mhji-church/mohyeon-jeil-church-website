@@ -194,23 +194,25 @@ export function canPlayArchiveVideo(level: ArchiveAccessLevel, type: ArchiveVide
 export async function setArchiveAccess(memberId: string, level: ArchiveAccessLevel, adminUsername: string) {
   await ensureNetlifySchema();
   const representativeId = await resolveRepresentativeMemberId(memberId);
-  await getNetlifyDb()
+  const result = await getNetlifyDb()
     .prepare(`INSERT INTO member_app_access (member_id, app_code, access_level, granted_by, granted_at, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM members WHERE id = ?
       ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
-    .bind(representativeId, ARCHIVE_APP_CODE, level, adminUsername)
+    .bind(representativeId, ARCHIVE_APP_CODE, level, adminUsername, representativeId)
     .run();
+  if (result.meta.changes !== 1) throw new Error("회원 정보를 확인해 주세요.");
 }
 
 export async function setArchiveSongStatsAccess(memberId: string, allowed: boolean, adminUsername: string) {
   await ensureNetlifySchema();
   const representativeId = await resolveRepresentativeMemberId(memberId);
-  await getNetlifyDb()
+  const result = await getNetlifyDb()
     .prepare(`INSERT INTO member_app_access (member_id, app_code, access_level, granted_by, granted_at, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM members WHERE id = ?
       ON CONFLICT(member_id, app_code) DO UPDATE SET access_level = excluded.access_level, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`)
-    .bind(representativeId, ARCHIVE_SONG_STATS_APP_CODE, allowed ? "full" : "none", adminUsername)
+    .bind(representativeId, ARCHIVE_SONG_STATS_APP_CODE, allowed ? "full" : "none", adminUsername, representativeId)
     .run();
+  if (result.meta.changes !== 1) throw new Error("회원 정보를 확인해 주세요.");
 }
 
 export async function upsertArchiveVideo(input: Omit<ArchiveVideoAdmin, "createdAt" | "updatedAt">) {

@@ -20,6 +20,10 @@ async function withTemporaryDatabase(name, setup) {
       if (!names.has(required)) throw new Error(`${name}: missing table ${required}`);
     }
     const sessionColumns = await client.execute("PRAGMA table_info(analytics_sessions)");
+    const recoveryTable = await client.execute("SELECT name FROM sqlite_schema WHERE name = 'member_password_reset_requests'");
+    if (recoveryTable.rows.length !== 1) throw new Error(`${name}: missing recovery request table`);
+    const grantTable = await client.execute("SELECT name FROM sqlite_schema WHERE name = 'member_recovery_grants'");
+    if (grantTable.rows.length !== 1) throw new Error(`${name}: missing recovery grant table`);
     const columns = new Set(sessionColumns.rows.map((row) => String(row.name)));
     for (const required of ["region_code", "city_code", "geo_status"]) {
       if (!columns.has(required)) throw new Error(`${name}: missing session column ${required}`);

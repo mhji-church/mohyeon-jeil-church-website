@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     return Response.json({
       ...collection,
       duplicateCount: collection.duplicateSummary.groupCount,
-    });
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return apiError("admin.members.list", error, "회원 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", 503);
   }
@@ -60,8 +60,11 @@ export async function PATCH(request: Request) {
   }
   try {
     if (payload?.action === "reset-password") {
+      if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) {
+        return Response.json({ error: "요청 경로를 확인해 주세요." }, { status: 403 });
+      }
       const temporaryPassword = await resetMemberPassword(id, user.email);
-      return Response.json({ ok: true, temporaryPassword });
+      return Response.json({ ok: true, temporaryPassword }, { headers: { "Cache-Control": "private, no-store" } });
     }
     const allowedStatuses = new Set<MemberStatus>(["pending", "approved", "suspended"]);
     const requestedStatus =

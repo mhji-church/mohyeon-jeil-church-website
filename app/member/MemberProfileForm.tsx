@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import type { Member } from "../../lib/members";
 import { formatMobilePhone } from "../../lib/phone";
+import MemberWithdrawal from "./MemberWithdrawal";
 
 type ProfileMember = Pick<
   Member,
@@ -17,6 +19,7 @@ export default function MemberProfileForm({ member }: { member: ProfileMember })
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [phone, setPhone] = useState(member.phone);
+  const [withdrawn, setWithdrawn] = useState(false);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,6 +93,8 @@ export default function MemberProfileForm({ member }: { member: ProfileMember })
       setSavingPassword(false);
     }
   }
+
+  if (withdrawn) return <section className="member-withdrawal-complete" role="status" tabIndex={-1} ref={element => element?.focus()}><h2>회원 탈퇴가 완료되었습니다.</h2><p>모든 로그인 계정에서 로그아웃되었습니다.</p><Link href="/">홈페이지로 이동</Link></section>;
 
   return (
     <div className="member-profile-grid">
@@ -215,6 +220,7 @@ export default function MemberProfileForm({ member }: { member: ProfileMember })
           </div>
         </form>
       </section>
+      <MemberWithdrawal onComplete={() => setWithdrawn(true)} />
     </div>
   );
 }

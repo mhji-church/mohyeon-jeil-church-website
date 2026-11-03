@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import {
   authenticateMember,
   clearMemberLoginFailures,
-  createMemberLoginRateKey,
+  createMemberLoginRateKeys,
+  resolveMemberLoginCandidates,
   getMemberLoginRetryAfter,
   recordMemberLogin,
   recordMemberLoginFailure,
@@ -13,6 +14,14 @@ import {
 } from "../../../member-auth";
 import { recordLoginAudit } from "../../../../lib/login-audit";
 import { logServerError } from "../../../../lib/api-response";
+import { loginWaitMessage } from "../../../../lib/member-login-feedback";
+
+function loginLimitedResponse(retryAfter: number) {
+  return Response.json(
+    { error: loginWaitMessage(retryAfter) },
+    { status: 429, headers: { "retry-after": String(retryAfter), "Cache-Control": "private, no-store" } },
+  );
+}
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
@@ -28,36 +37,24 @@ export async function POST(request: Request) {
       request.headers.get("cf-connecting-ip") ??
       forwardedFor.trim() ??
       "unknown";
-    const rateKey = await createMemberLoginRateKey(username, ipAddress);
-    const retryAfter = await getMemberLoginRetryAfter(rateKey);
+    const candidates = await resolveMemberLoginCandidates(username);
+    const rateKeys = await createMemberLoginRateKeys(username, ipAddress, candidates);
+    const retryAfter = Math.max(...await Promise.all(rateKeys.map(key => getMemberLoginRetryAfter(key))));
     if (retryAfter > 0) {
+      return loginLimitedResponse(retryAfter);
+    }
+    const result = await authenticateMember(username, password, candidates);
+    if (!result || result.member.status === "suspended") {
+      const blockedFor = Math.max(...await Promise.all(rateKeys.map(key => recordMemberLoginFailure(key))));
+      if (blockedFor > 0) return loginLimitedResponse(blockedFor);
       return Response.json(
-        { error: "로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요." },
-        { status: 429, headers: { "retry-after": String(retryAfter) } },
+        { error: "로그인 정보를 확인하거나 관리자에게 문의해 주세요." },
+        { status: 401 },
       );
     }
-    const result = await authenticateMember(username, password);
-    if (!result) {
-      const blockedFor = await recordMemberLoginFailure(rateKey);
-      return Response.json(
-        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
-        {
-          status: blockedFor > 0 ? 429 : 401,
-          headers: blockedFor > 0 ? { "retry-after": String(blockedFor) } : undefined,
-        },
-      );
-    }
-    if (result.member.status === "suspended") {
-      const blockedFor = await recordMemberLoginFailure(rateKey);
-      return Response.json(
-        { error: "로그인 정보를 확인하거나 관리자 승인 여부를 확인해 주세요." },
-        {
-          status: blockedFor > 0 ? 429 : 401,
-          headers: blockedFor > 0 ? { "retry-after": String(blockedFor) } : undefined,
-        },
-      );
-    }
-    await clearMemberLoginFailures(rateKey);
+    // Clear only the authenticated identity, not unrelated homonyms' records.
+    const successfulKey = await createMemberLoginRateKeys(username, ipAddress, [{ username: result.member.username, representativeId: result.member.id }]);
+    await clearMemberLoginFailures(successfulKey[0]);
     await createMemberSessionCookie(result.member.id);
     await recordMemberLogin(result.member.id);
     try {

@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
-import { recordAdminAudit } from "./admin-audit";
+import { adminAuditStatement, recordAdminAudit } from "./admin-audit";
+import { getNetlifyDb } from "./netlify-db";
 
 function clientIp(request: Request) {
   // Netlify sets this header at its edge. Only trust forwarded-for in local previews.
@@ -27,7 +28,7 @@ function deviceLabel(userAgent: string | null) {
 }
 
 export async function recordLoginAudit(request: Request, kind: "admin" | "member", actorId: string) {
-  await recordAdminAudit({
+  const input = {
     actorId,
     action: `${kind}.login`,
     targetType: kind,
@@ -36,5 +37,15 @@ export async function recordLoginAudit(request: Request, kind: "admin" | "member
       ipAddress: clientIp(request),
       device: deviceLabel(request.headers.get("user-agent")),
     },
-  });
+  };
+  if (kind === "member") {
+    // An in-flight login must not reinsert identifiable history after withdrawal.
+    const statement = adminAuditStatement(input);
+    await getNetlifyDb().prepare(`INSERT INTO admin_audit_logs
+      (id, actor_id, action, target_type, target_id, metadata_json)
+      SELECT ?, ?, ?, ?, ?, ? FROM members WHERE id = ?`)
+      .bind(...statement.args, actorId).run();
+    return;
+  }
+  await recordAdminAudit(input);
 }

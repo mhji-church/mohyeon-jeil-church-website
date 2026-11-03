@@ -65,7 +65,7 @@ export type AdminMemberCollection = {
 const PASSWORD_HASH_ITERATIONS = 100_000;
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_BLOCK_MS = 15 * 60 * 1000;
+const LOGIN_BLOCK_MS = 5 * 60 * 1000;
 
 function getD1() {
   return getNetlifyDb();
@@ -199,7 +199,53 @@ export async function createMember(input: MemberSignupInput) {
   throw new Error("로그인 이름을 만들지 못했습니다. 교회 관리자에게 문의해 주세요.");
 }
 
-export async function authenticateMember(username: string, password: string) {
+// Username always wins a collision with another person's name. Name matching
+// is exact after NFKC/whitespace normalization; no partial/fuzzy matching.
+export async function resolveMemberLoginCandidates(input: string) {
+  await ensureMemberStore();
+  const normalized = normalizeUsername(input);
+  if (!normalized || normalized.length > 100) return [];
+  const [alias, direct] = await Promise.all([
+    getMemberLoginAlias(normalized),
+    getD1().prepare("SELECT id, username, name FROM members WHERE username = ?")
+      .bind(normalized).first<{ id: string; username: string; name: string }>(),
+  ]);
+  if (direct && normalizeMemberName(String(direct.name)) !== normalizeMemberName(input)) {
+    return [{ username: normalized, representativeId: alias ? String(alias.representative_member_id) : String(direct.id) }];
+  }
+  // Only minimal metadata stays server-side. Existing stored names need JS
+  // normalization because SQLite has no Unicode NFKC comparison function.
+  const rows = await getD1().prepare(
+    `SELECT m.id, m.username, m.name,
+            COALESCE(a.representative_member_id, m.id) AS representative_id,
+            COALESCE(a.enabled, 1) AS enabled
+     FROM members m LEFT JOIN member_login_aliases a ON a.source_member_id = m.id`,
+  ).all<{ id: string; username: string; name: string; representative_id: string; enabled: number }>();
+  const directSource = rows.results.find(row => String(row.username) === normalized);
+  // Generated usernames can be identical to a person's display name. They
+  // must still go through homonym disambiguation, not select the first signup.
+  if ((alias || direct) && (!directSource || normalizeMemberName(String(directSource.name)) !== normalizeMemberName(input))) {
+    return [{ username: normalized, representativeId: alias ? String(alias.representative_member_id) : String(direct!.id) }];
+  }
+  const matches = rows.results.filter(row => normalizeMemberName(String(row.name)) === normalizeMemberName(input));
+  if (matches.length > 20) return []; // Fail closed rather than unbounded password work.
+  const candidates = new Map<string, { username: string; representativeId: string }>();
+  for (const row of matches) {
+    if (Number(row.enabled) !== 1) continue;
+    const representativeId = String(row.representative_id);
+    candidates.set(String(row.username), { username: String(row.username), representativeId });
+    // The canonical profile name accepts the group's enabled credentials. An
+    // old source name only accepts that source's own credential, never others'.
+    if (String(row.id) === representativeId) {
+      for (const login of await listMemberLoginAliases(representativeId)) {
+        if (login.enabled) candidates.set(login.username, { username: login.username, representativeId });
+      }
+    }
+  }
+  return candidates.size <= 20 ? [...candidates.values()] : [];
+}
+
+async function authenticateMemberUsername(username: string, password: string) {
   await ensureMemberStore();
   const normalizedUsername = normalizeUsername(username);
   const alias = await getMemberLoginAlias(normalizedUsername);
@@ -231,19 +277,32 @@ export async function authenticateMember(username: string, password: string) {
   };
 }
 
+export async function authenticateMember(input: string, password: string, candidates?: Awaited<ReturnType<typeof resolveMemberLoginCandidates>>) {
+  const resolved = candidates ?? await resolveMemberLoginCandidates(input);
+  if (!password || password.length > 72) return null;
+  const verified = new Map<string, NonNullable<Awaited<ReturnType<typeof authenticateMemberUsername>>>>();
+  for (const candidate of resolved) {
+    const result = await authenticateMemberUsername(candidate.username, password);
+    if (result) verified.set(result.member.id, result);
+  }
+  // Includes suspended matches in ambiguity detection: never choose the first
+  // homonym or silently fall through to a different member.
+  return verified.size === 1 ? [...verified.values()][0] : null;
+}
+
+export async function createMemberLoginRateKeys(input: string, ipAddress: string, candidates?: Awaited<ReturnType<typeof resolveMemberLoginCandidates>>) {
+  const resolved = candidates ?? await resolveMemberLoginCandidates(input);
+  const identities = resolved.length
+    ? [...new Set(resolved.map(item => `member:${item.representativeId}`))]
+    : [`login:${normalizeUsername(input)}`];
+  return Promise.all(identities.map(identity => memberAttemptRateKey(identity, ipAddress)));
+}
+
 export async function createMemberLoginRateKey(username: string, ipAddress: string) {
-  await ensureMemberStore();
-  const normalizedUsername = normalizeUsername(username);
-  const alias = await getMemberLoginAlias(normalizedUsername);
-  const memberRow = alias ? null : await getD1()
-    .prepare("SELECT id FROM members WHERE username = ?")
-    .bind(normalizedUsername)
-    .first<{ id: string }>();
-  const identity = alias?.representative_member_id
-    ? `member:${String(alias.representative_member_id)}`
-    : memberRow?.id
-      ? `member:${await resolveRepresentativeMemberId(String(memberRow.id))}`
-      : `login:${normalizedUsername}`;
+  return (await createMemberLoginRateKeys(username, ipAddress))[0];
+}
+
+export async function memberAttemptRateKey(identity: string, ipAddress: string) {
   const material = `${identity}\n${ipAddress.trim() || "unknown"}`;
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -252,7 +311,7 @@ export async function createMemberLoginRateKey(username: string, ipAddress: stri
   return toHex(new Uint8Array(digest));
 }
 
-export async function getMemberLoginRetryAfter(rateKey: string, now = Date.now()) {
+export async function getMemberLoginRetryAfter(rateKey: string, now?: number) {
   await ensureMemberStore();
   const row = await getD1()
     .prepare(
@@ -261,10 +320,12 @@ export async function getMemberLoginRetryAfter(rateKey: string, now = Date.now()
     .bind(rateKey)
     .first<{ blocked_until: number | string | null }>();
   const blockedUntil = Number(row?.blocked_until ?? 0);
-  return blockedUntil > now ? Math.ceil((blockedUntil - now) / 1000) : 0;
+  // Persisted deadlines, including pre-existing fifteen-minute blocks, remain
+  // authoritative. Merely reading or retrying never rewrites them.
+  return Math.max(0, Math.ceil((blockedUntil - (now ?? Date.now())) / 1000));
 }
 
-export async function recordMemberLoginFailure(rateKey: string, now = Date.now()) {
+export async function recordMemberLoginFailure(rateKey: string, now?: number) {
   await ensureMemberStore();
   const row = await getD1()
     .prepare(
@@ -277,16 +338,13 @@ export async function recordMemberLoginFailure(rateKey: string, now = Date.now()
       blocked_until: number | string | null;
       updated_at: number | string;
     }>();
+  const failedAt = now ?? Date.now();
   const previousUpdatedAt = Number(row?.updated_at ?? 0);
-  const withinWindow = now - previousUpdatedAt <= LOGIN_FAILURE_WINDOW_MS;
-  const failedCount = (withinWindow ? Number(row?.failed_count ?? 0) : 0) + 1;
   const previousBlockedUntil = Number(row?.blocked_until ?? 0);
-  const blockedUntil =
-    previousBlockedUntil > now
-      ? previousBlockedUntil
-      : failedCount >= LOGIN_FAILURE_LIMIT
-        ? now + LOGIN_BLOCK_MS
-        : 0;
+  if (previousBlockedUntil > failedAt) return Math.ceil((previousBlockedUntil - failedAt) / 1000);
+  const withinWindow = failedAt - previousUpdatedAt <= LOGIN_FAILURE_WINDOW_MS;
+  const failedCount = (withinWindow ? Number(row?.failed_count ?? 0) : 0) + 1;
+  const blockedUntil = failedCount >= LOGIN_FAILURE_LIMIT ? failedAt + LOGIN_BLOCK_MS : 0;
 
   await getD1()
     .prepare(
@@ -298,9 +356,9 @@ export async function recordMemberLoginFailure(rateKey: string, now = Date.now()
        blocked_until = excluded.blocked_until,
        updated_at = excluded.updated_at`,
     )
-    .bind(rateKey, failedCount, blockedUntil, now)
+    .bind(rateKey, failedCount, blockedUntil, failedAt)
     .run();
-  return blockedUntil > now ? Math.ceil((blockedUntil - now) / 1000) : 0;
+  return Math.max(0, Math.ceil((blockedUntil - (now ?? Date.now())) / 1000));
 }
 
 export async function clearMemberLoginFailures(rateKey: string) {
@@ -512,6 +570,9 @@ export async function resetMemberPassword(id: string, adminUsername?: string) {
          session_version = member_auth_state.session_version + 1,
          updated_at = CURRENT_TIMESTAMP`,
     ).bind(representativeId),
+    db.prepare(`UPDATE member_password_reset_requests SET resolved_at = CURRENT_TIMESTAMP
+      WHERE member_id IN (${memberIds.map(() => "?").join(",")}) AND resolved_at IS NULL`).bind(...memberIds),
+    db.prepare(`DELETE FROM member_recovery_grants WHERE member_id IN (${memberIds.map(() => "?").join(",")})`).bind(...memberIds),
   ];
   if (adminUsername) {
     statements.push(adminAuditStatement({
@@ -553,6 +614,9 @@ export async function changeMemberPassword(id: string, password: string) {
          session_version = member_auth_state.session_version + 1,
          updated_at = CURRENT_TIMESTAMP`,
     ).bind(representativeId),
+    db.prepare(`UPDATE member_password_reset_requests SET resolved_at = CURRENT_TIMESTAMP
+      WHERE member_id IN (${memberIds.map(() => "?").join(",")}) AND resolved_at IS NULL`).bind(...memberIds),
+    db.prepare(`DELETE FROM member_recovery_grants WHERE member_id IN (${memberIds.map(() => "?").join(",")})`).bind(...memberIds),
     adminAuditStatement({
       actorId: representativeId,
       action: "member.password_change",
@@ -645,7 +709,7 @@ export async function getMemberDuplicateCheck(
   }, members);
 }
 
-async function hashPassword(password: string, suppliedSalt?: Uint8Array) {
+export async function hashPassword(password: string, suppliedSalt?: Uint8Array) {
   const salt = suppliedSalt ?? crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -670,7 +734,7 @@ async function hashPassword(password: string, suppliedSalt?: Uint8Array) {
   };
 }
 
-async function verifyPassword(password: string, expectedHash: string, salt: string) {
+export async function verifyPassword(password: string, expectedHash: string, salt: string) {
   const calculated = await hashPassword(password, fromBase64Url(salt));
   return constantTimeEqual(calculated.hash, expectedHash);
 }

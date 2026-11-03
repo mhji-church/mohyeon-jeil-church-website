@@ -53,6 +53,15 @@ export async function getMemberSession() {
 export async function getMemberSessionFromToken(
   token: string | null | undefined,
 ) {
+  return (await verifiedMemberSession(token))?.member ?? null;
+}
+
+export async function getMemberSessionWithVersion() {
+  const cookieStore = await cookies();
+  return verifiedMemberSession(cookieStore.get(COOKIE_NAME)?.value);
+}
+
+async function verifiedMemberSession(token: string | null | undefined) {
   const secret = sessionSecret();
   if (!secret) return null;
   if (!token) return null;
@@ -76,7 +85,7 @@ export async function getMemberSessionFromToken(
   if (!isLegacy && Number(versionValue) !== authState.version) return null;
   const member = await getMember(authState.representativeId);
   if (!member || member.status === "suspended") return null;
-  return member;
+  return { member, version: authState.version };
 }
 
 export async function getApprovedMemberSession() {

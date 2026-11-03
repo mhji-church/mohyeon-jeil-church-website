@@ -107,6 +107,24 @@ Object.assign(process.env, {
 const browserPort = Number(process.env.MHJI_BROWSER_PORT ?? 4178);
 const server = await createServer({ server: { host: "127.0.0.1", port: browserPort, strictPort: true } });
 await server.listen();
+// Vite's socket can listen before Nitro/RSC environments are usable. Warm only
+// read routes; never retry a signup, login, password change or other mutation.
+const readinessDeadline = Date.now() + 90_000;
+let fixtureReady = false;
+while (Date.now() < readinessDeadline) {
+  try {
+    const loginPage = await fetch(`http://127.0.0.1:${browserPort}/member/login`, { signal: AbortSignal.timeout(15_000) });
+    const html = await loginPage.text();
+    const access = await fetch(`http://127.0.0.1:${browserPort}/api/archive/access`, { signal: AbortSignal.timeout(15_000) });
+    await access.text();
+    if (loginPage.status === 200 && html.includes('name="username"') && access.status === 200) { fixtureReady = true; break; }
+  } catch { /* Only readiness GETs are retried. */ }
+  await new Promise(resolve => setTimeout(resolve, 250));
+}
+if (!fixtureReady) {
+  await server.close();
+  throw new Error("Local browser fixture did not become ready within 90 seconds.");
+}
 const serveOnly = process.argv.includes("--serve-only");
 if (serveOnly) {
   console.log(`Browser fixture server: http://127.0.0.1:${browserPort}`);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createClient } from "@libsql/client";
 import ExcelJS from "exceljs";
 import { spawn } from "node:child_process";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -361,9 +361,12 @@ test("accessible member signup preserves legacy accounts and safely creates name
   assert.equal(duplicateUpdate.status, 200);
 
   const pendingLogin = await loginMember("홍길동", "482915", "198.51.100.11");
-  assert.equal(pendingLogin.status, 200);
-  assert.match(pendingLogin.headers.get("set-cookie") ?? "", /mhji_member_session=/);
-  const pendingLoginPayload = await pendingLogin.json();
+  assert.equal(pendingLogin.status, 401, "same-name accounts with the same password must not select the first signup");
+  assert.equal(pendingLogin.headers.get("set-cookie"), null);
+  const specificPendingLogin = await loginMember("홍길동5678", "482915", "198.51.100.11");
+  assert.equal(specificPendingLogin.status, 200);
+  assert.match(specificPendingLogin.headers.get("set-cookie") ?? "", /mhji_member_session=/);
+  const pendingLoginPayload = await specificPendingLogin.json();
   assert.equal(pendingLoginPayload.approvalPending, true);
   const unknownLogin = await loginMember("존재하지않는회원", "482915", "198.51.100.12");
   assert.equal(unknownLogin.status, 401);
@@ -402,8 +405,13 @@ test("accessible member signup preserves legacy accounts and safely creates name
     }),
   });
   assert.equal(confirmedApprove.status, 200);
-  const approvedLogin = await loginMember("홍길동", "482915", "198.51.100.11");
+  assert.equal((await loginMember("홍길동", "482915", "198.51.100.11")).status, 401);
+  const distinguishApproved = await request("/api/admin/members", { method: "PATCH", headers: { "content-type": "application/json", cookie: websiteAdminCookie }, body: JSON.stringify({ id: created.id, action: "reset-password" }) });
+  assert.equal(distinguishApproved.status, 200);
+  const approvedTemporary = (await distinguishApproved.json()).temporaryPassword;
+  const approvedLogin = await loginMember("홍길동", approvedTemporary, "198.51.100.11");
   assert.equal(approvedLogin.status, 200);
+  assert.equal((await approvedLogin.clone().json()).approvalPending, false);
   const approvedLoginText = await approvedLogin.text();
   assert.doesNotMatch(approvedLoginText, /482915/);
   assert.equal((await request("/api/admin/members")).status, 403);
@@ -518,6 +526,19 @@ test("member merges preserve aliases, unify sessions, rotate passwords, and roll
     assert.equal((await loginMember("merge-g3-a", "merge-pass-c3", "198.51.100.80")).status, 401);
     assert.equal((await loginMember("missing-merge-user", "merge-pass-a3", "198.51.100.81")).status, 401);
 
+    // Canonical name accepts enabled group credentials. Old source names
+    // accept only their own credential, never another source's password.
+    for (const fixture of fixtures.slice(4)) {
+      const nameLogin = await loginMember("가상이름C", fixture.password, "198.51.100.82");
+      assert.equal(nameLogin.status, 200);
+      assert.equal(nameLogin.headers.get("set-cookie").split("=")[1].split(".")[0], ids["merge-g3-a"]);
+    }
+    assert.equal((await loginMember("가상이름B", "merge-pass-b3", "198.51.100.83")).status, 200);
+    assert.equal((await loginMember("가상이름B", "merge-pass-a3", "198.51.100.83")).status, 401);
+    const recoverMerged = await request("/api/members/recovery", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, "x-forwarded-for": "198.51.100.84" }, body: JSON.stringify({ name: "가상이름B", birthDate: "910505" }) });
+    assert.equal(recoverMerged.status, 200);
+    assert.equal(String((await client.execute("SELECT member_id FROM member_recovery_grants")).rows[0].member_id), ids["merge-g3-a"]);
+
     const passwordChange = await request("/api/members/profile", {
       method: "PATCH",
       headers: { "content-type": "application/json", cookie: aliasCookies.get("merge-g3-b") },
@@ -600,7 +621,7 @@ test("member login throttling survives requests without exposing raw identifiers
   }
   const blocked = await loginMember("없는회원", "000000", forwardedFor);
   assert.equal(blocked.status, 429);
-  assert.ok(Number(blocked.headers.get("retry-after")) > 0);
+  assert.equal(Number(blocked.headers.get("retry-after")), 300);
   assert.doesNotMatch(await blocked.text(), /없는회원|203\.0\.113\.77/);
 
   const db = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
@@ -614,6 +635,77 @@ test("member login throttling survives requests without exposing raw identifiers
   } finally {
     db.close();
   }
+});
+
+test("five-minute member blocks keep their deadline, preserve the failure window, and clear after a successful login", async () => {
+  const ip = "198.51.100.201";
+  const username = "worship-user";
+  const key = createHash("sha256").update(`member:${memberIds[username]}\n${ip}`).digest("hex");
+  const db = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  const attempt = () => db.execute({ sql: "SELECT failed_count, blocked_until, updated_at FROM member_login_attempts WHERE rate_key = ?", args: [key] });
+  try {
+    for (let index = 0; index < 4; index += 1) assert.equal((await loginMember(username, "wrong-password", ip)).status, 401);
+    const fifth = await loginMember(username, "wrong-password", ip);
+    assert.equal(fifth.status, 429);
+    assert.equal(fifth.headers.get("retry-after"), "300");
+    assert.match((await fifth.json()).error, /로그인 시도가 많아 일시적으로 제한되었습니다\. 5분 0초/);
+    const initial = (await attempt()).rows[0];
+    assert.equal(Number(initial.failed_count), 5);
+    assert.equal(Number(initial.blocked_until) - Number(initial.updated_at), 300_000);
+
+    // Move only the temporary database clock one second into the block.
+    const shiftedNow = Date.now();
+    await db.execute({ sql: "UPDATE member_login_attempts SET blocked_until = ?, updated_at = ? WHERE rate_key = ?", args: [shiftedNow + 299_000, shiftedNow - 1000, key] });
+    const active = (await attempt()).rows[0];
+    for (const password of ["wrong-password", "local-test-password"]) {
+      const retry = await loginMember(username, password, ip);
+      assert.equal(retry.status, 429);
+      assert.equal(retry.headers.get("set-cookie"), null);
+      const seconds = Number(retry.headers.get("retry-after"));
+      assert.ok(seconds > 295 && seconds <= 299);
+      assert.equal((await retry.json()).error, `로그인 시도가 많아 일시적으로 제한되었습니다. ${Math.floor(seconds / 60)}분 ${seconds % 60}초 후 다시 시도해 주세요.`);
+      assert.deepEqual((await attempt()).rows[0], active);
+    }
+    assert.equal((await loginMember(username, "local-test-password", "198.51.100.202")).status, 200);
+    assert.equal((await loginMember("full-user", "local-test-password", ip)).status, 200);
+    assert.deepEqual((await attempt()).rows[0], active);
+
+    // Five minutes have elapsed; a correct password now succeeds and clears
+    // this account/IP's persisted failure record.
+    const expiredNow = Date.now();
+    await db.execute({ sql: "UPDATE member_login_attempts SET blocked_until = ?, updated_at = ? WHERE rate_key = ?", args: [expiredNow - 1, expiredNow - 300_001, key] });
+    assert.equal((await loginMember(username, "local-test-password", ip)).status, 200);
+    assert.equal((await attempt()).rows.length, 0);
+    assert.equal((await loginMember(username, "wrong-password", ip)).status, 401);
+    assert.equal(Number((await attempt()).rows[0].failed_count), 1);
+    assert.equal((await loginMember(username, "local-test-password", ip)).status, 200);
+    assert.equal((await attempt()).rows.length, 0);
+
+    for (const [minutes, expectedStatus, expectedFailures] of [[14, 429, 5], [16, 401, 1]]) {
+      await db.execute({ sql: "INSERT INTO member_login_attempts (rate_key, failed_count, blocked_until, updated_at) VALUES (?, 4, 0, ?) ON CONFLICT(rate_key) DO UPDATE SET failed_count = 4, blocked_until = 0, updated_at = excluded.updated_at", args: [key, Date.now() - minutes * 60_000] });
+      assert.equal((await loginMember(username, "wrong-password", ip)).status, expectedStatus);
+      assert.equal(Number((await attempt()).rows[0].failed_count), expectedFailures);
+    }
+  } finally { db.close(); }
+});
+
+test("existing fifteen-minute member blocks remain authoritative without rewriting production records", async () => {
+  const ip = "198.51.100.203";
+  const key = createHash("sha256").update(`member:${memberIds["worship-user"]}\n${ip}`).digest("hex");
+  const db = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const now = Date.now();
+    await db.execute({ sql: "INSERT INTO member_login_attempts (rate_key, failed_count, blocked_until, updated_at) VALUES (?, 5, ?, ?)", args: [key, now + 900_000, now] });
+    const before = (await db.execute({ sql: "SELECT * FROM member_login_attempts WHERE rate_key = ?", args: [key] })).rows[0];
+    for (const password of ["wrong-password", "local-test-password"]) {
+      const response = await loginMember("worship-user", password, ip);
+      assert.equal(response.status, 429);
+      const seconds = Number(response.headers.get("retry-after"));
+      assert.ok(seconds > 890 && seconds <= 900);
+      assert.match((await response.json()).error, /로그인 시도가 많아 일시적으로 제한/);
+      assert.deepEqual((await db.execute({ sql: "SELECT * FROM member_login_attempts WHERE rate_key = ?", args: [key] })).rows[0], before);
+    }
+  } finally { db.close(); }
 });
 
 test("archive pages and metadata require an assigned archive level", async () => {
@@ -1076,4 +1168,363 @@ test("deleting a member also removes archive access rows", async () => {
   } finally {
     client.close();
   }
+});
+
+test("exact normalized names disambiguate passwords and share account limits with old usernames", async () => {
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  const fixtures = [
+    { username: "name-unique", name: "한글정규", password: "unique-name-password" },
+    { username: "name-twin-a", name: "가상동명", password: "twin-a-password" },
+    { username: "name-twin-b", name: "가상동명", password: "twin-b-password" },
+    { username: "legacy-collision", name: "가상아이디", password: "legacy-collision-password" },
+    { username: "name-collision", name: "legacy-collision", password: "other-person-password" },
+  ];
+  const ids = {};
+  try {
+    for (const fixture of fixtures) {
+      const response = await signupMember({ ...fixture, phone: "010-8833-7733", birthDate: "1982-11-08", position: "" });
+      assert.equal(response.status, 201);
+      ids[fixture.username] = String((await client.execute({ sql: "SELECT id FROM members WHERE username = ?", args: [fixture.username] })).rows[0].id);
+    }
+    const loginId = async (name, password, ip = "198.51.100.180") => {
+      const response = await loginMember(name, password, ip);
+      assert.equal(response.status, 200);
+      return (response.headers.get("set-cookie") ?? "").split("=")[1].split(".")[0];
+    };
+    assert.equal(await loginId("  한글정규  ".normalize("NFD"), fixtures[0].password), ids["name-unique"]);
+    assert.equal(await loginId("가상동명", fixtures[1].password), ids["name-twin-a"]);
+    assert.equal(await loginId("가상동명", fixtures[2].password), ids["name-twin-b"]);
+    assert.equal(await loginId("legacy-collision", fixtures[3].password), ids["legacy-collision"]);
+    assert.equal((await loginMember("legacy-collision", fixtures[4].password, "198.51.100.181")).status, 401);
+    assert.equal((await loginMember("한글", fixtures[0].password, "198.51.100.182")).status, 401);
+    const repeated = await signupMember({ username: "name-twin-c", name: "가상동명", password: fixtures[1].password, phone: "010-8833-7733", birthDate: "1982-11-08", position: "" });
+    assert.equal(repeated.status, 201);
+    const ambiguous = await loginMember("가상동명", fixtures[1].password, "198.51.100.183");
+    assert.equal(ambiguous.status, 401);
+    assert.equal(ambiguous.headers.get("set-cookie"), null);
+    assert.doesNotMatch(await ambiguous.text(), /name-twin|가상동명|8833/);
+    assert.equal(await loginId("name-twin-a", fixtures[1].password), ids["name-twin-a"]);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await loginMember(attempt % 2 ? "name-unique" : "한글정규", "wrong-password", "198.51.100.184");
+      assert.equal(response.status, attempt < 4 ? 401 : 429);
+      if (attempt === 4) assert.equal(response.headers.get("retry-after"), "300");
+    }
+    for (const name of ["한글정규", "name-unique"]) assert.equal((await loginMember(name, fixtures[0].password, "198.51.100.184")).status, 429);
+    await client.execute({ sql: "UPDATE members SET status = 'suspended' WHERE id = ?", args: [ids["name-unique"]] });
+    assert.equal((await loginMember("한글정규", fixtures[0].password, "198.51.100.185")).status, 401);
+  } finally { client.close(); }
+});
+
+test("direct name and birth recovery uses private one-use grants without changing approval or exposing account matches", async () => {
+  const client = createClient({ url: "file:" + databasePath.replaceAll("\\", "/") });
+  const ids = {};
+  const fixtures = [
+    { username: "recover-zero", name: "가상영년", birthDate: "2000-01-02" },
+    { username: "recover-empty", name: "가상미등록", birthDate: "" },
+    { username: "recover-twin-a", name: "가상복구동명", birthDate: "1920-02-03" },
+    { username: "recover-twin-b", name: "가상복구동명", birthDate: "2020-02-03" },
+    { username: "recover-suspended", name: "가상중지복구", birthDate: "1982-11-08" },
+    { username: TEST_ADMIN_USERNAME, name: "가상관리제외", birthDate: "1982-11-08" },
+  ];
+  let sequence = 0;
+  const ip = () => "203.0.113." + (++sequence);
+  const recover = (name, birthDate, address = ip(), extra = {}) => request("/api/members/recovery", {
+    method: "POST", headers: { "content-type": "application/json", origin: baseUrl, "x-forwarded-for": address },
+    body: JSON.stringify({ name, birthDate, ...extra }),
+  });
+  const complete = (cookie, password = "recover-new-password", address = ip(), extra = {}) => request("/api/members/recovery/complete", {
+    method: "POST", headers: { "content-type": "application/json", origin: baseUrl, "x-forwarded-for": address, ...(cookie ? { cookie } : {}) },
+    body: JSON.stringify({ password, confirmation: password, ...extra }),
+  });
+  const recoveryCookie = response => (response.headers.get("set-cookie") ?? "").split(";")[0];
+  try {
+    for (const fixture of fixtures) {
+      const response = await signupMember({ ...fixture, phone: "010-6622-1111", password: "recover-original-password", position: "" });
+      assert.equal(response.status, 201);
+      ids[fixture.username] = String((await client.execute({ sql: "SELECT id FROM members WHERE username = ?", args: [fixture.username] })).rows[0].id);
+    }
+    await client.execute({ sql: "UPDATE members SET status = 'suspended' WHERE id = ?", args: [ids["recover-suspended"]] });
+    const before = await client.execute("SELECT id, password_hash, password_salt, status FROM members ORDER BY id");
+    const beforeVersions = await client.execute("SELECT * FROM member_auth_state ORDER BY member_id");
+    const bodies = [];
+    const invalidCookies = [];
+    let validCookie;
+    for (const [name, hint] of [["가상영년", "000102"], ["가상영년", "001102"], ["가상미등록", "821108"], ["가상복구동명", "200203"], ["가상미존재", "821108"], ["가상중지복구", "821108"], ["가상관리제외", "821108"]]) {
+      const response = await recover(name, hint);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("cache-control"), /private, no-store/);
+      assert.match(response.headers.get("set-cookie"), /HttpOnly/i);
+      assert.match(response.headers.get("set-cookie"), /SameSite=Strict/i);
+      assert.match(response.headers.get("set-cookie"), /Path=\/api\/members\/recovery/);
+      assert.match(response.headers.get("set-cookie"), /Max-Age=300/i);
+      assert.match(recoveryCookie(response), /^mhji_member_recovery=[A-Za-z0-9_-]{43}$/);
+      bodies.push(await response.text());
+      if (!validCookie) validCookie = recoveryCookie(response); else invalidCookies.push(recoveryCookie(response));
+    }
+    assert.equal(new Set(bodies).size, 1, "missing, ambiguous, blocked and valid hints return identical public responses");
+    assert.doesNotMatch(bodies[0], /000102|821108|recover-zero|token|temporaryPassword/);
+    const grants = await client.execute("SELECT * FROM member_recovery_grants");
+    assert.equal(grants.rows.length, 1);
+    assert.equal(grants.rows[0].member_id, ids["recover-zero"]);
+    assert.equal(grants.rows[0].token_hash, createHash("sha256").update(validCookie.split("=")[1]).digest("hex"));
+    assert.ok(Number(grants.rows[0].expires_at) > Date.now() && Number(grants.rows[0].expires_at) <= Date.now() + 300_000);
+    for (const cookie of invalidCookies) assert.equal((await complete(cookie)).status, 400);
+    assert.equal((await complete(null)).status, 400);
+    assert.equal((await complete(validCookie, "recover-new-password", ip(), { memberId: ids["recover-empty"] })).status, 400);
+    assert.equal((await recover("가상영년", "000102", ip(), { verified: true })).status, 400);
+    assert.equal((await recover("가상영년", "00102")).status, 400);
+    assert.deepEqual((await client.execute("SELECT id, password_hash, password_salt, status FROM members ORDER BY id")).rows, before.rows);
+    assert.deepEqual((await client.execute("SELECT * FROM member_auth_state ORDER BY member_id")).rows, beforeVersions.rows);
+    assert.equal((await request("/api/members/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "가상영년", birthDate: "000102", verified: true, password: "hijacked-password" }) })).status, 401);
+
+    const newer = recoveryCookie(await recover("  가상영년  ".normalize("NFD"), "000102"));
+    assert.equal((await complete(validCookie)).status, 400, "new grant replaces the old browser's grant");
+    const oldLogin = await loginMember("recover-zero", "recover-original-password", ip());
+    assert.equal(oldLogin.status, 200);
+    const oldCookie = oldLogin.headers.get("set-cookie").split(";")[0];
+    assert.equal((await complete(newer, "recover-new-password", ip(), { confirmation: "does-not-match" })).status, 400);
+    const changed = await complete(newer);
+    assert.equal(changed.status, 200);
+    assert.deepEqual(await changed.json(), { ok: true });
+    assert.match(changed.headers.get("cache-control"), /private, no-store/);
+    assert.equal((await complete(newer, "should-not-replace-password")).status, 400, "grant is one-use");
+    assert.equal((await request("/api/session", { headers: { cookie: oldCookie } }).then(r => r.json())).authenticated, false);
+    assert.equal((await loginMember("recover-zero", "recover-original-password", ip())).status, 401);
+    for (const login of ["recover-zero", "가상영년"]) {
+      const response = await loginMember(login, "recover-new-password", ip());
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).approvalPending, true);
+    }
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_recovery_grants WHERE member_id = ?", args: [ids["recover-zero"]] })).rows[0].n), 0);
+
+    const expired = recoveryCookie(await recover("가상영년", "000102"));
+    await client.execute({ sql: "UPDATE member_recovery_grants SET expires_at = ? WHERE member_id = ?", args: [Date.now() - 1, ids["recover-zero"]] });
+    assert.equal((await complete(expired)).status, 400);
+    const revoked = recoveryCookie(await recover("가상영년", "000102"));
+    const adminReset = await request("/api/admin/members", { method: "PATCH", headers: { "content-type": "application/json", cookie: websiteAdminCookie }, body: JSON.stringify({ id: ids["recover-zero"], action: "reset-password" }) });
+    assert.equal(adminReset.status, 200);
+    assert.equal((await complete(revoked)).status, 400, "administrator password changes revoke outstanding grants");
+    const rollback = recoveryCookie(await recover("가상영년", "000102"));
+    const beforeRollback = await client.execute({ sql: "SELECT password_hash, force_password_change, status FROM members WHERE id = ?", args: [ids["recover-zero"]] });
+    const versionBeforeRollback = await client.execute({ sql: "SELECT * FROM member_auth_state WHERE member_id = ?", args: [ids["recover-zero"]] });
+    await client.execute("CREATE TRIGGER fail_direct_recovery BEFORE INSERT ON admin_audit_logs WHEN instr(NEW.metadata_json, 'name_birth_recovery') > 0 BEGIN SELECT RAISE(ABORT, 'test recovery audit failure'); END");
+    assert.equal((await complete(rollback)).status, 503);
+    assert.deepEqual((await client.execute({ sql: "SELECT password_hash, force_password_change, status FROM members WHERE id = ?", args: [ids["recover-zero"]] })).rows, beforeRollback.rows);
+    assert.deepEqual((await client.execute({ sql: "SELECT * FROM member_auth_state WHERE member_id = ?", args: [ids["recover-zero"]] })).rows, versionBeforeRollback.rows);
+    await client.execute("DROP TRIGGER fail_direct_recovery");
+    assert.equal((await complete(rollback)).status, 200, "failed transaction does not consume its grant");
+    const stateBeforeLimit = await client.execute({ sql: "SELECT password_hash, status FROM members WHERE id = ?", args: [ids["recover-zero"]] });
+    for (let index = 0; index < 5; index += 1) assert.equal((await recover("가상영년", "000102", "203.0.113.230")).status, index < 4 ? 200 : 429);
+    const blockedRow = await client.execute("SELECT * FROM member_login_attempts WHERE failed_count = 5 AND blocked_until > 0 ORDER BY rate_key");
+    assert.equal((await recover("가상영년", "000102", "203.0.113.230")).status, 429);
+    assert.deepEqual((await client.execute("SELECT * FROM member_login_attempts WHERE failed_count = 5 AND blocked_until > 0 ORDER BY rate_key")).rows, blockedRow.rows);
+    assert.deepEqual((await client.execute({ sql: "SELECT password_hash, status FROM members WHERE id = ?", args: [ids["recover-zero"]] })).rows, stateBeforeLimit.rows);
+    for (let attempt = 0; attempt < 5; attempt += 1) assert.equal((await complete("mhji_member_recovery=" + "x".repeat(43), "irrelevant-password", "203.0.113.231")).status, attempt < 4 ? 400 : 429);
+    const stillValid = recoveryCookie(await recover("가상영년", "000102"));
+    assert.equal((await complete(stillValid, "irrelevant-password", "203.0.113.231")).status, 429);
+    assert.equal((await loginMember("recover-zero", "recover-new-password", "203.0.113.231")).status, 200, "reset rate limits never lock login");
+    for (const path of ["/api/members/recovery", "/api/members/recovery/complete"]) {
+      assert.equal((await request(path, { method: "POST", headers: { "content-type": "application/json", origin: "https://malicious.invalid" }, body: "{}" })).status, 403);
+    }
+    assert.equal((await request("/api/members/recovery", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl }, body: JSON.stringify({ name: "x".repeat(1500), birthDate: "000102" }) })).status, 413);
+  } finally { client.close(); }
+});
+
+test("direct recovery rotates every merged alias atomically and preserves the representative status and permissions", async () => {
+  const client = createClient({ url: "file:" + databasePath.replaceAll("\\", "/") });
+  try {
+    const a = await withdrawalFixture(client, "direct-merge-a", "직접병합A", "010-8899-6600");
+    const b = await withdrawalFixture(client, "direct-merge-b", "직접병합B", "010-8899-6600");
+    await client.execute({ sql: "UPDATE members SET birth_date = '1960-01-02' WHERE id IN (?, ?)", args: [a.id, b.id] });
+    const collection = await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } }).then(r => r.json());
+    const group = collection.duplicateGroups.find(item => item.accounts.some(account => account.id === a.id));
+    assert.equal(group.accounts.length, 2);
+    const merge = data => request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify(data) });
+    const preview = (await (await merge({ action: "preview", groupId: group.id })).json()).preview;
+    assert.equal((await merge({ action: "merge", groupId: group.id, fingerprint: preview.fingerprint, representativeMemberId: a.id, profile: preview.recommendedProfile })).status, 201);
+    const oldCookies = [];
+    for (const member of [a, b]) oldCookies.push((await loginMember(member.username, member.password, "203.0.113.232")).headers.get("set-cookie").split(";")[0]);
+    const started = await request("/api/members/recovery", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, "x-forwarded-for": "203.0.113.232" }, body: JSON.stringify({ name: b.name, birthDate: "600102" }) });
+    assert.equal(started.status, 200);
+    const cookie = started.headers.get("set-cookie").split(";")[0];
+    const finished = await request("/api/members/recovery/complete", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie, "x-forwarded-for": "203.0.113.232" }, body: JSON.stringify({ password: "merged-direct-new", confirmation: "merged-direct-new" }) });
+    assert.equal(finished.status, 200);
+    for (const member of [a, b]) {
+      assert.equal((await loginMember(member.username, member.password, "203.0.113.233")).status, 401);
+      const response = await loginMember(member.username, "merged-direct-new", "203.0.113.234");
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("set-cookie").split("=")[1].split(".")[0], a.id);
+    }
+    for (const cookie of oldCookies) assert.equal((await request("/api/session", { headers: { cookie } }).then(r => r.json())).authenticated, false);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM members WHERE id IN (?, ?) AND status = 'pending'", args: [a.id, b.id] })).rows[0].n), 2);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_app_access WHERE member_id IN (?, ?)", args: [a.id, b.id] })).rows[0].n), 0);
+  } finally { client.close(); }
+});
+
+function withdrawal(cookie, password, ip = "198.51.100.220", extra = {}, origin = baseUrl) {
+  return request("/api/members/withdrawal", { method: "POST", headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...(origin ? { origin } : {}), "x-forwarded-for": ip }, body: JSON.stringify({ password, confirmed: true, ...extra }) });
+}
+
+async function withdrawalFixture(client, username, name, phone = "010-8844-9944") {
+  const password = `${username}-password`;
+  assert.equal((await signupMember({ username, name, phone, birthDate: "1982-11-08", password, position: "집사" })).status, 201);
+  const id = String((await client.execute({ sql: "SELECT id FROM members WHERE username = ?", args: [username] })).rows[0].id);
+  const login = await loginMember(username, password, "198.51.100.219");
+  assert.equal(login.status, 200);
+  return { id, username, name, phone, password, cookie: login.headers.get("set-cookie").split(";")[0] };
+}
+
+test("member self withdrawal deletes credentials and private data, preserves redacted audit and unrelated public data", async () => {
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const member = await withdrawalFixture(client, "withdraw-self", "가상본인탈퇴");
+    const other = await withdrawalFixture(client, "withdraw-other", "가상다른교인");
+    const beforeOther = (await client.execute({ sql: "SELECT * FROM members WHERE id = ?", args: [other.id] })).rows;
+    assert.equal((await withdrawal(null, member.password)).status, 401);
+    assert.equal((await withdrawal(adminCookie, member.password)).status, 401, "administrator cookie is not a member session");
+    assert.equal((await withdrawal(member.cookie, member.password, undefined, { id: other.id })).status, 400);
+    assert.equal((await withdrawal(member.cookie, member.password, undefined, { memberId: other.id })).status, 400);
+    assert.equal((await withdrawal(member.cookie, member.password, undefined, { confirmed: false })).status, 400);
+    assert.equal((await withdrawal(member.cookie, member.password, undefined, {}, "https://malicious.invalid")).status, 403);
+    assert.equal((await withdrawal(member.cookie, member.password, undefined, {}, null)).status, 403);
+    assert.equal((await withdrawal(member.cookie, "incorrect-password")).status, 401);
+    assert.equal((await request("/api/session", { headers: { cookie: member.cookie } }).then(r => r.json())).authenticated, true);
+    await client.execute({ sql: "INSERT INTO member_app_access (member_id, app_code, access_level) VALUES (?, 'worship_archive', 'full')", args: [member.id] });
+    await client.execute({ sql: "INSERT INTO member_password_reset_requests (member_id) VALUES (?)", args: [member.id] });
+    await client.execute({ sql: "INSERT INTO member_recovery_grants (token_hash, member_id, session_version, expires_at) VALUES (?, ?, 0, ?)", args: ["a".repeat(64), member.id, Date.now() + 300_000] });
+    await client.execute({ sql: "INSERT INTO business_applications (id, member_id, applicant_name, applicant_phone, business_name, category, owner_name, address, description, admin_note) VALUES ('withdraw-application', ?, ?, ?, '가상 사업장', '기타', ?, '가상 주소', '가상 소개', ?)", args: [member.id, member.name, member.phone, member.name, member.name] });
+    await client.execute("INSERT INTO content_posts (id, type, title, date, images) VALUES ('withdraw-public', 'gallery', '교회 공용 앨범', '2026.11.03', '[\"/assets/shared-photo.jpg\"]')");
+    await client.execute({ sql: "INSERT INTO admin_audit_logs (id, actor_id, action, target_type, target_id, metadata_json) VALUES ('withdraw-old-audit', ?, 'member.password_change', 'member', ?, ?)", args: [member.id, member.id, JSON.stringify({ name: member.name, phone: member.phone, birthDate: "1982-11-08", aliasUsername: member.username, ipAddress: "198.51.100.220" })] });
+    await client.execute({ sql: "INSERT INTO admin_audit_logs (id, actor_id, action, target_type, target_id, metadata_json) VALUES ('withdraw-legacy-username', ?, 'member.login', 'member', '', ?)", args: [member.username, JSON.stringify({ ipAddress: "198.51.100.220" })] });
+    await client.execute({ sql: "INSERT INTO archive_audit_logs (id, actor, action, target_type, target_id, summary, details_json) VALUES ('withdraw-old-archive', 'archive-test-admin', 'access.update', 'member', ?, ?, ?)", args: [member.id, member.name, JSON.stringify({ name: member.name, phone: member.phone })] });
+    const beforeCount = Number((await client.execute("SELECT COUNT(*) AS n FROM admin_audit_logs")).rows[0].n);
+    const response = await withdrawal(member.cookie, member.password);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+    assert.match(response.headers.get("cache-control"), /private, no-store/);
+    assert.match(response.headers.get("set-cookie"), /Max-Age=0/i);
+    for (const table of ["members", "member_app_access", "member_auth_state", "member_password_reset_requests", "member_recovery_grants", "business_applications"]) {
+      const column = table === "members" ? "id" : "member_id";
+      assert.equal(Number((await client.execute({ sql: `SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`, args: [member.id] })).rows[0].n), 0);
+    }
+    assert.deepEqual((await client.execute({ sql: "SELECT * FROM members WHERE id = ?", args: [other.id] })).rows, beforeOther);
+    assert.equal(Number((await client.execute("SELECT COUNT(*) AS n FROM content_posts WHERE id = 'withdraw-public' AND images = '[\"/assets/shared-photo.jpg\"]'")).rows[0].n), 1);
+    assert.equal(Number((await client.execute("SELECT COUNT(*) AS n FROM admin_audit_logs")).rows[0].n), beforeCount + 1);
+    const event = (await client.execute("SELECT * FROM admin_audit_logs WHERE action = 'member.withdrawal' ORDER BY created_at DESC")).rows[0];
+    assert.match(String(event.actor_id), /^withdrawn:/);
+    assert.equal(event.actor_id, event.target_id);
+    assert.deepEqual(JSON.parse(String(event.metadata_json)), { result: "success" });
+    for (const sql of ["SELECT actor_id, target_id, metadata_json FROM admin_audit_logs WHERE id = 'withdraw-old-audit'", "SELECT actor_id, target_id, metadata_json FROM admin_audit_logs WHERE id = 'withdraw-legacy-username'", "SELECT actor, target_id, summary, details_json FROM archive_audit_logs WHERE id = 'withdraw-old-archive'"]) {
+      const serialized = JSON.stringify((await client.execute(sql)).rows);
+      for (const secret of [member.id, member.name, member.username, member.phone, "1982-11-08", "198.51.100.220"]) assert.equal(serialized.includes(secret), false);
+    }
+    assert.equal((await request("/api/session", { headers: { cookie: member.cookie } }).then(r => r.json())).authenticated, false);
+    for (const login of [member.username, member.name]) assert.equal((await loginMember(login, member.password, "198.51.100.221")).status, 401);
+    assert.equal((await withdrawal(member.cookie, member.password)).status, 401);
+    const reset = await request("/api/members/recovery", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, "x-forwarded-for": "198.51.100.222" }, body: JSON.stringify({ name: member.name, birthDate: "821108" }) });
+    assert.equal(reset.status, 200);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_password_reset_requests WHERE member_id = ?", args: [member.id] })).rows[0].n), 0);
+    assert.equal((await request("/api/admin/activity", { headers: { cookie: other.cookie } })).status, 403);
+    assert.equal((await request("/api/admin/activity", { headers: { cookie: websiteAdminCookie } })).status, 403);
+    const history = await request("/api/admin/activity?action=member.withdrawal", { headers: { cookie: adminCookie } });
+    assert.equal(history.status, 200);
+    assert.ok((await history.json()).logs.some(log => log.action === "member.withdrawal"));
+    const rejoined = await withdrawalFixture(client, member.username, member.name);
+    assert.notEqual(rejoined.id, member.id);
+    assert.equal(String((await client.execute({ sql: "SELECT status FROM members WHERE id = ?", args: [rejoined.id] })).rows[0].status), "pending");
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_app_access WHERE member_id = ?", args: [rejoined.id] })).rows[0].n), 0);
+    assert.equal((await request("/api/session", { headers: { cookie: member.cookie } }).then(r => r.json())).authenticated, false);
+  } finally { client.close(); }
+});
+
+test("withdrawal reauthentication has a separate persistent limit and retries never extend its deadline", async () => {
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const member = await withdrawalFixture(client, "withdraw-limit", "가상탈퇴제한");
+    const ip = "198.51.100.223";
+    const rateKey = createHash("sha256").update(`withdrawal:${member.id}\n${ip}`).digest("hex");
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const response = await withdrawal(member.cookie, "incorrect-password", ip);
+      assert.equal(response.status, attempt < 5 ? 401 : 429);
+      if (attempt === 5) assert.equal(Number(response.headers.get("retry-after")), 300);
+    }
+    const before = await client.execute({ sql: "SELECT * FROM member_login_attempts WHERE rate_key = ?", args: [rateKey] });
+    const restricted = await withdrawal(member.cookie, member.password, ip);
+    assert.equal(restricted.status, 429);
+    assert.deepEqual((await client.execute({ sql: "SELECT * FROM member_login_attempts WHERE rate_key = ?", args: [rateKey] })).rows, before.rows);
+    assert.equal((await loginMember(member.name, member.password, ip)).status, 200, "withdrawal limit does not lock member login");
+    await client.execute({ sql: "UPDATE member_login_attempts SET blocked_until = ? WHERE rate_key = ?", args: [Date.now() - 1, rateKey] });
+    assert.equal((await withdrawal(member.cookie, member.password, ip)).status, 200);
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_login_attempts WHERE rate_key = ?", args: [rateKey] })).rows[0].n), 0);
+  } finally { client.close(); }
+});
+
+test("withdrawal rolls back all deletion and audit redaction on failure and refuses unreviewed references", async () => {
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const member = await withdrawalFixture(client, "withdraw-rollback", "가상탈퇴복구");
+    await client.execute({ sql: "INSERT INTO member_password_reset_requests (member_id) VALUES (?)", args: [member.id] });
+    await client.execute({ sql: "INSERT INTO member_app_access (member_id, app_code, access_level) VALUES (?, 'worship_archive', 'full')", args: [member.id] });
+    const before = {};
+    for (const table of ["members", "member_password_reset_requests", "member_app_access", "admin_audit_logs"]) before[table] = (await client.execute(`SELECT * FROM ${table} ORDER BY 1`)).rows;
+    await client.execute("CREATE TRIGGER fail_withdrawal_audit BEFORE INSERT ON admin_audit_logs WHEN NEW.action = 'member.withdrawal' BEGIN SELECT RAISE(ABORT, 'test audit unavailable'); END");
+    const failed = await withdrawal(member.cookie, member.password);
+    assert.equal(failed.status, 503);
+    assert.doesNotMatch(await failed.text(), /test audit|sqlite|libsql|withdraw-rollback|password/i);
+    for (const table of Object.keys(before)) assert.deepEqual((await client.execute(`SELECT * FROM ${table} ORDER BY 1`)).rows, before[table]);
+    assert.equal((await request("/api/session", { headers: { cookie: member.cookie } }).then(r => r.json())).authenticated, true);
+    await client.execute("DROP TRIGGER fail_withdrawal_audit");
+    await client.execute("CREATE TABLE future_member_relation (member_id TEXT REFERENCES members(id) ON DELETE CASCADE)");
+    await client.execute({ sql: "INSERT INTO future_member_relation (member_id) VALUES (?)", args: [member.id] });
+    assert.equal((await withdrawal(member.cookie, member.password)).status, 503);
+    assert.equal(Number((await client.execute("SELECT COUNT(*) AS n FROM future_member_relation")).rows[0].n), 1);
+    await client.execute("DROP TABLE future_member_relation");
+    assert.equal((await withdrawal(member.cookie, member.password)).status, 200);
+  } finally { client.close(); }
+});
+
+test("merged withdrawal removes the entire merged identity and snapshots but preserves a merely duplicate account", async () => {
+  const client = createClient({ url: `file:${databasePath.replaceAll("\\", "/")}` });
+  try {
+    const a = await withdrawalFixture(client, "withdraw-merge-a", "가상병합탈퇴A", "010-8811-2211");
+    const b = await withdrawalFixture(client, "withdraw-merge-b", "가상병합탈퇴B", "010-8811-2211");
+    await client.execute({ sql: "UPDATE members SET birth_date = '1970-01-01' WHERE id IN (?, ?)", args: [a.id, b.id] });
+    const collection = await request("/api/admin/members", { headers: { cookie: websiteAdminCookie } }).then(r => r.json());
+    const group = collection.duplicateGroups.find(group => group.accounts.some(account => account.id === a.id));
+    assert.equal(group.accounts.length, 2);
+    const mergeRequest = data => request("/api/admin/members/merge", { method: "POST", headers: { "content-type": "application/json", origin: baseUrl, cookie: websiteAdminCookie }, body: JSON.stringify(data) });
+    const preview = (await (await mergeRequest({ action: "preview", groupId: group.id })).json()).preview;
+    const merged = await mergeRequest({ action: "merge", groupId: group.id, fingerprint: preview.fingerprint, representativeMemberId: a.id, profile: preview.recommendedProfile });
+    assert.equal(merged.status, 201);
+    const mergeId = (await merged.json()).mergeId;
+    const duplicate = await withdrawalFixture(client, "withdraw-unmerged", "가상미병합회원", "010-8811-2211");
+    const duplicateBefore = (await client.execute({ sql: "SELECT * FROM members WHERE id = ?", args: [duplicate.id] })).rows;
+    await client.execute({ sql: "INSERT INTO member_merge_groups (id, representative_member_id, status, resolved_profile_json, created_by) VALUES ('withdraw-old-reverted', ?, 'reverted', ?, 'test-admin')", args: [a.id, JSON.stringify({ name: a.name, phone: a.phone })] });
+    await client.execute({ sql: "INSERT INTO member_merge_accounts (merge_id, member_id, original_member_json) VALUES ('withdraw-old-reverted', ?, ?)", args: [duplicate.id, JSON.stringify({ name: duplicate.name })] });
+    await client.execute({ sql: "INSERT INTO member_password_reset_requests (member_id) VALUES (?)", args: [b.id] });
+    await client.execute({ sql: "INSERT INTO member_app_access (member_id, app_code, access_level) VALUES (?, 'worship_archive', 'full')", args: [b.id] });
+    const login = await loginMember(b.username, b.password, "198.51.100.224");
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    assert.equal((await withdrawal(cookie, duplicate.password, "198.51.100.225")).status, 401);
+    const requests = await Promise.all([withdrawal(cookie, b.password, "198.51.100.226"), withdrawal(cookie, b.password, "198.51.100.227")]);
+    assert.equal(requests.filter(response => response.status === 200).length, 1);
+    // SQLite can refuse the second write lock instead of queuing it. No write
+    // is automatically retried: the loser returns a safe retryable error.
+    assert.ok(requests.every(response => [200, 401, 503].includes(response.status)));
+    for (const response of requests.filter(response => response.status === 503)) assert.deepEqual(await response.json(), { error: "탈퇴를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    for (const [table, columns] of [["members", ["id"]], ["member_login_aliases", ["source_member_id", "representative_member_id"]], ["member_auth_state", ["member_id"]], ["member_merge_accounts", ["member_id"]], ["member_app_access", ["member_id"]], ["member_password_reset_requests", ["member_id"]]]) {
+      for (const column of columns) assert.equal(Number((await client.execute({ sql: `SELECT COUNT(*) AS n FROM ${table} WHERE ${column} IN (?, ?)`, args: [a.id, b.id] })).rows[0].n), 0);
+    }
+    assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS n FROM member_merge_groups WHERE id = ?", args: [mergeId] })).rows[0].n), 0);
+    const oldGroup = (await client.execute("SELECT * FROM member_merge_groups WHERE id = 'withdraw-old-reverted'")).rows[0];
+    assert.equal(oldGroup.resolved_profile_json, "{}");
+    assert.match(String(oldGroup.representative_member_id), /^withdrawn:/);
+    assert.deepEqual((await client.execute({ sql: "SELECT * FROM members WHERE id = ?", args: [duplicate.id] })).rows, duplicateBefore);
+    for (const oldCookie of [a.cookie, b.cookie, cookie]) assert.equal((await request("/api/session", { headers: { cookie: oldCookie } }).then(r => r.json())).authenticated, false);
+    for (const [name, password] of [[a.username, a.password], [b.username, b.password], [a.name, a.password], [b.name, b.password]]) assert.equal((await loginMember(name, password, "198.51.100.228")).status, 401);
+    assert.equal((await loginMember(duplicate.username, duplicate.password, "198.51.100.229")).status, 200);
+    assert.equal((await client.execute("PRAGMA foreign_key_check")).rows.length, 0);
+  } finally { client.close(); }
 });

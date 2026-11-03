@@ -1327,10 +1327,23 @@ test("website admin mobile navigation and lists stay compact without changing de
 test("approved local member can enter the worship archive", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = watchErrors(page);
-  await page.goto("/member/login?return_to=%2Farchive");
+  await page.goto("/member/login?return_to=%2Farchive", { waitUntil: "networkidle" });
+  // Verify the actual client handler before entering credentials. Streamed
+  // login HTML can be visible before React attaches the submit handler.
+  await expect.poll(async () => {
+    const type = await page.getByLabel("비밀번호").getAttribute("type");
+    if (type === "text") return type;
+    await page.getByRole("button", { name: "보기", exact: true }).click();
+    return page.getByLabel("비밀번호").getAttribute("type");
+  }, { timeout: 10_000 }).toBe("text");
+  await page.getByRole("button", { name: "숨기기", exact: true }).click();
   await page.getByLabel("이름 또는 기존 아이디").fill("test-member");
   await page.getByLabel("비밀번호").fill("browser-test-password");
-  await page.getByRole("button", { name: "교인 로그인" }).click();
+  const [login] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith("/api/members/session")),
+    page.getByRole("button", { name: "교인 로그인" }).click(),
+  ]);
+  expect(login.status()).toBe(200);
   await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:4178\/archive(?:[/?#]|$)/, { timeout: 20_000 });
   await expect(page.getByText("모현제일교회 예배 아카이브").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "브라우저테스트 집사 회원 메뉴" })).toBeVisible();

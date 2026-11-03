@@ -120,12 +120,12 @@ export async function createBusinessApplication(
   const validated = validateBusinessApplication(input);
   if (!validated.value) throw new Error(validated.error);
   const id = crypto.randomUUID();
-  await getD1()
+  const inserted = await getD1()
     .prepare(
       `INSERT INTO business_applications
       (id, member_id, applicant_name, applicant_phone, business_name, category,
        owner_name, business_phone, address, description, website, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM members WHERE id = ?`,
     )
     .bind(
       id,
@@ -140,8 +140,10 @@ export async function createBusinessApplication(
       validated.value.description,
       validated.value.website,
       validated.value.imageUrl,
+      memberId,
     )
     .run();
+  if (inserted.meta.changes !== 1) throw new Error("회원 정보를 확인해 주세요.");
   return id;
 }
 

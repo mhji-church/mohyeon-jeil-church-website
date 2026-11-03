@@ -12,6 +12,7 @@ import type {
 import type { MemberMergePreview } from "../../../lib/member-merges";
 import AdminPagination from "../AdminPagination";
 import AdminSidebar from "../AdminSidebar";
+import AccessibleDialog from "../../components/AccessibleDialog";
 
 type Props = {
   userName: string;
@@ -977,25 +978,22 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
       )}
 
       {temporaryPassword && (
-        <div className="admin-confirm-backdrop" role="dialog" aria-modal="true">
-          <section className="admin-temp-password">
+        <AccessibleDialog open onClose={() => setTemporaryPassword(null)} labelledBy="temporary-password-title" className="admin-temp-password admin-recovery-dialog">
             <span>TEMPORARY PASSWORD</span>
-            <h2>임시 비밀번호가 발급됐습니다</h2>
+            <h2 id="temporary-password-title">임시 비밀번호가 발급됐습니다</h2>
             <p>
               {temporaryPassword.member.name} 회원에게 아래 비밀번호를 안전하게
               전달해 주세요. 다음 로그인 때 새 비밀번호로 변경해야 합니다.
             </p>
             <strong>{temporaryPassword.password}</strong>
             <button type="button" onClick={() => setTemporaryPassword(null)}>확인</button>
-          </section>
-        </div>
+        </AccessibleDialog>
       )}
 
       {confirmPasswordReset && (
-        <div className="admin-confirm-backdrop" role="alertdialog" aria-modal="true">
-          <section>
+        <AccessibleDialog open onClose={() => { if (!resettingPassword) setConfirmPasswordReset(null); }} labelledBy="confirm-password-title" className="admin-recovery-dialog">
             <span>RESET PASSWORD</span>
-            <h2>임시 비밀번호를 발급할까요?</h2>
+            <h2 id="confirm-password-title">임시 비밀번호를 발급할까요?</h2>
             <p>
               ‘{confirmPasswordReset.name}({confirmPasswordReset.username})’ 회원의 기존
               비밀번호는 즉시 사용할 수 없게 됩니다. 새로 발급된 임시 비밀번호로
@@ -1024,8 +1022,7 @@ export default function AdminMembers({ userName, userEmail, signOutPath, initial
                 {resettingPassword ? "발급 중…" : "발급"}
               </button>
             </div>
-          </section>
-        </div>
+        </AccessibleDialog>
       )}
 
       {confirmDelete && (

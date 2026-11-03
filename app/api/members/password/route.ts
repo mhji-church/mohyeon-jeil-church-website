@@ -1,8 +1,11 @@
 import { changeMemberPassword } from "../../../../lib/members";
-import { getMemberSession } from "../../../member-auth";
+import { clearMemberSessionCookie, getMemberSession } from "../../../member-auth";
 import { apiError } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
+  if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) {
+    return Response.json({ error: "요청 경로를 확인해 주세요." }, { status: 403 });
+  }
   const member = await getMemberSession();
   if (!member) {
     return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
@@ -13,7 +16,8 @@ export async function POST(request: Request) {
   const password = typeof payload?.password === "string" ? payload.password : "";
   try {
     await changeMemberPassword(member.id, password);
-    return Response.json({ ok: true });
+    await clearMemberSessionCookie();
+    return Response.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return apiError("members.password.change", error, "비밀번호를 변경하지 못했습니다. 입력값을 확인해 주세요.", 400);
   }
