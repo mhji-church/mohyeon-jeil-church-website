@@ -39,6 +39,7 @@ type PlaylistItem = {
 type PlaylistResponse = {
   items?: PlaylistItem[];
   nextPageToken?: string;
+  pageInfo?: { totalResults?: number };
   error?: { message?: string };
 };
 
@@ -120,8 +121,14 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
   const videos: Array<YouTubePlaylistVideo & { publishedAt: string }> = [];
   const seen = new Set<string>();
   let pageToken = "";
+  const pages = new Set<string>();
+  const signal = AbortSignal.timeout(40_000);
+  let itemCount = 0;
+  let expectedCount = 0;
 
   do {
+    if (pages.has(pageToken) || pages.size >= 500) throw new Error("Incomplete playlist pagination");
+    pages.add(pageToken);
     const params = new URLSearchParams({
       part: "snippet,contentDetails",
       maxResults: "50",
@@ -132,16 +139,20 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
 
     const response = await fetch(
       `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
-      { cache: "no-store" },
+      { cache: "no-store", signal },
     );
     const data = (await response.json()) as PlaylistResponse;
-    if (!response.ok) {
-      throw new Error(data.error?.message || `YouTube API request failed (${response.status})`);
+    if (!response.ok || data.error || !Array.isArray(data.items) ||
+        (data.nextPageToken !== undefined && typeof data.nextPageToken !== "string")) {
+      throw new Error("YouTube playlist response is incomplete");
     }
+    itemCount += data.items.length;
+    expectedCount = Math.max(expectedCount, Number(data.pageInfo?.totalResults) || 0);
 
     for (const item of data.items ?? []) {
       const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
       const rawTitle = item.snippet?.title?.trim();
+      if (!rawTitle || (!videoId && rawTitle !== "Private video" && rawTitle !== "Deleted video")) throw new Error("Incomplete playlist item");
       if (
         !videoId ||
         !rawTitle ||
@@ -173,6 +184,8 @@ export async function getYouTubePlaylistVideos(type: YouTubePlaylistType) {
 
     pageToken = data.nextPageToken ?? "";
   } while (pageToken);
+
+  if (itemCount < expectedCount || videos.length === 0) throw new Error("Incomplete or empty playlist");
 
   return videos
     .sort((left, right) =>
@@ -231,18 +244,41 @@ export async function getCachedYouTubePlaylistVideos(type: YouTubePlaylistType) 
   }
 }
 
-export async function syncYouTubePlaylist(type: YouTubePlaylistType) {
-  const videos = await getYouTubePlaylistVideos(type);
+export class YouTubeSyncBusyError extends Error {
+  constructor(readonly retryAfter: number) { super("Playlist sync is busy or cooling down"); }
+}
+
+export async function getYouTubeSyncStatus() {
   await ensureNetlifySchema();
-  await getNetlifyDb()
-    .prepare(
-      `INSERT INTO youtube_playlist_cache (playlist_type, videos_json, updated_at)
-       VALUES (?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(playlist_type) DO UPDATE SET
-         videos_json = excluded.videos_json,
-         updated_at = CURRENT_TIMESTAMP`,
-    )
-    .bind(type, JSON.stringify(videos))
-    .run();
-  return videos;
+  return getNetlifyDb().prepare("SELECT updated_at FROM youtube_playlist_cache WHERE playlist_type = 'sermons'")
+    .first<{ updated_at: string }>();
+}
+
+export async function syncYouTubePlaylist(type: YouTubePlaylistType) {
+  await ensureNetlifySchema();
+  const db = getNetlifyDb();
+  const owner = crypto.randomUUID();
+  await db.writeTransaction(async tx => {
+    const now = Date.now();
+    const row = (await tx.execute({ sql: "SELECT lease_until, next_allowed_at FROM youtube_sync_locks WHERE playlist_type = ?", args: [type] })).rows[0];
+    const until = Math.max(Number(row?.lease_until ?? 0), Number(row?.next_allowed_at ?? 0));
+    if (until > now) throw new YouTubeSyncBusyError(Math.ceil((until - now) / 1000));
+    await tx.execute({ sql: `INSERT INTO youtube_sync_locks VALUES (?, ?, ?, ?)
+      ON CONFLICT(playlist_type) DO UPDATE SET owner=excluded.owner, lease_until=excluded.lease_until, next_allowed_at=excluded.next_allowed_at`, args: [type, owner, now + 90_000, now + 30_000] });
+  });
+  try {
+    const videos = await getYouTubePlaylistVideos(type);
+    await db.writeTransaction(async tx => {
+      const lock = (await tx.execute({ sql: "SELECT owner, lease_until FROM youtube_sync_locks WHERE playlist_type = ?", args: [type] })).rows[0];
+      if (lock?.owner !== owner || Number(lock.lease_until) <= Date.now()) throw new Error("Sync lease expired");
+      await tx.execute({ sql: `INSERT INTO youtube_playlist_cache (playlist_type, videos_json, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(playlist_type) DO UPDATE SET videos_json=excluded.videos_json, updated_at=CURRENT_TIMESTAMP`, args: [type, JSON.stringify(videos)] });
+      await tx.execute({ sql: "UPDATE youtube_sync_locks SET lease_until=0, next_allowed_at=? WHERE playlist_type=? AND owner=?", args: [Date.now() + 30_000, type, owner] });
+    });
+    return videos;
+  } catch (error) {
+    await db.prepare("UPDATE youtube_sync_locks SET lease_until=0, next_allowed_at=? WHERE playlist_type=? AND owner=?")
+      .bind(Date.now() + 30_000, type, owner).run();
+    throw error;
+  }
 }

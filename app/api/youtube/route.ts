@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const playlistType = type as YouTubePlaylistType;
     const videos =
       (await getCachedYouTubePlaylistVideos(playlistType)) ??
-      (await syncYouTubePlaylist(playlistType));
+      (playlistType === "worship" ? await syncYouTubePlaylist(playlistType) : []);
     return NextResponse.json(
       { videos },
       {

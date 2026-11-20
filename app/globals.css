@@ -2998,6 +2998,14 @@ select {
   gap: 18px;
 }
 
+.admin-home-tools { display: flex; justify-content: flex-end; width: 100%; max-width: none; margin-top: 24px; }
+.admin-youtube-refresh { display: flex; flex-direction: column; align-items: flex-end; width: fit-content; max-width: 100%; padding: 0; border: 0; background: transparent; }
+.admin-youtube-refresh > button { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 6px; background: #30303e; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+.admin-youtube-refresh > button:hover:not(:disabled) { background: #4b4856; }
+.admin-youtube-refresh > button:focus-visible { outline: 3px solid #b8816c; outline-offset: 3px; }
+.admin-youtube-refresh > button:disabled { opacity: .6; cursor: not-allowed; }
+.admin-youtube-refresh > p { width: min(280px, calc(100vw - 40px)); margin: 8px 0 0; padding: 8px 10px; border: 1px solid #e6e2dd; border-radius: 6px; background: #fff; box-shadow: 0 3px 12px #30303e12; color: #30303e; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-youtube-refresh > p:empty { display: none; }
 .member-login-form > button[data-login-blocked="true"] { cursor: not-allowed; font-variant-numeric: tabular-nums; }
 .member-login-form .member-form-error { overflow-wrap: anywhere; }
 .member-withdrawal-entry { grid-column: 1 / -1; text-align: right; }
@@ -10114,6 +10122,11 @@ body.modal-open { overflow: hidden; }
 }
 
 .admin-home-detail-grid .admin-home-section { min-width: 0; margin-top: 0; }
+@media (min-width: 1181px) {
+  .admin-home-detail-grid { align-items: stretch; }
+  .admin-home-detail-grid .admin-home-section { display: grid; grid-template-rows: auto 1fr; }
+  .admin-home-quick-section .admin-home-quick-grid { grid-template-rows: repeat(4, 1fr); }
+}
 .admin-section-heading { min-height: 42px; margin-bottom: 12px; }
 .admin-section-heading h2 { font-size: 22px; font-weight: 720; }
 .admin-section-heading > small { color: var(--admin-subtle); font-size: 13px; font-weight: 600; }

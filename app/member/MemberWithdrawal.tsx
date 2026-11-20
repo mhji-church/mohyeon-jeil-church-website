@@ -65,7 +65,6 @@ export default function MemberWithdrawal({ onComplete }: { onComplete: () => voi
       <AccessibleDialog open={open} onClose={close} labelledBy="withdrawal-title" describedBy="withdrawal-notice" className="member-withdrawal-dialog">
         <header><h2 id="withdrawal-title">회원 탈퇴</h2><button type="button" aria-label="회원 탈퇴 창 닫기" onClick={close} disabled={busy}>×</button></header>
         <p id="withdrawal-notice">탈퇴하면 회원정보와 로그인 계정이 삭제되며 복구할 수 없습니다. 다시 이용하려면 새로 가입해야 합니다.</p>
-        <p className="member-withdrawal-hint">병합한 계정은 모든 기존 아이디가 함께 삭제됩니다.</p>
         <form className="member-form" method="post" onSubmit={submit} aria-busy={busy}>
           <label><span>현재 비밀번호</span><input name="withdrawalPassword" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} maxLength={72} required disabled={busy} /></label>
           <label className="member-withdrawal-check"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} /><span>탈퇴 안내를 확인했습니다</span></label>

@@ -4,6 +4,7 @@ import { getAdminContentSummary, type ContentPost, type ContentType } from "../.
 import { getAdminMemberSummary } from "../../lib/members";
 import { getKoreaDate } from "../../lib/korea-date";
 import AdminSidebar from "./AdminSidebar";
+import YouTubeRefresh from "./YouTubeRefresh";
 import { logServerError } from "../../lib/api-response";
 import { getAnalyticsVisitorSummary } from "../../lib/analytics-report";
 
@@ -131,6 +132,7 @@ export default async function AdminHomePage() {
             </div>
           </section>
         </div>
+        {canManageArchive && <aside className="admin-home-tools" aria-label="홈페이지 도구"><YouTubeRefresh /></aside>}
       </section>
     </main>
   );
